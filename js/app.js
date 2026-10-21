@@ -117,11 +117,40 @@
       ${F('Saloon HVAC units per car', 'hvac.unitsPerCar', 'num')}<div></div>
       ${F('Cab HVAC applicable (driving cars)', 'hvac.cabHvac', 'check', { wide: true })}
     </div><p class="hint">Position and size of each unit come from the equipment list (step 2), its mass from the weight list (step 5): saloon units are roof rows named AC…, the cab unit a row named CAB AC or CAB HVAC. The tool checks the counts.</p>`);
+    const anyCab = cfg.carTypes.some(t => t.cab);
+    const CB = TLT.cabCfg(cfg);
+    if (anyCab) h += card("Driver's cab", `<div class="fields">
+      ${F('Driving desk', 'cab.desk', 'select', { re: true, options: [['side', 'Side driving desk'], ['central', 'Central driving desk']] })}
+      ${CB.desk === 'side' ? F('Desk on side', 'cab.deskSide', 'select', { options: [['B', 'Side B'], ['A', 'Side A']] }) : '<div></div>'}
+      ${F('Desk depth', 'cab.deskDepth', 'num', { unit: 'mm' })}${F('Desk width', 'cab.deskWidth', 'num', { unit: 'mm' })}
+      ${F('Observer / second seat', 'cab.observer', 'check', { wide: true })}
+      ${F('GoA4 (driverless): remove cab back wall', 'cab.goa4', 'check', { wide: true, re: true })}
+      ${CB.goa4 ? F('Covered front console depth', 'cab.consoleDepth', 'num', { unit: 'mm', wide: true, hint: 'The cab floor behind the console becomes standing area. Partition, cab-to-saloon door and driver seat are removed.' }) : ''}
+    </div><p class="hint">Driver seat follows the desk: centred behind a central desk (detrainment door moves to side A), or on the desk side with the observer seat opposite.</p>`);
+    const WC = TLT.windowCfg(cfg);
+    const winOpts = [['single', 'Single window'], ['double', 'Two windows'], ['none', 'No window']];
+    h += card('Windows (side wall)', `<div class="fields">
+      ${F('Bays between doors', 'windows.inner', 'select', { re: true, options: winOpts })}${F('End bays', 'windows.end', 'select', { re: true, options: winOpts })}
+      ${F('Single window width (0 = fill bay)', 'windows.singleWidth', 'num', { unit: 'mm' })}${F('Width of each of two windows', 'windows.doubleWidth', 'num', { unit: 'mm' })}
+      ${F('Window height', 'windows.height', 'num', { unit: 'mm' })}${F('Sill height above floor', 'windows.sill', 'num', { unit: 'mm' })}
+      ${F('Drop-down (openable) windows', 'windows.drop', 'select', { re: true, options: [['none', 'None'], ['ends', 'End bays only'], ['all', 'All windows']] })}
+      ${WC.drop !== 'none' ? F('Drop-down depth (top hopper)', 'windows.dropDepth', 'num', { unit: 'mm' }) : '<div></div>'}
+      ${F('Windows in passenger door leaves', 'windows.doorWin', 'check', { wide: true, re: true })}
+      ${WC.doorWin ? F('Door window width (0 = auto)', 'windows.doorWinWidth', 'num', { unit: 'mm' }) + F('Door window height', 'windows.doorWinHeight', 'num', { unit: 'mm' }) + F('Door window sill above floor', 'windows.doorWinSill', 'num', { unit: 'mm' }) : ''}
+    </div>`);
+    if (anyCab) h += card('Front view (sheet 1)', `<div class="fields">
+      ${F('Wipers', 'front.wipers', 'select', { numeric: true, options: [['0', 'None'], ['1', '1'], ['2', '2'], ['3', '3']] })}${F('Wiper type', 'front.wiperType', 'select', { options: [['single', 'Single arm'], ['pantograph', 'Pantograph arm']] })}
+      ${F('Head / tail lights above floor', 'front.lightsZ', 'num', { unit: 'mm' })}${F('Lights inset from body side', 'front.lightsInset', 'num', { unit: 'mm' })}
+      ${F('Coupler height ATR', 'front.couplerHeight', 'num', { unit: 'mm' })}${F('Destination display', 'front.destination', 'check')}
+      ${F('Show vehicle gauge outline', 'front.showGauge', 'check', { wide: true, re: true })}
+      ${TLT.frontCfg(cfg).showGauge ? F('Gauge width', 'front.gaugeWidth', 'num', { unit: 'mm' }) + F('Gauge height ATR', 'front.gaugeHeight', 'num', { unit: 'mm' }) : ''}
+    </div><p class="hint">Windscreen is split around the detrainment door (Door system). The gauge outline is simplified (rectangle with chamfered corners); use the project's kinematic gauge for checks.</p>`);
     h += card('Interior & seating rules', `<div class="fields">
       ${F('Seating', 'interior.seatType', 'select', { re: true, options: [['longitudinal', 'Longitudinal'], ['transverse', 'Transverse (facing bays)']] })}
       ${F('Seat width / pax', 'interior.seatWidth', 'num', { unit: 'mm' })}
       ${F('Seat depth', 'interior.seatDepth', 'num', { unit: 'mm' })}${F('Foot zone in front of seats', 'interior.footZone', 'num', { unit: 'mm' })}
       ${F('Clearance at doors', 'interior.doorClearance', 'num', { unit: 'mm' })}${F('Clearance at end wall / cab', 'interior.endClearance', 'num', { unit: 'mm' })}
+      ${F('Min. door clearance (fixed seats per bay)', 'interior.minDoorClearance', 'num', { unit: 'mm', wide: true, hint: 'Used when a car variant asks for 6 / 7 / 8 seats between doors: the door clearance shrinks to fit, down to this value.' })}
       ${trans ? F('Seats per side (row)', 'interior.transSeatsPerSide', 'num') + F('Transverse seat depth', 'interior.transSeatDepth', 'num', { unit: 'mm' }) + F('Legroom, facing seats', 'interior.transLegroom', 'num', { unit: 'mm' }) : ''}
       ${F('Wheelchair space length', 'interior.wcLength', 'num', { unit: 'mm' })}${F('Wheelchair space width', 'interior.wcWidth', 'num', { unit: 'mm' })}
       ${F('Turning circle Ø', 'interior.wcTurning', 'num', { unit: 'mm' })}${F('Min. aisle (check)', 'interior.minAisle', 'num', { unit: 'mm' })}
@@ -169,10 +198,20 @@
         ${F('END 1 support', 'support1', 'select', { options: [['own', 'Own bogie'], ['shared', 'Shared (Jacobs) bogie']] })}${F('END 2 support', 'support2', 'select', { options: [['own', 'Own bogie'], ['shared', 'Shared (Jacobs) bogie']] })}
         ${F('Doors per side', 'doorsPerSide', 'num')}${F('Door pitch in car', 'doorPitch', 'num', { unit: 'mm' })}
         ${F('END 2 coupler face → nearest door centre', 'doorRearOffset', 'num', { unit: 'mm', wide: true })}
+        ${F('Seats between two doors (per side)', 'seatsPerBay', 'select', { re: true, options: [['', 'Auto (fill with clearance)'], ['5', '5-seater'], ['6', '6-seater'], ['7', '7-seater'], ['8', '8-seater'], ['9', '9-seater']], wide: true, hint: seatFitHint(t) })}
         ${F('Tare mass AW0 (used for capacity)', 'tare', 'num', { unit: 't', wide: true })}
         ${F('Spec. seats (check)', 'specSeats', 'num')}${F('Spec. standees AW2 (check)', 'specStanding', 'num')}
         <div class="f wide"><span class="sub">Interior items</span>${interiorItemsHtml(t, i)}</div>
       </div></div>`;
+  }
+
+  function seatFitHint(t) {
+    let lay = null; try { lay = TLT.layoutCar(t, cfg); } catch (e) { return ''; }
+    const inner = lay.bays.filter(b => b.k0 === 'door' && b.k1 === 'door');
+    if (!inner.length) return 'No bay between two doors.';
+    const L = Math.min(...inner.map(b => b.x1 - b.x0));
+    const sw = TLT.num(cfg.interior.seatWidth, 430), mc = TLT.num(cfg.interior.minDoorClearance, 100), dc = TLT.num(cfg.interior.doorClearance, 150);
+    return `Bay between doors ${Math.round(L)} mm: up to <b>${Math.floor((L - 2 * mc) / sw)}</b> seats at ${mc} mm min. clearance (${Math.floor((L - 2 * dc) / sw)} at the normal ${dc} mm).`;
   }
 
   /* Interior items editor (wheelchair spaces, electrical cabinets, seat limits) */
@@ -644,7 +683,7 @@
   }
   function normalise(o) {
     const base = TLT.PRESETS['dhaka-l5n']();
-    ['project', 'common', 'interior', 'loads', 'hvac'].forEach(k => { o[k] = Object.assign({}, base[k], o[k] || {}); });
+    ['project', 'common', 'interior', 'loads', 'hvac', 'cab', 'windows', 'front'].forEach(k => { o[k] = Object.assign({}, base[k], o[k] || {}); });
     if (!o.doors) {
       const c = o.common || {};
       o.doors = clone(base.doors);

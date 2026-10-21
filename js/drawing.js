@@ -22,6 +22,7 @@
     SEAT: { color: '#0f7a63', lw: 0.2, aci: 3, fill: '#d5efe7' },
     FOOT: { color: '#0f7a63', lw: 0.13, aci: 3, dash: [1.2, 0.8] },
     STAND: { color: '#d6b300', lw: 0.1, aci: 2, fill: '#fbf0b4' },
+    GAUGE: { color: '#6a1b9a', lw: 0.2, aci: 6, dash: [3, 1.5] },
     WC: { color: '#1565c0', lw: 0.25, aci: 5, fill: '#dce9fb' },
     WC_DASH: { color: '#1565c0', lw: 0.15, aci: 5, dash: [1.5, 1] },
     CABINET: { color: '#4a4a4a', lw: 0.25, aci: 8, fill: '#e2e2e2' },
@@ -148,22 +149,44 @@
         v.rect(cx - cw / 2 + 90, fh + 1000, cx + cw / 2 - 90, fh + Math.min(1650, ch - 150), 'WINDOW');
       }
     }
-    // Doors
+    // Doors (with leaf windows)
+    const WC = TLT.windowCfg(cfg);
     lay.doors.forEach(d => {
       v.rect(d - dw / 2, fh, d + dw / 2, fh + dh, 'DOOR');
       v.line(d, fh, d, fh + dh, 'DOOR');
-      if (detail) {
-        v.rect(d - dw / 2 + 110, fh + 950, d - 110, fh + 1700, 'WINDOW');
-        v.rect(d + 110, fh + 950, d + dw / 2 - 110, fh + 1700, 'WINDOW');
+      if (WC.doorWin) {
+        const leaf = dw / 2, ww = WC.doorWinWidth > 0 ? Math.min(WC.doorWinWidth, leaf - 100) : leaf - 220;
+        const z0 = fh + WC.doorWinSill, z1 = Math.min(fh + dh - 80, z0 + WC.doorWinHeight);
+        [d - leaf / 2, d + leaf / 2].forEach(cx => v.rect(cx - ww / 2, z0, cx + ww / 2, z1, 'WINDOW', detail ? undefined : { lw: 0.13 }));
       }
     });
-    // Windows (one per bay)
+    // Side windows per bay: single / double / none; end bays separately; drop-down windows marked
+    const z0 = fh + WC.sill, z1 = fh + WC.sill + WC.height;
+    const lastBay = lay.bays.length - 1;
     lay.bays.forEach(b => {
       const L = b.x1 - b.x0;
-      if (L < 1000) return;
-      const w = Math.min(L - 500, 2600);
+      const isEnd = b.i === 0 || b.i === lastBay;
+      const kind = isEnd ? WC.end : WC.inner;
+      if (kind === 'none' || L < 900) return;
       const m = (b.x0 + b.x1) / 2;
-      v.rect(m - w / 2, fh + 820, m + w / 2, fh + 1700, 'WINDOW', { fill: '#e8f0fd' });
+      let wins = [];
+      if (kind === 'single' || L < 2 * WC.doubleWidth + 400) {
+        const w = WC.singleWidth > 0 ? Math.min(WC.singleWidth, L - 300) : Math.min(L - 500, 2600);
+        if (w > 300) wins = [[m - w / 2, m + w / 2]];
+      } else {
+        const w = Math.min(WC.doubleWidth, (L - 500) / 2), gap = Math.max(150, Math.min(400, L - 2 * w - 400));
+        wins = [[m - gap / 2 - w, m - gap / 2], [m + gap / 2, m + gap / 2 + w]];
+      }
+      const drop = WC.drop === 'all' || (WC.drop === 'ends' && isEnd);
+      wins.forEach(([a, c], k) => {
+        v.rect(a, z0, c, z1, 'WINDOW', { fill: '#e8f0fd' });
+        // the window nearest the car end drops (Dhaka: 2 per side, one at each end)
+        const isOuter = wins.length === 1 || (b.i === 0 ? k === 0 : b.i === lastBay ? k === wins.length - 1 : true);
+        if (drop && isOuter) {
+          v.line(a, z1 - WC.dropDepth, c, z1 - WC.dropDepth, 'WINDOW', { dash: [1.2, 0.8] });
+          if (detail) v.text((a + c) / 2, z1 - WC.dropDepth / 2, 'DROP', 1.4, { anchor: 'middle', valign: 'middle', ly: 'WINDOW', color: '#1e5bd8' });
+        }
+      });
     });
     // Couplers
     const cy = fh - 420;
@@ -277,24 +300,47 @@
     // Cab
     if (type.cab) {
       const xp = lay.salStart;
-      const DC = lay.doorCfg;
-      // cab partition, with the cab-to-saloon door opening when applicable
-      const g0 = DC.cabSaloon.on ? DC.cabSaloon.y - DC.cabSaloon.width / 2 : 0, g1 = DC.cabSaloon.on ? DC.cabSaloon.y + DC.cabSaloon.width / 2 : 0;
-      const segs = DC.cabSaloon.on ? [[g1, hi], [-hi, g0]] : [[-hi, hi]];
-      segs.forEach(([a, b]) => { v.line(xp - 60, a, xp - 60, b, 'CAB'); v.line(xp, a, xp, b, 'CAB'); });
-      if (DC.cabSaloon.on) {
-        v.line(xp - 60, g1, xp, g1, 'CAB'); v.line(xp - 60, g0, xp, g0, 'CAB');
-        if (/slid/i.test(DC.cabSaloon.type)) v.rect(xp - 45, g1, xp - 15, g1 + DC.cabSaloon.width * 0.9, 'DOOR', { fill: '#efd9f4' });
-        else v.line(xp - 30, g1, xp - 30 - DC.cabSaloon.width * 0.95, g1 - DC.cabSaloon.width * 0.3, 'DOOR', { lw: 0.15 });
+      const DC = lay.doorCfg, CB = lay.cabCfg;
+      const detY = DC.detrain.on ? TLT.detrainY(lay, cfg) : 0;
+      if (!lay.openCab) {
+        // cab partition, with the cab-to-saloon door opening when applicable
+        const g0 = DC.cabSaloon.on ? DC.cabSaloon.y - DC.cabSaloon.width / 2 : 0, g1 = DC.cabSaloon.on ? DC.cabSaloon.y + DC.cabSaloon.width / 2 : 0;
+        const segs = DC.cabSaloon.on ? [[g1, hi], [-hi, g0]] : [[-hi, hi]];
+        segs.forEach(([a, b]) => { v.line(xp - 60, a, xp - 60, b, 'CAB'); v.line(xp, a, xp, b, 'CAB'); });
+        if (DC.cabSaloon.on) {
+          v.line(xp - 60, g1, xp, g1, 'CAB'); v.line(xp - 60, g0, xp, g0, 'CAB');
+          if (/slid/i.test(DC.cabSaloon.type)) v.rect(xp - 45, g1, xp - 15, g1 + DC.cabSaloon.width * 0.9, 'DOOR', { fill: '#efd9f4' });
+          else v.line(xp - 30, g1, xp - 30 - DC.cabSaloon.width * 0.95, g1 - DC.cabSaloon.width * 0.3, 'DOOR', { lw: 0.15 });
+        }
       }
-      const con0 = bodyF + 330, con1 = bodyF + Math.min(900, lay.cabLen * 0.42);
-      const dHalf = DC.detrain.on ? DC.detrain.width / 2 + 30 : 0;
-      v.rect(con0, Math.max(dHalf, 300), con1, hi - 120, 'CAB', { fill: '#ececec' });
-      v.rect(con0, -hi + 120, con1, -Math.max(dHalf, 300), 'CAB', { fill: '#ececec' });
-      if (DC.detrain.on) v.rect(bodyF - 10, -DC.detrain.width / 2, bodyF + 110, DC.detrain.width / 2, 'DOOR', { fill: '#efd9f4' });
-      const sx = bodyF + Math.min(lay.cabLen - 450, Math.max(1100, lay.cabLen * 0.62));
-      v.circle(sx, -hi / 2 - 100, 230, 'CAB', { fill: '#ffffff' });
-      v.circle(sx, hi / 2 + 100, 200, 'CAB', { fill: '#ffffff' });
+      const dz = DC.detrain.on ? [detY - DC.detrain.width / 2 - 40, detY + DC.detrain.width / 2 + 40] : null;
+      const freeSpans = (y0, y1) => { // [y0,y1] minus the detrainment door zone
+        if (!dz || dz[1] <= y0 || dz[0] >= y1) return [[y0, y1]];
+        const out = []; if (dz[0] > y0 + 150) out.push([y0, dz[0]]); if (dz[1] < y1 - 150) out.push([dz[1], y1]); return out;
+      };
+      if (lay.openCab) {
+        // GoA4: covered console across the front, no driver seat; the rest of the cab is passenger area
+        const c1 = bodyF + CB.consoleDepth;
+        freeSpans(-hi + 120, hi - 120).forEach(([y0, y1]) => v.rect(bodyF + 300, y0, c1, y1, 'CAB', { fill: '#ececec' }));
+        v.line(c1, -hi, c1, hi, 'CAB', { dash: [1.5, 1] });
+        if (detail) v.text(bodyF + 300 + (CB.consoleDepth - 300) / 2, dz && dz[0] < 0 && dz[1] > 0 ? hi - 520 : 0, 'COVERED CONSOLE', 1.3, { anchor: 'middle', valign: 'middle', rot: 90, ly: 'CAB', color: '#4a4a4a' });
+      } else if (CB.desk === 'central') {
+        const d1 = bodyF + Math.min(lay.cabLen * 0.55, 300 + CB.deskDepth);
+        freeSpans(-CB.deskWidth / 2, CB.deskWidth / 2).forEach(([y0, y1]) => v.rect(bodyF + 300, y0, d1, y1, 'CAB', { fill: '#ececec' }));
+        v.circle(d1 + 380, 0, 240, 'CAB', { fill: '#ffffff' });
+        if (detail) v.text(d1 + 380, 0, 'DRIVER', 1.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a' });
+        if (CB.observer) v.circle(d1 + 380, (DC.detrain.on && detY < 0 ? 1 : -1) * (hi - 380), 190, 'CAB', { fill: '#ffffff' });
+      } else {
+        const k = CB.deskSide === 'A' ? 1 : -1;
+        const d1 = bodyF + Math.min(lay.cabLen * 0.55, 300 + CB.deskDepth);
+        const yIn = dz ? (k > 0 ? Math.max(dz[1], 120) : Math.min(dz[0], -120)) : k * 120;
+        v.rect(bodyF + 300, k > 0 ? yIn : -hi + 120, d1, k > 0 ? hi - 120 : yIn, 'CAB', { fill: '#ececec' });
+        const sy = k * (Math.abs(yIn) + (hi - 120 - Math.abs(yIn)) / 2);
+        v.circle(d1 + 360, sy, 240, 'CAB', { fill: '#ffffff' });
+        if (detail) v.text(d1 + 360, sy, 'DRIVER', 1.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a' });
+        if (CB.observer) v.circle(d1 + 360, -k * (hi - 380), 190, 'CAB', { fill: '#ffffff' });
+      }
+      if (DC.detrain.on) v.rect(bodyF - 10, detY - DC.detrain.width / 2, bodyF + 110, detY + DC.detrain.width / 2, 'DOOR', { fill: '#efd9f4' });
       if (DC.cabSide.on) {
         const cxd = lay.cabDoorX, cw = DC.cabSide.width;
         [1, -1].forEach(k => {
@@ -307,7 +353,7 @@
       } else {
         v.line(bodyF + 650, hi, xp - 60, hi, 'BODY_THIN'); v.line(bodyF + 650, -hi, xp - 60, -hi, 'BODY_THIN');
       }
-      if (detail) v.text(bodyF + lay.cabLen * 0.55, 0, 'CAB', 2.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a', bold: true });
+      if (detail && !lay.openCab) v.text(bodyF + lay.cabLen * 0.78, (lay.cabCfg.desk === 'central' ? -1 : (lay.cabCfg.deskSide === 'A' ? -1 : 1)) * (hi - 260), 'CAB', 2.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a', bold: true });
     }
 
     // Seats
@@ -374,6 +420,120 @@
       v.text((b.x0 + b.x1) / 2, 120, 'B' + b.i, 1.6, { anchor: 'middle', valign: 'base', ly: 'TEXT', color: '#777777' });
     });
   }
+
+  /* ---------- Front elevation of a driving car (looking at END 1; x = lateral, + = side B, z above rail) ---------- */
+  function drawFront(v, lay, cfg) {
+    const c = cfg.common, F = TLT.frontCfg(cfg), DC = lay.doorCfg, CB = lay.cabCfg;
+    const fh = num(c.floorHeight, 1130), rh = num(c.roofHeight, 3650), sole = fh - num(c.mountDepth, 250);
+    const D = num(c.wheelDia, 860), hw = lay.W / 2, s = v.s;
+    const g = 1435;
+    // roof equipment seen from the front (behind the body outline)
+    lay.equipment.items.filter(e => e.loc === 'roof').forEach(e => {
+      const x0 = -e.y - e.width / 2, x1 = -e.y + e.width / 2;
+      v.rect(x0, rh - 200, x1, rh + e.height, 'ROOF', { fill: true });
+    });
+    // gauge outline
+    if (F.showGauge) {
+      const gw = F.gaugeWidth / 2, gh = F.gaugeHeight;
+      v.poly([[-gw + 250, 120], [-gw, 400], [-gw, gh - 600], [-gw + 600, gh], [gw - 600, gh], [gw, gh - 600], [gw, 400], [gw - 250, 120]], true, 'GAUGE');
+    }
+    // rails, wheels, bogie
+    [-1, 1].forEach(k => {
+      const xi = k * g / 2, xo = k * (g / 2 + 72);
+      v.rect(Math.min(xi, xo), -40, Math.max(xi, xo), 0, 'RAIL', { fill: '#888888' });
+      v.rect(k * (g / 2 + 36) - 8, -150, k * (g / 2 + 36) + 8, -40, 'RAIL');
+      v.rect(k * (g / 2 + 36) - 75, -172, k * (g / 2 + 36) + 75, -150, 'RAIL', { fill: '#888888' });
+      v.rect(k * 680, 0, k * 815, D, 'BOGIE', { fill: '#ffffff' });
+      v.rect(k * 650, 0, k * 680, 30, 'BOGIE', { fill: '#b3261e' });
+    });
+    v.rect(-1080, D / 2 - 120, 1080, D / 2 + 320, 'BOGIE', { fill: '#fbe9e7' });
+    // body outline: straight lower sides, slight tumblehome, arched roof
+    const pts = [];
+    const roofHalf = hw - 260;
+    for (let k = 0; k <= 10; k++) { const x = -roofHalf + (2 * roofHalf * k) / 10; pts.push([x, rh - 230 * Math.pow(x / roofHalf, 2)]); }
+    const body = [[-(hw - 160), sole], [-(hw - 10), fh + 250], [-hw, fh + 1500], [-(hw - 70), rh - 420], [-(hw - 160), rh - 300]].concat(pts, [[hw - 160, rh - 300], [hw - 70, rh - 420], [hw, fh + 1500], [hw - 10, fh + 250], [hw - 160, sole]]);
+    v.poly(body, true, 'BODY', { fill: '#f7f8fa' });
+    // anticlimber, obstacle deflector, coupler
+    v.rect(-1150, sole - 60, 1150, sole + 120, 'BODY_THIN', { fill: '#e6e8eb' });
+    v.poly([[-(hw - 350), 160], [hw - 350, 160], [hw - 250, 480], [-(hw - 250), 480]], true, 'BODY_THIN', { fill: '#eef0f2' });
+    const ch = F.couplerHeight;
+    v.rect(-260, ch - 150, 260, ch + 150, 'BODY', { fill: '#dfe3e7' });
+    v.rect(-110, ch - 230, 110, ch - 150, 'BODY_THIN');
+    // windscreen band, split around the detrainment door
+    const wz0 = fh + 950, wz1 = rh - 470, wx = hw - 300;
+    const detX = DC.detrain.on ? -TLT.detrainY(lay, cfg) : null;
+    const dw2 = DC.detrain.width / 2, dTop = fh + DC.detrain.height;
+    let panes = [[-wx, wx]];
+    if (DC.detrain.on) panes = [[-wx, detX - dw2 - 60], [detX + dw2 + 60, wx]].filter(([a, b]) => b - a > 200);
+    panes.forEach(([a, b]) => v.poly([[a, wz0], [b, wz0], [b - (b > 0 ? 80 : 0), wz1], [a + (a < 0 ? 80 : 0), wz1]], true, 'WINDOW', { fill: '#dfe9fb', lw: 0.3 }));
+    if (DC.detrain.on) {
+      v.rect(detX - dw2, fh - 60, detX + dw2, dTop, 'DOOR', { fill: '#f3e5f7', lw: 0.35 });
+      v.rect(detX - dw2 + 60, Math.max(wz0, fh + 300), detX + dw2 - 60, Math.min(wz1, dTop - 120), 'WINDOW', { fill: '#dfe9fb' });
+      v.line(detX + dw2 - 120, fh + 900, detX + dw2 - 120, fh + 1150, 'DOOR', { lw: 0.4 });
+    }
+    // destination indicator
+    if (F.destination) {
+      const dx = DC.detrain.on && Math.abs(detX) > 300 ? -Math.sign(detX) * 450 : 0;
+      v.rect(dx - 650, wz1 + 60, dx + 650, wz1 + 230, 'BODY_THIN', { fill: '#2b2b2b' });
+    }
+    // head and tail lights
+    const lz = fh + F.lightsZ;
+    [-1, 1].forEach(k => {
+      v.circle(k * (hw - F.lightsInset), lz, 95, 'BODY', { fill: '#fffbe6' });
+      v.circle(k * (hw - F.lightsInset - 240), lz, 70, 'NOTE', { fill: '#f6b3ad' });
+    });
+    // wipers
+    const n = F.wipers;
+    if (n > 0) {
+      const pz = wz0 + 70;
+      const centres = [];
+      const pc = p => (p[0] + p[1]) / 2;
+      if (n === 1) { const drvSide = CB.desk === 'central' ? 0 : (CB.deskSide === 'B' ? 1 : -1); const p = panes.reduce((best, q) => (Math.abs(pc(q) - drvSide * wx / 2) < Math.abs(pc(best) - drvSide * wx / 2) ? q : best), panes[0]); centres.push(pc(p)); }
+      else if (n === 2 && panes.length === 2) { centres.push(pc(panes[0]), pc(panes[1])); }
+      else {
+        for (let k = 0; k < n; k++) {
+          let x = -wx + (2 * wx * (k + 0.5)) / n;
+          const inDoor = DC.detrain.on && Math.abs(x - detX) < dw2 + 80;
+          if (inDoor) { const p = panes.reduce((best, q) => (Math.abs(pc(q) - x) < Math.abs(pc(best) - x) ? q : best), panes[0]); x = pc(p); }
+          centres.push(x);
+        }
+      }
+      centres.forEach(x => {
+        if (F.wiperType === 'pantograph') {
+          v.line(x - 90, pz, x - 30, pz + 620, 'BODY', { lw: 0.35 }); v.line(x + 60, pz, x + 120, pz + 620, 'BODY', { lw: 0.35 });
+          v.line(x + 45, pz + 330, x + 45, pz + 1000, 'BODY', { lw: 0.6 });
+        } else {
+          v.line(x, pz, x - 110, pz + 700, 'BODY', { lw: 0.35 });
+          v.line(x - 150, pz + 280, x - 150, pz + 1020, 'BODY', { lw: 0.6 });
+        }
+        v.circle(x, pz, 35, 'BODY', { fill: '#333333' });
+      });
+    }
+    // centre line and dimensions
+    v.line(0, -350, 0, Math.max(F.gaugeHeight, rh) + 250, 'CENTER');
+    v.dimChainH([-g / 2, g / 2], -40, -380, { h: 1.7 });
+    v.dimChainH([-hw, hw], sole, -380 - 4.5 * s, { h: 1.7 });
+    if (F.showGauge) v.dimChainH([-F.gaugeWidth / 2, F.gaugeWidth / 2], F.gaugeHeight, F.gaugeHeight + 3.5 * s, { h: 1.6 });
+    const xr = Math.max(hw, F.gaugeWidth / 2);
+    v.dimV(xr, 0, fh, xr + 4.5 * s, { h: 1.6, side: 'right' });
+    v.dimV(xr, 0, rh, xr + 9 * s, { h: 1.6, side: 'right' });
+    if (DC.detrain.on) {
+      v.dimChainH([detX - dw2, detX + dw2], dTop, dTop + 2.6 * s, { h: 1.5 });
+      v.dimV(detX - dw2, fh - 60, dTop, detX - dw2 - 2.5 * s, { h: 1.5 });
+    }
+    v.text(-xr, -380 - 9.5 * s, 'SIDE A', 1.6, { anchor: 'start', color: '#555555', bold: true });
+    v.text(xr, -380 - 9.5 * s, 'SIDE B', 1.6, { anchor: 'end', color: '#555555', bold: true });
+    const info = [`Wipers: ${n ? `${n} × ${F.wiperType === 'pantograph' ? 'pantograph' : 'single-arm'}` : 'none'}`, `Detrainment door: ${DC.detrain.on ? `${DC.detrain.width} × ${DC.detrain.height}${Math.abs(detX) > 1 ? ', offset ' + Math.round(Math.abs(detX)) : ', centred'}` : 'none'}`,
+      `Desk: ${CB.goa4 ? 'GoA4, covered console' : CB.desk === 'central' ? 'central' : 'side ' + CB.deskSide}`];
+    info.forEach((tx, i) => v.text(-xr, -380 - (13.5 + i * 3.2) * s, tx, 1.6, { color: '#333333' }));
+  }
+
+  // Detrainment door: centred, or moved to side A when the driving desk is central
+  TLT.detrainY = function (lay, cfg) {
+    const CB = TLT.cabCfg(cfg), DC = lay.doorCfg;
+    if (CB.desk !== 'central' || CB.goa4) return 0;
+    return lay.Wi / 2 - 200 - DC.detrain.width / 2;
+  };
 
   /* ---------- Paper helpers ---------- */
   function frame(p, W, H) {
@@ -592,7 +752,25 @@
       return [car.no, car.label, car.unit + 1, (t.desc || '') + (car.flip ? ' (reversed)' : ''), t.cab ? 'Yes' : '—', i0(lay.Lc), i0(lay.Lb), i0(lay.bc), lay.doors.length, bog];
     });
     tRows.push(['', '', '', 'TRAIN TOTAL', R.form.cars.filter(c => c.type.cab).length, i0(R.form.length), '', '', '', `${R.form.cars.reduce((a, c) => a + R.layouts.get(c.type.name).motorBogies, 0)} motor bogies`]);
+    const drv = R.form.cars.find(cc => cc.type.cab);
+    const colW = drv ? Math.min(150, Math.max(105, PW * 0.27)) : 0;
+    const fac = (PW - 40 - (colW ? colW + 8 : 0)) / cols.reduce((a, c) => a + c.w, 0);
+    cols.forEach(c => { c.w *= fac; });
     const yB = table(p, 20, yTab, cols, tRows, { rowH: 5, h: 2, boldRows: [tRows.length - 1], shade: [tRows.length - 1] });
+    let frontView = null;
+    if (drv) {
+      const lay = R.layouts.get(drv.type.name);
+      const F = TLT.frontCfg(cfg);
+      const cx0 = PW - 10 - colW, cw = colW - 6;
+      const top = yTab, bottom = 54;
+      const needW = Math.max(lay.W, F.gaugeWidth) + 1900, needH = Math.max(F.gaugeHeight, num(c.maxHeight, 4100)) + 1700;
+      const fs = pickScale(Math.max(needW / cw, needH / (top - bottom - 10)));
+      const spare = Math.max(0, (top - bottom - 12) - needH / fs);
+      frontView = new View(fs, cx0 + cw / 2 - 300 / fs, top - 9 - (needH - 1000) / fs - Math.min(spare, 6));
+      drawFront(frontView, lay, cfg);
+      p.text(cx0 + 2, top - 3, `FRONT VIEW — ${drv.type.name} (END 1)   1:${fs}`, 2.4, { bold: true });
+      views.push(frontView);
+    }
 
     // Legend + notes
     let yy = yB - 7;
@@ -613,10 +791,10 @@
       'NOTES',
       `1. Car lengths are over coupler faces. Bogie centres ${[...new Set(R.used.map(n => R.layouts.get(n).bc))].join(' / ')} mm; wheel Ø${num(c.wheelDia, 860)} new.`,
       `2. Floor ${num(c.floorHeight, 1130)} mm, roof ${num(c.roofHeight, 3650)} mm, max. height ${num(c.maxHeight, 4100)} mm above top of rail.`,
-      `3. Equipment positions are indicative and taken from the tool inputs.`,
-      `4. Passenger capacity, mass and axle loads: see the capacity sheet and the weight calculation.`,
+      `3. Equipment positions from the equipment list; capacity and weights on later sheets.`,
     ];
-    notes.forEach((t, i) => p.text(165, yy - i * 4.6, t, i ? 2 : 2.4, { bold: i === 0 }));
+    const noteW = (drv ? PW - 10 - colW - 6 : PW - 20) - 165;
+    notes.forEach((t, i) => p.text(165, yy - i * 4.6, trunc(t, i ? 2 : 2.4, noteW), i ? 2 : 2.4, { bold: i === 0 }));
     return { title: `Train formation & vehicle layout (${n} cars)`, short: 'Train layout', size, scale, views, paper: p };
   }
 
@@ -896,12 +1074,34 @@
     });
   }
 
+  function drawRoofPlan(v, lay, cfg) {
+    const { bodyF, bodyR, Lc, W, type, mid } = lay;
+    const hw = W / 2;
+    if (type.cab) v.poly([[bodyF + 650, hw], [bodyR, hw], [bodyR, -hw], [bodyF + 650, -hw], [bodyF + 200, -hw + 260], [bodyF, -hw + 750], [bodyF, hw - 750], [bodyF + 200, hw - 260]], true, 'BODY', { fill: '#fafbfc' });
+    else v.rect(bodyF, -hw, bodyR, hw, 'BODY', { fill: '#fafbfc' });
+    v.rect(bodyF + (type.cab ? 900 : 150), -hw + 180, bodyR - 150, hw - 180, 'BODY_THIN');
+    v.line(-200, 0, Lc + 200, 0, 'CENTER');
+    v.line(mid, -hw - 400, mid, hw + 400, 'CENTER');
+    lay.bogies.forEach(xb => v.line(xb, -hw - 250, xb, hw + 250, 'CENTER'));
+    lay.equipment.items.filter(e => e.loc === 'roof').forEach(e => {
+      const xc = mid - e.x, x0 = xc - e.length / 2, x1 = xc + e.length / 2, y0 = e.y - e.width / 2, y1 = e.y + e.width / 2;
+      v.rect(x0, y0, x1, y1, 'ROOF', { fill: true });
+      if (e.kind === 'ac') { const r = Math.min(e.width, e.length) * 0.18; v.circle(xc - e.length / 4, e.y, r, 'ROOF'); v.circle(xc + e.length / 4, e.y, r, 'ROOF'); }
+      if (e.kind === 'panto') { v.line(x0, y0, x1, y1, 'ROOF', { lw: 0.13 }); v.line(x0, y1, x1, y0, 'ROOF', { lw: 0.13 }); }
+      labelIn(v, e.name, x0, x1, e.y, 1.8, 'ROOF');
+    });
+  }
+
   function underframeSheet(R, size, lay) {
     const cfg = R.cfg, c = cfg.common;
     const [PW, PH] = size;
-    const scale = pickScale((lay.Lc + 2500) / (PW - 60));
-    const s = scale;
     const maxH = Math.max(num(c.maxHeight, 4100), num(c.roofHeight, 3650) + 450);
+    const hasRoof = lay.equipment.items.some(e => e.loc === 'roof');
+    const nRows = lay.equipment.items.length + 1;
+    let scale = pickScale((lay.Lc + 2500) / (PW - 60));
+    const need = sc => maxH / sc + 30 + lay.W / sc + (hasRoof ? 26 + lay.W / sc : 0) + 26 + Math.min(4.4, 3.4) * nRows;
+    while (need(scale) > PH - 42 - 52 && scale < 400) scale = pickScale(scale + 1);
+    const s = scale;
     const ox = 25 + ((PW - 60) - lay.Lc / s) / 2;
     const oy = PH - 42 - maxH / s;
     const v = new View(scale, ox, oy);
@@ -932,21 +1132,32 @@
       v.dimV(xc - low.length / 2, 0, sole - low.height, xc - low.length / 2 - 2.5 * s, { h: 1.7, label: `${Math.round(sole - low.height)}` });
     }
 
-    // Underframe plan (viewed from above, floor removed)
     const W = lay.W;
-    const planY = -(30 * s) - W / 2;
+    // Roof plan (viewed from above)
+    let planRY = null;
+    if (hasRoof) {
+      planRY = -(26 * s) - W / 2;
+      v.setTf(0, false, lay.Lc, true, planRY);
+      drawRoofPlan(v, lay, cfg);
+      v.clearTf();
+    }
+    // Underframe plan (viewed from above, floor removed)
+    const planY = hasRoof ? planRY - W - 30 * s : -(30 * s) - W / 2;
     v.setTf(0, false, lay.Lc, true, planY);
     drawUnderframePlan(v, lay, cfg);
     v.clearTf();
     const top = planY + W / 2, bot = planY - W / 2;
     // ordinate dimensions of box centres from car centre: side A above, side B below
-    const ord = (list, sign) => {
+    const ord = (list, sign, pYArg) => {
+      const pY = pYArg == null ? planY : pYArg;
+      if (!list.length && pYArg != null) return;
+      const top = pY + W / 2, bot = pY - W / 2;
       const yRow = sign > 0 ? top + 5 * s : bot - 5 * s;
-      v.add({ t: 'L', x1: lay.mid, y1: planY + sign * W / 2, x2: lay.mid, y2: yRow + sign * 1 * s, ly: 'DIM' });
+      v.add({ t: 'L', x1: lay.mid, y1: pY + sign * W / 2, x2: lay.mid, y2: yRow + sign * 1 * s, ly: 'DIM' });
       v.add({ t: 'T', x: lay.mid - 0.6 * s, y: yRow + sign * 1.2 * s + (sign > 0 ? 0 : -1.4 * s), s: '0', h: 1.7 * s, anchor: 'end', valign: 'base', rot: 0, ly: 'DIM' });
       list.forEach(e => {
         const xc = lay.mid - e.x;
-        const yEdge = planY + e.y + sign * e.width / 2;
+        const yEdge = pY + e.y + sign * e.width / 2;
         v.add({ t: 'L', x1: xc, y1: yEdge + sign * 0.6 * s, x2: xc, y2: yRow + sign * 1 * s, ly: 'DIM' });
         v.add({ t: 'L', x1: xc - 0.6 * s, y1: yRow - 0.6 * s, x2: xc + 0.6 * s, y2: yRow + 0.6 * s, ly: 'DIM', lw: 0.3 });
         const lab = `${e.x > 0 ? '+' : ''}${Math.round(e.x)}`;
@@ -960,13 +1171,22 @@
     };
     ord(under.filter(e => e.y >= 0), 1);
     ord(under.filter(e => e.y < 0), -1);
+    if (hasRoof) {
+      ord(roof.filter(e => e.y >= 0), 1, planRY);
+      ord(roof.filter(e => e.y < 0), -1, planRY);
+      v.text(-9 * s, planRY + 200, 'ROOF', 1.9, { anchor: 'end', bold: true, color: '#9a5b12' });
+      v.text(-9 * s, planRY + W / 2 - 300, 'SIDE A', 1.8, { anchor: 'end', bold: true, color: '#555555' });
+      v.text(-9 * s, planRY - W / 2 + 100, 'SIDE B', 1.8, { anchor: 'end', bold: true, color: '#555555' });
+      v.text(-9 * s, planY + 200, 'UNDERFRAME', 1.9, { anchor: 'end', bold: true, color: '#0b6e8a' });
+      v.dimV(lay.Lc, planRY - W / 2, planRY + W / 2, lay.Lc + 6 * s, { h: 1.8 });
+    }
     v.text(-9 * s, planY + W / 2 - 300, 'SIDE A', 1.8, { anchor: 'end', bold: true, color: '#555555' });
     v.text(-9 * s, planY - W / 2 + 100, 'SIDE B', 1.8, { anchor: 'end', bold: true, color: '#555555' });
     v.dimV(lay.Lc, planY - W / 2, planY + W / 2, lay.Lc + 6 * s, { h: 1.8 });
-    v.text(0, bot - 14 * s, 'UNDERFRAME PLAN — viewed from above, floor removed. X values = equipment centre from car centre (+ towards END 1).', 1.8, { color: '#555555' });
+    v.text(0, bot - 14 * s, `${hasRoof ? 'ROOF PLAN and ' : ''}UNDERFRAME PLAN — viewed from above${hasRoof ? '' : ', floor removed'}. X values = equipment centre from car centre (+ towards END 1).`, 1.8, { color: '#555555' });
 
     // Equipment table
-    const yT = oy + (bot / s) - 24;
+    const yT = oy + (bot / s) - 22;
     const all = under.concat(roof);
     const avail = yT - 52;
     const rowH = Math.min(4.4, avail / Math.max(1, all.length + 1));

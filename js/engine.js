@@ -155,6 +155,28 @@
     return { items: out, errors };
   };
 
+  /* ---------------- Driver's cab, windows, front view ---------------- */
+  TLT.cabCfg = function (cfg) {
+    const c = cfg.cab || {};
+    const on = v => v === true || v === 'true';
+    return { desk: c.desk === 'central' ? 'central' : 'side', deskSide: c.deskSide === 'A' ? 'A' : 'B', observer: c.observer == null ? true : on(c.observer),
+      goa4: on(c.goa4), consoleDepth: num(c.consoleDepth, 700), deskDepth: num(c.deskDepth, 800), deskWidth: num(c.deskWidth, 1400) };
+  };
+  TLT.windowCfg = function (cfg) {
+    const w = cfg.windows || {};
+    const t = v => (['single', 'double', 'none'].includes(v) ? v : 'single');
+    return { inner: t(w.inner), end: t(w.end), singleWidth: num(w.singleWidth, 0), doubleWidth: num(w.doubleWidth, 1000), height: num(w.height, 900), sill: num(w.sill, 820),
+      drop: ['none', 'ends', 'all'].includes(w.drop) ? w.drop : 'ends', dropDepth: num(w.dropDepth, 400),
+      doorWin: w.doorWin == null ? true : (w.doorWin === true || w.doorWin === 'true'), doorWinWidth: num(w.doorWinWidth, 0), doorWinHeight: num(w.doorWinHeight, 750), doorWinSill: num(w.doorWinSill, 950) };
+  };
+  TLT.frontCfg = function (cfg) {
+    const f = cfg.front || {}, c = cfg.common || {};
+    return { wipers: Math.max(0, Math.min(3, Math.round(num(f.wipers, 2)))), wiperType: f.wiperType === 'pantograph' ? 'pantograph' : 'single',
+      lightsZ: num(f.lightsZ, 350), lightsInset: num(f.lightsInset, 420), destination: f.destination == null ? true : (f.destination === true || f.destination === 'true'),
+      couplerHeight: num(f.couplerHeight, 720), gaugeWidth: num(f.gaugeWidth, 3000), gaugeHeight: num(f.gaugeHeight, num(c.maxHeight, 4100)),
+      showGauge: f.showGauge == null ? true : (f.showGauge === true || f.showGauge === 'true') };
+  };
+
   /* ---------------- Door system ---------------- */
   TLT.doorCfg = function (cfg) {
     const c = cfg.common || {}, d = cfg.doors || {};
@@ -197,6 +219,11 @@
     const cabLen = type.cab ? num(type.cabLength, 2000) : 0;
     const endWall = num(c.endWallThk, 150);
     const salStart = type.cab ? bodyF + cabLen : bodyF + endWall;
+    // GoA4: cab back wall removed, cab floor behind the covered front console counts as standing area
+    const CB = TLT.cabCfg(cfg);
+    const openCab = !!(type.cab && CB.goa4);
+    const standStart = openCab ? Math.min(salStart, bodyF + Math.max(300, CB.consoleDepth)) : salStart;
+    if (openCab && CB.consoleDepth < 650) warn.push(`${type.name}: front console zone ${CB.consoleDepth} mm is shorter than the cab nose (about 650 mm).`);
     const salEnd = bodyR - endWall;
     if (salEnd <= salStart) warn.push(`${type.name}: saloon length is zero or negative — check body/cab length.`);
 
@@ -225,6 +252,10 @@
     const wcL = num(r.wcLength, 1300), wcW = num(r.wcWidth, 700);
     const cabDepthDef = num(r.cabinetDepth, 600);
     const clr = k => (k === 'door' ? dClr : eClr);
+    // Seats per bay between doors (6 / 7 / 8 …): door clearance shrinks to fit, down to a minimum
+    const nSel = Math.round(num(type.seatsPerBay, NaN));
+    const minClr = num(r.minDoorClearance, 100);
+    let warnedSel = false;
 
     const seatBlocks = [];   // {side,x0,x1,n,bay,depth,foot[,groups,trans]}
     const wheelchairs = [];  // {side,x0,x1,depth,bay,place}
@@ -234,7 +265,14 @@
 
     bays.forEach(bay => {
       ['A', 'B'].forEach(side => {
-        const a = bay.x0 + clr(bay.k0), b = bay.x1 - clr(bay.k1);
+        let ca = clr(bay.k0), cb = clr(bay.k1);
+        const inner = bay.k0 === 'door' && bay.k1 === 'door';
+        if (inner && nSel > 0 && !trans) {
+          const c = (bay.x1 - bay.x0 - nSel * seatW) / 2;
+          if (c < minClr - EPS && !warnedSel) { warn.push(`${type.name}: ${nSel} seats need ${Math.round(nSel * seatW + 2 * minClr)} mm between doors; the bay is ${Math.round(bay.x1 - bay.x0)} mm (min. clearance ${minClr} mm each side).`); warnedSel = true; }
+          ca = cb = Math.max(minClr, c);
+        }
+        const a = bay.x0 + ca, b = bay.x1 - cb;
         const mine = itemsIn.items.filter(q => q.bay === bay.i && q.sides.includes(side));
         if (b - a <= EPS) {
           mine.filter(q => q.kind !== 'max').forEach(q => warn.push(`${type.name}: B${bay.i} side ${side} has no free length (${Math.round(bay.x1 - bay.x0)} mm bay) for the ${q.kind === 'wheelchair' ? 'wheelchair space' : 'cabinet "' + q.label + '"'}.`));
@@ -266,6 +304,7 @@
         mids.sort((p, q) => p[0] - q[0]).forEach(([m0, m1]) => { if (m0 > cur + EPS) free.push([cur, m0]); cur = Math.max(cur, m1); });
         if (hi > cur + EPS) free.push([cur, hi]);
         let left = mine.filter(q => q.kind === 'max').reduce((m, q) => Math.min(m, q.n), Infinity);
+        if (inner && nSel > 0 && !trans) left = Math.min(left, nSel);
         free.forEach(([f0, f1]) => {
           const avail = f1 - f0;
           if (avail <= EPS || left <= 0) return;
@@ -332,9 +371,9 @@
       aWc += (w.x1 - w.x0) * w.depth;
       if (!r.wcAsStanding) { const [y0, y1] = sideY(w.side, w.depth); occ.push({ x0: w.x0, x1: w.x1, y0, y1 }); }
     });
-    const standRects = TLT.freeRects(salStart, salEnd, -half, half, occ);
+    const standRects = TLT.freeRects(standStart, salEnd, -half, half, occ);
     const aStand = standRects.reduce((s, q) => s + (q.x1 - q.x0) * (q.y1 - q.y0), 0);
-    const aSaloon = Math.max(0, salEnd - salStart) * Wi;
+    const aSaloon = Math.max(0, salEnd - standStart) * Wi;
 
     // Aisle check
     const maxDepth = seatBlocks.reduce((m, s) => Math.max(m, s.depth), 0);
@@ -347,12 +386,12 @@
       if (cabDoorX - DC.cabSide.width / 2 < bodyF + 600 || cabDoorX + DC.cabSide.width / 2 > salStart - 60)
         warn.push(`${type.name}: cab side door (${DC.cabSide.width} mm at ${Math.round(cabDoorX - bodyF)} mm) does not fit in the ${cabLen} mm cab.`);
     }
-    if (type.cab && DC.cabSaloon.on && Math.abs(DC.cabSaloon.y) + DC.cabSaloon.width / 2 > Wi / 2 - 50)
+    if (type.cab && !openCab && DC.cabSaloon.on && Math.abs(DC.cabSaloon.y) + DC.cabSaloon.width / 2 > Wi / 2 - 50)
       warn.push(`${type.name}: cab-to-saloon door does not fit across the car at offset ${DC.cabSaloon.y} mm.`);
 
     return {
       type, Lc, Lb, bodyF, bodyR, mid, bogies, bc, shared: [sh1, sh2], W, Wi, doors, dw, cabLen, salStart, salEnd, bays,
-      seatBlocks, wheelchairs, cabinets, screens, standRects, seats, doorCfg: DC, cabDoorX,
+      seatBlocks, wheelchairs, cabinets, screens, standRects, seats, doorCfg: DC, cabDoorX, cabCfg: CB, openCab, standStart,
       areas: { saloon: aSaloon / 1e6, seat: aSeat / 1e6, foot: aFoot / 1e6, wheelchair: aWc / 1e6, cabinet: aCab / 1e6, standing: aStand / 1e6 },
       aisle, warnings: warn,
       equipment: TLT.equipmentFor(type, cfg),

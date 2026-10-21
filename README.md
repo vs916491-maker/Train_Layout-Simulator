@@ -11,7 +11,7 @@ It is plain HTML + JavaScript. There is nothing to install and no server: open i
 | 1 | **Main Dimensions** | Project and title block, formation and number of car variants, car body and bogie, door system, HVAC, interior rules, one card per car variant (incl. tare mass for capacity and END 1 / END 2 support: own or shared Jacobs bogie), load cases. Ends with **Next**. |
 | 2 | **Equipment Inputs** | Equipment list for **layout only** (positions and sizes of underframe and roof boxes), from Excel or edited in the table. **Generate Results** builds steps 3–5. |
 | 3 | **Train Layouts & Capacity** | Train layout, one interior layout per car variant, passenger capacity calculation (uses the tare typed in step 1). |
-| 4 | **Underframe Layout** | Per car variant: side elevation, underframe plan with X from car centre, equipment table. |
+| 4 | **Underframe Layout** | Per car variant: side elevation, roof plan (when the car has roof equipment), underframe plan with X from car centre, equipment table. Any roof or underframe row added in step 2 appears on these sheets and on the train and car layouts. |
 | 5 | **Weight Calculations** | Separate weight list per car (Location, Item, L/W/H, X/Y/Z, Mass) entered in the table or uploaded from its own Excel file; **Add line item**; **Copy equipment from step 2**. Results: car body (sprung) and bogie (unsprung) mass, calculated vs target tare, CoG X/Y/Z, support / axle / wheel loads per load case, train bogie table including shared Jacobs bogies, axle-load and wheel-load-imbalance checks. Weight sheets as PDF / DXF. |
 
 If inputs change after generating, steps 3–5 show a **Generate again** banner.
@@ -48,6 +48,13 @@ Set **Number of car variants** in the formation card; a card appears for each. E
 | Seat limit / No seats | Bay, side, max seats | Caps the seats on that bay side. |
 
 Placement: next to the door (default), END 1 side, middle or END 2 side of the bay. Bays are numbered B0 … Bn from END 1 (B0 is between the cab / end wall and the first door); the bay list in each item shows the bay lengths. Side A is the top of the plan view. Older input files with text bay rules (`1 A wheelchair`) are converted automatically.
+
+### Driver's cab, windows, front view
+
+* **Driver's cab** (shown when a variant has a cab): side desk (on side A or B, observer seat opposite) or central desk (driver seat centred; the detrainment door moves towards side A). **GoA4** removes the cab back wall, the cab-to-saloon door and the driver seat; only a covered front console (depth input) remains and the rest of the cab floor counts as standing area.
+* **Windows**: per bay type (between doors / end bays) single, two or no windows; window width, height and sill; drop-down (hopper) windows in end bays or all; windows in the door leaves with their own size.
+* **Seats between doors** (per car variant): Auto, or a fixed 5 … 9-seater. With a fixed count the door clearance shrinks to fit, down to *Min. door clearance* (Interior rules); below that the tool warns. The card shows how many seats fit.
+* **Front view** on sheet 1: wipers (0–3, single or pantograph arm), detrainment door, windscreen, head / tail lights, destination display, coupler, rails and a simplified vehicle gauge outline.
 
 ### Equipment Excel file
 
