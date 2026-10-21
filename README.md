@@ -8,11 +8,11 @@ It is plain HTML + JavaScript. There is nothing to install and no server: open i
 
 | Step | Tab | What you do / get |
 |---|---|---|
-| 1 | **Main Dimensions** | Project and title block, formation and number of car variants, car body and bogie, **door system** (passenger doors; front detrainment door, cab side doors and cab-to-saloon door with applicability, size and position), **HVAC** (units per car, cab HVAC), interior rules, one card per car variant, load cases. Ends with **Next**. |
-| 2 | **Equipment Inputs** | Download the Excel template, fill in equipment (drawn) and mass items (weight only), upload it. Rows are checked and can be corrected. **Generate Results** builds steps 3–5. |
-| 3 | **Layout & Calculations** | Train layout (formation table: car, type, unit, description, cab, lengths, bogie centres, doors, bogies); one interior layout per car variant; passenger capacity calculation. |
+| 1 | **Main Dimensions** | Project and title block, formation and number of car variants, car body and bogie, door system, HVAC, interior rules, one card per car variant (incl. tare mass for capacity and END 1 / END 2 support: own or shared Jacobs bogie), load cases. Ends with **Next**. |
+| 2 | **Equipment Inputs** | Equipment list for **layout only** (positions and sizes of underframe and roof boxes), from Excel or edited in the table. **Generate Results** builds steps 3–5. |
+| 3 | **Train Layouts & Capacity** | Train layout, one interior layout per car variant, passenger capacity calculation (uses the tare typed in step 1). |
 | 4 | **Underframe Layout** | Per car variant: side elevation, underframe plan with X from car centre, equipment table. |
-| 5 | **Weight Calculations** | Per car variant: editable mass list with **Add line item** (Other items stays last), calculated tare vs target tare, passenger mass, CoG, bogie and axle loads per load case; train summary; weight sheets as PDF / DXF. |
+| 5 | **Weight Calculations** | Separate weight list per car (Location, Item, L/W/H, X/Y/Z, Mass) entered in the table or uploaded from its own Excel file; **Add line item**; **Copy equipment from step 2**. Results: car body (sprung) and bogie (unsprung) mass, calculated vs target tare, CoG X/Y/Z, support / axle / wheel loads per load case, train bogie table including shared Jacobs bogies, axle-load and wheel-load-imbalance checks. Weight sheets as PDF / DXF. |
 
 If inputs change after generating, steps 3–5 show a **Generate again** banner.
 
@@ -68,12 +68,28 @@ One sheet (named `Equipment`, or the first sheet) with a header row. Column orde
 
 The template you download contains the current list, so you can edit it and upload it again. CSV files with the same columns are also accepted.
 
-### Weight calculation
+### Weight calculation (step 5)
 
-* Tare = sum of all rows (equipment + mass items) of a car variant; compared with the typed target tare.
-* Passengers are placed at the seat centroid (seated) and the standing-area centroid (standing).
-* Centre of gravity along the car from each row's X; Bogie 1 (END 1) = M × (bc/2 + CoG) / bc, Bogie 2 = M − Bogie 1; axle load = heavier bogie ÷ 2, checked against the axle-load limit.
-* The capacity sheet keeps using the typed tare with equal axle sharing; the weight sheets are the detailed check.
+Weight Excel file (separate from the equipment file), one sheet:
+
+| Column | Meaning |
+|---|---|
+| Car Type | Car variant name |
+| Location | `Car body`, `Roof`, `Interior`, `UF`, `Cab`, `End` or `Bogie` |
+| Item | e.g. Carbody shell, Seats, VVVF, Bogie END 1 … `Other items` last |
+| Length / Width / Height (mm) | Optional size |
+| X from car centre (mm) | Item CoG, + towards END 1 |
+| Y from centre line (mm) | Item CoG, + towards side A |
+| Z above rail (mm) | Item CoG height above top of rail; blank = default for the location |
+| Mass (kg) | Item mass |
+
+Method:
+
+* Car body mass = all rows except `Bogie`; bogie rows sit directly on the nearest support.
+* Supports: own bogie at ± half the bogie centres, or a shared (Jacobs) bogie at the car end. Adjacent shared ends in the formation are merged into one bogie; enter a shared bogie's mass on one car only (the tool warns if it is entered twice).
+* Passengers (step 1 load cases) are placed at the seat centroid and the standing-area centroid.
+* Car-body reactions from the body CoG; bogie load = reaction(s) + bogie rows; axle load = bogie load ÷ 2.
+* Wheel load imbalance = deviation of the wheel load from half the axle load, from the lateral moment and the wheel load spacing (default 1500 mm); checked against the limit (default 15 %).
 
 ### Capacity rules
 

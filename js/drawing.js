@@ -170,10 +170,10 @@
     if (type.cab) {
       v.rect(0, cy - 120, 160, cy + 120, 'BODY');
       v.rect(160, cy - 50, bodyF + 300, cy + 50, 'BODY_THIN');
-    } else {
+    } else if (!lay.shared[0]) {
       v.rect(0, cy - 60, bodyF + 250, cy + 60, 'BODY_THIN');
     }
-    v.rect(bodyR - 250, cy - 60, Lc, cy + 60, 'BODY_THIN');
+    if (!lay.shared[1]) v.rect(bodyR - 250, cy - 60, Lc, cy + 60, 'BODY_THIN');
     // Gangway bellows (non-cab ends)
     const gw = (x0, x1) => {
       v.rect(x0, fh - 120, x1, fh + 2150, 'BODY_THIN');
@@ -579,7 +579,8 @@
     const tRows = R.form.cars.map(car => {
       const lay = R.layouts.get(car.type.name);
       const t = car.type;
-      const bog = lay.motorBogies === 2 ? 'M + M' : lay.motorBogies === 1 ? 'T + M' : 'T + T';
+      const bt = k => (lay.motorBogies === 2 || (lay.motorBogies === 1 && k === 1) ? 'M' : 'T') + (lay.shared[k] ? ' (Jacobs)' : '');
+      const bog = `${bt(0)} + ${bt(1)}`;
       return [car.no, car.label, car.unit + 1, (t.desc || '') + (car.flip ? ' (reversed)' : ''), t.cab ? 'Yes' : '—', i0(lay.Lc), i0(lay.Lb), i0(lay.bc), lay.doors.length, bog];
     });
     tRows.push(['', '', '', 'TRAIN TOTAL', R.form.cars.filter(c => c.type.cab).length, i0(R.form.length), '', '', '', `${R.form.cars.reduce((a, c) => a + R.layouts.get(c.type.name).motorBogies, 0)} motor bogies`]);
@@ -853,8 +854,8 @@
     if (type.cab) v.poly([[bodyF + 650, hw], [bodyR, hw], [bodyR, -hw], [bodyF + 650, -hw], [bodyF + 200, -hw + 260], [bodyF, -hw + 750], [bodyF, hw - 750], [bodyF + 200, hw - 260]], true, 'BODY', { fill: '#fafbfc' });
     else v.rect(bodyF, -hw, bodyR, hw, 'BODY', { fill: '#fafbfc' });
     // couplers
-    v.rect(0, -60, bodyF + 250, 60, 'BODY_THIN');
-    v.rect(bodyR - 250, -60, Lc, 60, 'BODY_THIN');
+    if (!lay.shared[0]) v.rect(0, -60, bodyF + 250, 60, 'BODY_THIN');
+    if (!lay.shared[1]) v.rect(bodyR - 250, -60, Lc, 60, 'BODY_THIN');
     // centre lines
     v.line(-200, 0, Lc + 200, 0, 'CENTER');
     v.line(mid, -hw - 400, mid, hw + 400, 'CENTER');
@@ -892,10 +893,9 @@
     const t = lay.type;
     const items = lay.equipment.items;
     const under = items.filter(e => e.loc === 'under'), roof = items.filter(e => e.loc === 'roof');
-    const sumM = a => a.reduce((m, e) => m + (Number.isFinite(e.mass) ? e.mass : 0), 0);
     const fh = num(c.floorHeight, 1130), sole = fh - num(c.mountDepth, 250);
     p.text(20, PH - 19, `UNDERFRAME & ROOF EQUIPMENT LAYOUT — ${t.name.toUpperCase()} CAR`, 4.2, { bold: true });
-    p.text(20, PH - 24.5, `${t.desc || ''}  ·  ${under.length} underframe items, ${fmtKg(sumM(under))}  ·  ${roof.length} roof items, ${fmtKg(sumM(roof))}  ·  source: ${cfg.equipmentSource || 'equipment list'}`, 2.2, { color: '#444444' });
+    p.text(20, PH - 24.5, `${t.desc || ''}  ·  ${under.length} underframe items  ·  ${roof.length} roof items  ·  source: ${cfg.equipmentSource || 'equipment list'}`, 2.2, { color: '#444444' });
 
     // Side elevation
     v.line(-1200, 0, lay.Lc + 1200, 0, 'RAIL');
@@ -953,14 +953,13 @@
     const yT = oy + (bot / s) - 24;
     const all = under.concat(roof);
     const avail = yT - 52;
-    const rowH = Math.min(4.4, avail / Math.max(1, all.length + 2));
+    const rowH = Math.min(4.4, avail / Math.max(1, all.length + 1));
     const th = Math.min(1.9, rowH * 0.45);
     const cols = [{ h: 'No.', w: 9, align: 'middle' }, { h: 'Equipment', w: 30 }, { h: 'Location', w: 20 }, { h: 'L', w: 14, align: 'end' }, { h: 'W', w: 14, align: 'end' },
-      { h: 'H', w: 14, align: 'end' }, { h: 'X from centre', w: 22, align: 'end' }, { h: 'Y from CL', w: 20, align: 'end' }, { h: 'Bottom / top ATR', w: 26, align: 'end' }, { h: 'Mass (kg)', w: 18, align: 'end' }];
+      { h: 'H', w: 14, align: 'end' }, { h: 'X from centre', w: 22, align: 'end' }, { h: 'Y from CL', w: 20, align: 'end' }, { h: 'Bottom / top ATR', w: 30, align: 'end' }];
     const rows = all.map((e, i) => [i + 1, e.name, e.loc === 'roof' ? 'Roof' : 'Underframe', i0(e.length), i0(e.width), i0(e.height), `${e.x > 0 ? '+' : ''}${Math.round(e.x)}`, `${e.y > 0 ? '+' : ''}${Math.round(e.y)}`,
-      e.loc === 'roof' ? `top ${Math.round(num(c.roofHeight, 3650) + e.height)}` : `${Math.round(sole - e.height)}`, Number.isFinite(e.mass) ? i0(e.mass) : '—']);
-    rows.push(['', 'TOTAL', '', '', '', '', '', '', `UF ${fmtKg(sumM(under))}`, i0(sumM(all))]);
-    if (all.length) table(p, 20, yT, cols, rows, { rowH, h: th, boldRows: [rows.length - 1], shade: [rows.length - 1] });
+      e.loc === 'roof' ? `top ${Math.round(num(c.roofHeight, 3650) + e.height)}` : `${Math.round(sole - e.height)}`]);
+    if (all.length) table(p, 20, yT, cols, rows, { rowH, h: th });
     else p.text(20, yT - 5, 'No equipment rows for this car type. Upload or edit the equipment list in the Underframe Input tab.', 2.2, { color: '#b3261e' });
     legend(p, 240, yT - 2, [
       { ly: 'EQUIP', label: 'Underframe equipment', kind: 'box' },
@@ -984,52 +983,60 @@
     return sheets;
   };
   const t2 = kg => (Number.isFinite(kg) ? (kg / 1000).toFixed(2) : '—');
-  const sgn = v => `${v > 0 ? '+' : ''}${Math.round(v)}`;
+  const sgn = v => (Number.isFinite(v) ? `${v > 0 ? '+' : ''}${Math.round(v)}` : '—');
+  const okC = (val) => (val === 'EXCEEDED' ? '#b3261e' : val === 'OK' ? '#0f7a63' : undefined);
 
   function weightSheet(R, size, w) {
-    const cfg = R.cfg;
+    const cfg = R.cfg, W = R.weights;
     const [PW, PH] = size;
     const p = new View(1, 0, 0);
     const lay = w.lay, t = lay.type;
     p.text(20, PH - 19, `WEIGHT CALCULATION — ${t.name.toUpperCase()} CAR`, 4.2, { bold: true });
-    p.text(20, PH - 24.5, `${t.desc || ''}  ·  calculated tare ${t2(w.tareKg)} t  ·  target (Main Dimensions) ${Number.isFinite(w.target) ? t2(w.target) + ' t' : '—'}  ·  source: ${cfg.equipmentSource || 'equipment list'}`, 2.2, { color: '#444444' });
+    p.text(20, PH - 24.5, `${t.desc || ''}  ·  calculated tare ${t2(w.tareKg)} t (car body ${t2(w.bodyMass)} t + bogies ${t2(w.bogieMass)} t)  ·  target ${Number.isFinite(w.target) ? t2(w.target) + ' t' : '—'}  ·  source: ${cfg.weightSource || 'weight list'}`, 2.2, { color: '#444444' });
     const yTop = PH - 32;
-    p.text(20, yTop, '1. MASS BREAKDOWN (AW0)', 2.6, { bold: true });
-    const n = w.items.length + 4;
-    const rowH = Math.min(4.4, (yTop - 3 - 54) / n);
-    const th = Math.min(1.9, rowH * 0.46);
-    const cols = [{ h: 'No.', w: 9, align: 'middle' }, { h: 'Category', w: 26 }, { h: 'Item', w: 74 }, { h: 'Location', w: 22 },
-      { h: 'X from centre (mm)', w: 30, align: 'end' }, { h: 'Mass (kg)', w: 24, align: 'end' }, { h: 'Moment (kg·m)', w: 26, align: 'end' }];
-    const rows = w.items.map((it, i) => [i + 1, it.cat === 'mass' ? 'Mass item' : 'Equipment', it.name, it.cat === 'mass' ? '—' : it.loc === 'roof' ? 'Roof' : 'Underframe',
-      sgn(it.x), it.hasMass ? fmtInt(it.mass) : 'missing', fmtInt(it.mass * it.x / 1000)]);
-    rows.push(['', '', 'CALCULATED TARE (AW0)', '', sgn(w.xg0), fmtInt(w.tareKg), fmtInt(w.tareKg * w.xg0 / 1000)]);
-    rows.push(['', '', 'Target tare from Main Dimensions', '', '', Number.isFinite(w.target) ? fmtInt(w.target) : '—', '']);
-    rows.push(['', '', 'Difference (calculated - target)', '', '', Number.isFinite(w.diff) ? (w.diff > 0 ? '+' : '') + fmtInt(w.diff) : '—', Number.isFinite(w.diff) && w.target ? `${((w.diff / w.target) * 100).toFixed(1)} %` : '']);
-    const base = rows.length - 3;
-    table(p, 20, yTop - 3, cols, rows, { rowH, h: th, boldRows: [base], shade: [base, base + 1, base + 2],
-      colorFn: (ri, ci, val) => (val === 'missing' ? '#b3261e' : ri === base + 2 && ci === 5 && Number.isFinite(w.diff) && Math.abs(w.diff) > 0.03 * (w.target || 1) ? '#b3261e' : undefined) });
+    p.text(20, yTop, '1. MASS LIST (AW0) — X from car centre (+ END 1), Y from centre line (+ side A), Z above top of rail', 2.4, { bold: true });
+    const nRows = w.items.length + 6;
+    const cases = w.cases;
+    const avail = yTop - 3 - 52 - (cases.length + 1) * 4.4 - 22;
+    const rowH = Math.max(2.6, Math.min(4.2, avail / nRows));
+    const th = Math.min(1.85, rowH * 0.47);
+    const cols = [{ h: 'No.', w: 8, align: 'middle' }, { h: 'Location', w: 18 }, { h: 'Item', w: 64 }, { h: 'L', w: 14, align: 'end' }, { h: 'W', w: 14, align: 'end' }, { h: 'H', w: 14, align: 'end' },
+      { h: 'X', w: 17, align: 'end' }, { h: 'Y', w: 15, align: 'end' }, { h: 'Z', w: 15, align: 'end' }, { h: 'Mass (kg)', w: 21, align: 'end' },
+      { h: 'm·X (kg·m)', w: 22, align: 'end' }, { h: 'm·Y (kg·m)', w: 22, align: 'end' }, { h: 'm·Z (kg·m)', w: 22, align: 'end' }, { h: 'Carried by', w: PW - 40 - 266, align: 'start' }];
+    const iv = v => (Number.isFinite(v) && v !== 0 ? fmtInt(v) : '—');
+    const rows = w.items.map((it, i) => [i + 1, it.loc, it.name, iv(it.length), iv(it.width), iv(it.height), sgn(it.x), sgn(it.y), sgn(it.z) + (it.zAuto ? '*' : ''),
+      it.hasMass ? fmtInt(it.mass) : 'missing', fmtInt(it.mass * it.x / 1000), fmtInt(it.mass * it.y / 1000), fmtInt(it.mass * it.z / 1000),
+      it.loc === 'Bogie' ? `Bogie ${Math.abs(it.x - w.s1) <= Math.abs(it.x - w.s2) ? 'END 1' : 'END 2'}` : 'Car body']);
+    const base = rows.length;
+    const body = w.items.filter(i => i.loc !== 'Bogie');
+    rows.push(['', '', 'CAR BODY (sprung)', '', '', '', '', '', '', fmtInt(w.bodyMass), fmtInt(body.reduce((a, i) => a + i.mass * i.x, 0) / 1000), fmtInt(body.reduce((a, i) => a + i.mass * i.y, 0) / 1000), fmtInt(body.reduce((a, i) => a + i.mass * i.z, 0) / 1000), '']);
+    rows.push(['', '', 'BOGIES (unsprung)', '', '', '', '', '', '', fmtInt(w.bogieMass), '', '', '', `END 1 ${fmtInt(w.bogAt[0])} · END 2 ${fmtInt(w.bogAt[1])}`]);
+    rows.push(['', '', 'CALCULATED TARE (AW0)  /  CoG', '', '', '', sgn(w.cg.x), sgn(w.cg.y), sgn(w.cg.z), fmtInt(w.tareKg), fmtInt(w.tareKg * w.cg.x / 1000), fmtInt(w.tareKg * w.cg.y / 1000), fmtInt(w.tareKg * w.cg.z / 1000), '']);
+    rows.push(['', '', 'Target tare (Main Dimensions)', '', '', '', '', '', '', Number.isFinite(w.target) ? fmtInt(w.target) : '—', '', '', '', '']);
+    rows.push(['', '', 'Difference (calculated - target)', '', '', '', '', '', '', Number.isFinite(w.diff) ? (w.diff > 0 ? '+' : '') + fmtInt(w.diff) : '—', Number.isFinite(w.diff) && w.target ? `${((w.diff / w.target) * 100).toFixed(1)} %` : '', '', '', '']);
+    const yI = table(p, 20, yTop - 3, cols, rows, { rowH, h: th, boldRows: [base, base + 1, base + 2], shade: [base, base + 1, base + 2, base + 3, base + 4],
+      colorFn: (ri, ci, val) => (val === 'missing' ? '#b3261e' : ri === base + 4 && ci === 9 && Number.isFinite(w.diff) && Math.abs(w.diff) > 0.03 * (w.target || 1) ? '#b3261e' : undefined) });
+    p.text(20, yI - 3.2, '* Z not given: default height for the location. Bogie rows sit on the nearest support; all other rows are carried by the car body.', 1.6, { color: '#555555' });
 
-    // Load cases
-    const x2 = 20 + cols.reduce((a, c) => a + c.w, 0) + 9;
-    p.text(x2, yTop, '2. AXLE LOAD PER LOAD CASE', 2.6, { bold: true });
-    const colsL = [{ h: 'Case', w: 20 }, { h: 'Pax', w: 11, align: 'end' }, { h: 'Pax (t)', w: 13, align: 'end' }, { h: 'Gross (t)', w: 15, align: 'end' },
-      { h: 'CoG X', w: 14, align: 'end' }, { h: 'Bogie 1 (t)', w: 17, align: 'end' }, { h: 'Bogie 2 (t)', w: 17, align: 'end' }, { h: 'Max axle', w: 15, align: 'end' }, { h: 'Check', w: 16, align: 'middle' }];
-    const fitW = PW - 15 - x2, sumW = colsL.reduce((a, c) => a + c.w, 0);
-    colsL.forEach(c => { c.w = c.w * Math.min(1, fitW / sumW); });
-    const rowsL = w.cases.map(q => [q.name, q.pax, t2(q.paxMass), t2(q.mass), sgn(q.xg), t2(q.b1), t2(q.b2), t2(q.axle * 1), q.ok ? 'OK' : 'EXCEEDED']);
-    const yL = table(p, x2, yTop - 3, colsL, rowsL, { rowH: 4.6, h: 1.85, colorFn: (ri, ci, val) => (val === 'EXCEEDED' ? '#b3261e' : val === 'OK' ? '#0f7a63' : undefined) });
+    let y = yI - 9;
+    p.text(20, y, '2. SUPPORT, AXLE AND WHEEL LOADS PER LOAD CASE (this car)', 2.4, { bold: true });
+    const supLab = k => `${k ? 'END 2' : 'END 1'}${lay.shared[k] ? ' (shared)' : ''}`;
+    const colsL = [{ h: 'Case', w: 24 }, { h: 'Pax', w: 14, align: 'end' }, { h: 'Gross (t)', w: 20, align: 'end' }, { h: 'CoG X', w: 17, align: 'end' }, { h: 'CoG Y', w: 15, align: 'end' }, { h: 'CoG Z', w: 15, align: 'end' },
+      { h: `${supLab(0)} (t)`, w: 34, align: 'end' }, { h: `${supLab(1)} (t)`, w: 34, align: 'end' }, { h: 'Max axle (t)', w: 22, align: 'end' }, { h: 'Wheel imbal.', w: 22, align: 'end' }, { h: 'Axle check', w: 22, align: 'middle' }, { h: 'Imbal. check', w: 22, align: 'middle' }];
+    const ownOnly = !lay.shared[0] && !lay.shared[1];
+    const rowsL = cases.map(q => {
+      const ax = Math.max(q.sup[0].axle, q.sup[1].axle), im = Math.max(q.sup[0].imb, q.sup[1].imb);
+      return [q.name, q.pax, t2(q.mass), sgn(q.xg), sgn(q.yg), sgn(q.zg), t2(q.sup[0].F), t2(q.sup[1].F), t2(ax), `${im.toFixed(1)} %`,
+        ownOnly ? (ax <= W.maxAxle * 1000 + 1e-6 ? 'OK' : 'EXCEEDED') : 'see train', ownOnly ? (im <= W.limit + 1e-9 ? 'OK' : 'EXCEEDED') : 'see train'];
+    });
+    const yL = table(p, 20, y - 3, colsL, rowsL, { rowH: 4.4, h: 1.85, colorFn: (ri, ci, val) => okC(val) });
     const notes = [
-      '3. METHOD',
-      `· Tare = sum of all mass items and equipment rows for ${t.name}.`,
-      `· Passengers ${num(cfg.loads.paxMass, 60)} kg each; seated at the seat centroid (X ${sgn(w.seatX)}),`,
-      `  standing at the standing-area centroid (X ${sgn(w.standX)}).`,
-      `· CoG X from car centre, + towards END 1. Bogie centres ±${Math.round(lay.bc / 2)} mm.`,
-      '· Bogie 1 (END 1) = M × (bc/2 + CoG) / bc ; Bogie 2 = M - Bogie 1.',
-      `· Axle load = heavier bogie ÷ 2. Limit ${num(cfg.loads.maxAxleLoad, 16)} t.`,
-      '· Capacity sheet uses the typed tare and equal sharing; this sheet is the detailed check.',
-    ];
-    notes.forEach((tx, i) => p.text(x2, yL - 8 - i * 4.4, tx, i ? 1.9 : 2.6, { bold: i === 0 }));
-    if (w.missing) p.text(x2, yL - 8 - notes.length * 4.4 - 3, `${w.missing} row(s) have no mass and count as 0 kg.`, 2, { color: '#b3261e', bold: true });
+      `Passengers ${W.paxKg} kg: seated at the seat centroid (X ${sgn(w.seatX)}), standing at the standing-area centroid (X ${sgn(w.standX)}), on the centre line.`,
+      `Supports at X ${sgn(w.s1)} (END 1) and ${sgn(w.s2)} (END 2). Car-body reactions from the body CoG; bogie rows added to their support. Axle load = support load ÷ 2.`,
+      `Wheel load imbalance = |lateral moment| ÷ (wheel spacing ${W.wheelSpacing} mm × support load / 2), i.e. deviation of the wheel load from half the axle load. Limit ${W.limit} %, axle load limit ${W.maxAxle} t.`,
+      lay.shared[0] || lay.shared[1] ? 'Shared (Jacobs) supports: values are this car\'s share only; the train sheet adds the neighbouring car.' : '',
+    ].filter(Boolean);
+    notes.forEach((tx, i) => p.text(20, yL - 5 - i * 3.8, tx, 1.75, { color: '#444444' }));
     return { title: `Weight calculation — ${t.name}`, short: `${t.name} weight`, size, scale: 0, dxfScale: 100, views: [], paper: p };
   }
 
@@ -1038,31 +1045,40 @@
     const [PW, PH] = size;
     const p = new View(1, 0, 0);
     const cases = cfg.cases || [];
-    p.text(20, PH - 19, 'WEIGHT CALCULATION — TRAIN SUMMARY', 4.2, { bold: true });
-    p.text(20, PH - 24.5, `Formation ${cfg.formation.replace(/\s+/g, ' ')}  ·  calculated train tare ${t2(W.tareTrain)} t  ·  passenger mass ${W.paxKg} kg`, 2.2, { color: '#444444' });
+    p.text(20, PH - 19, 'WEIGHT CALCULATION — TRAIN, BOGIE AND AXLE LOADS', 4.2, { bold: true });
+    p.text(20, PH - 24.5, `Formation ${cfg.formation.replace(/\s+/g, ' ')}  ·  ${W.bogies.length} bogies (${W.bogies.filter(b => b.parts.length > 1).length} shared)  ·  calculated train tare ${t2(W.tareTrain)} t`, 2.2, { color: '#444444' });
     let y = PH - 32;
-    p.text(20, y, '1. CAR-BY-CAR — gross mass (t) / max axle load (t)', 2.6, { bold: true });
-    const wc = Math.min(30, (PW - 40 - 76) / Math.max(1, cases.length));
-    const cols = [{ h: 'Car', w: 12, align: 'middle' }, { h: 'Type', w: 16, align: 'middle' }, { h: 'Tare calc. (t)', w: 24, align: 'end' }, { h: 'Tare target (t)', w: 24, align: 'end' }]
-      .concat(cases.map(cs => ({ h: cs.name, w: wc, align: 'end' })));
-    const maxA = W.maxAxle * 1000;
-    const rows = R.form.cars.map(car => {
-      const w = W.perType.get(car.type.name);
-      return [car.no, car.label, t2(w.tareKg), t2(w.target)].concat(w.cases.map(q => `${t2(q.mass)} / ${t2(q.axle)}`));
-    });
-    rows.push(['', 'TRAIN', t2(W.tareTrain), t2(R.form.cars.reduce((a, c) => a + num(c.type.tare, 0) * 1000, 0))].concat(W.train.map(q => t2(q.mass))));
-    const yB = table(p, 20, y - 3, cols, rows, { rowH: 4.8, h: 1.95, boldRows: [rows.length - 1], shade: [rows.length - 1],
-      colorFn: (ri, ci, val) => { if (ci < 4 || ri >= rows.length - 1) return undefined; const a = parseFloat(String(val).split('/')[1]); return a * 1000 > maxA + 1e-6 ? '#b3261e' : undefined; } });
+    p.text(20, y, '1. AXLE LOAD PER BOGIE (t)  /  WHEEL LOAD IMBALANCE (%)', 2.6, { bold: true });
+    const wc = Math.min(36, (PW - 40 - 84) / Math.max(1, cases.length));
+    const cols = [{ h: 'Bogie', w: 14, align: 'middle' }, { h: 'Location', w: 48 }, { h: 'Pos. (mm)', w: 22, align: 'end' }].concat(cases.map(cs => ({ h: cs.name, w: wc, align: 'end' })));
+    const n = W.bogies.length + 1;
+    const rowH = Math.min(4.8, (y - 3 - 110) / n);
+    const rows = W.bogies.map(bg => [bg.no, bg.label, fmtInt(bg.tx)].concat(bg.cases.map(q => `${t2(q.axle)} / ${q.imb.toFixed(1)}%`)));
+    const yB = table(p, 20, y - 3, cols, rows, { rowH, h: Math.min(1.9, rowH * 0.45),
+      colorFn: (ri, ci, val) => { if (ci < 3 || ri < 0) return undefined; const q = W.bogies[ri].cases[ci - 3]; return q.ok && q.imbOk ? undefined : '#b3261e'; } });
     y = yB - 9;
     p.text(20, y, '2. TRAIN CHECK', 2.6, { bold: true });
-    const cols2 = [{ h: 'Item', w: 52 }].concat(cases.map(cs => ({ h: cs.name, w: wc, align: 'end' })));
+    const cols2 = [{ h: 'Item', w: 62 }].concat(cases.map(cs => ({ h: cs.name, w: wc, align: 'end' })));
     const rows2 = [
       ['Passengers'].concat(W.train.map(q => fmtInt(q.pax))),
       ['Train mass (t)'].concat(W.train.map(q => t2(q.mass))),
       ['Max. axle load (t)'].concat(W.train.map(q => t2(q.axle))),
-      [`Check ≤ ${W.maxAxle} t`].concat(W.train.map(q => (q.ok ? 'OK' : 'EXCEEDED'))),
+      [`Axle load ≤ ${W.maxAxle} t`].concat(W.train.map(q => (q.ok ? 'OK' : 'EXCEEDED'))),
+      ['Max. wheel load imbalance'].concat(W.train.map(q => `${q.imb.toFixed(1)} %`)),
+      [`Imbalance ≤ ${W.limit} %`].concat(W.train.map(q => (q.imbOk ? 'OK' : 'EXCEEDED'))),
     ];
-    table(p, 20, y - 3, cols2, rows2, { rowH: 4.8, h: 1.95, boldRows: [3], colorFn: (ri, ci, val) => (val === 'EXCEEDED' ? '#b3261e' : val === 'OK' ? '#0f7a63' : undefined) });
+    const y2 = table(p, 20, y - 3, cols2, rows2, { rowH: 4.8, h: 1.95, boldRows: [3, 5], colorFn: (ri, ci, val) => okC(val) });
+    y = y2 - 9;
+    p.text(20, y, '3. CAR MASSES (t)', 2.6, { bold: true });
+    const cols3 = [{ h: 'Car', w: 12, align: 'middle' }, { h: 'Type', w: 16, align: 'middle' }, { h: 'Supports', w: 34, align: 'middle' }, { h: 'Car body', w: 20, align: 'end' }, { h: 'Bogies', w: 20, align: 'end' },
+      { h: 'Tare calc.', w: 20, align: 'end' }, { h: 'Tare target', w: 20, align: 'end' }].concat(cases.map(cs => ({ h: cs.name, w: Math.min(24, (PW - 40 - 142) / Math.max(1, cases.length)), align: 'end' })));
+    const rows3 = R.form.cars.map(car => {
+      const w = W.perType.get(car.type.name);
+      const sp = w.lay.shared.map(s => (s ? 'shared' : 'own')).join(' / ');
+      return [car.no, car.label, sp, t2(w.bodyMass), t2(w.bogieMass), t2(w.tareKg), t2(w.target)].concat(w.cases.map(q => t2(q.mass)));
+    });
+    const y3 = table(p, 20, y - 3, cols3, rows3, { rowH: Math.min(4.6, (y - 3 - 56) / (rows3.length + 1)), h: 1.85 });
+    if (W.warnings.length) W.warnings.slice(0, 4).forEach((wn, i) => p.text(20, y3 - 5 - i * 3.8, '· ' + wn, 1.8, { color: '#b3261e' }));
     return { title: 'Weight calculation — train summary', short: 'Train weight', size, scale: 0, dxfScale: 100, views: [], paper: p };
   }
   const fmtInt = v => (Number.isFinite(v) ? Math.round(v).toLocaleString('en-US') : '—');

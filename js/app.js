@@ -8,20 +8,35 @@
   const ALLOWED_IN_VIEWER = new Set(['pdf', 'json', 'zip', 'svg', 'csv', 'txt', 'md', 'html', 'xlsx']);
   const EQ_COLS = [
     { key: 'car', head: 'Car Type', hint: 'Must match a car variant name, e.g. Tc, M1, M2' },
-    { key: 'cat', head: 'Category', hint: 'Equipment (drawn on the layouts) or Mass item (carbody, bogies, cables, interior … weight only)' },
-    { key: 'name', head: 'Equipment / Item', hint: 'Name shown on the drawing or in the weight list, e.g. VVVF, Carbody shell' },
-    { key: 'loc', head: 'Location', hint: 'Underframe or Roof (equipment only)' },
+    { key: 'name', head: 'Equipment', hint: 'Name shown on the drawing, e.g. VVVF' },
+    { key: 'loc', head: 'Location', hint: 'Underframe or Roof' },
     { key: 'length', head: 'Length (mm)', hint: 'Along the car' },
     { key: 'width', head: 'Width (mm)', hint: 'Across the car' },
     { key: 'height', head: 'Height (mm)', hint: 'Box height below the mounting face (roof: above roof)' },
-    { key: 'x', head: 'X from car centre (mm)', hint: 'Centre of the item; + towards END 1. Used for drawing and for the centre of gravity' },
-    { key: 'y', head: 'Y from centre line (mm)', hint: 'Equipment centre; + towards side A' },
-    { key: 'mass', head: 'Mass (kg)', hint: 'Used for the tare mass and axle loads' },
+    { key: 'x', head: 'X from car centre (mm)', hint: 'Centre of the box; + towards END 1' },
+    { key: 'y', head: 'Y from centre line (mm)', hint: 'Centre of the box; + towards side A' },
     { key: 'kind', head: 'Symbol', hint: 'Optional: box, ac or panto' },
   ];
+  const WT_COLS = [
+    { key: 'car', head: 'Car Type', hint: 'Car variant name, e.g. Tc, M1, M2' },
+    { key: 'loc', head: 'Location', hint: 'Car body, Roof, Interior, UF, Cab, End or Bogie (Bogie rows sit directly on the nearest bogie)' },
+    { key: 'name', head: 'Item', hint: 'e.g. Carbody shell, VVVF, Seats, Bogie END 1 … put Other items last' },
+    { key: 'length', head: 'Length (mm)', hint: 'Optional, along the car' },
+    { key: 'width', head: 'Width (mm)', hint: 'Optional, across the car' },
+    { key: 'height', head: 'Height (mm)', hint: 'Optional, vertical size' },
+    { key: 'x', head: 'X from car centre (mm)', hint: 'Centre of gravity of the item; + towards END 1' },
+    { key: 'y', head: 'Y from centre line (mm)', hint: 'Centre of gravity; + towards side A' },
+    { key: 'z', head: 'Z above rail (mm)', hint: 'Centre of gravity height above top of rail; blank = default for the location' },
+    { key: 'mass', head: 'Mass (kg)', hint: 'Item mass' },
+  ];
+  const LISTS = {
+    equipment: { key: 'equipment', cols: null, sheet: 'Equipment', suffix: '_equipment', srcKey: 'equipmentSource', required: ['car', 'name', 'x', 'length'], sheetRe: /equip/i },
+    weights: { key: 'weightItems', cols: null, sheet: 'Weights', suffix: '_weights', srcKey: 'weightSource', required: ['car', 'name', 'mass'], sheetRe: /weigh|mass/i },
+  };
 
   let cfg = null;
   const gen = { main: null, uf: null, wt: null };
+  LISTS.equipment.cols = EQ_COLS; LISTS.weights.cols = WT_COLS;
   const ui = { pane: 1, sheet: { main: 0, uf: 0, wt: 0 }, zoom: { main: 1, uf: 1, wt: 1 }, wcar: null };
   let timer = null;
 
@@ -46,7 +61,7 @@
   function field(base, label, path, kind, o) {
     o = o || {};
     const full = base ? base + '.' + path : path;
-    const id = 'f-' + full.replace(/[^a-z0-9]/gi, '_');
+    const id = (o.idp || 'f-') + full.replace(/[^a-z0-9]/gi, '_');
     const v = get(cfg, full);
     const cls = 'f' + (o.wide || kind === 'area' ? ' wide' : '') + (kind === 'check' ? ' check' : '');
     if (kind === 'check') return `<div class="${cls}"><input type="checkbox" id="${id}" data-path="${full}" data-kind="check"${v ? ' checked' : ''}${o.re ? ' data-rerender="1"' : ''}><label for="${id}">${esc(label)}</label></div>`;
@@ -101,7 +116,7 @@
     h += card('HVAC', `<div class="fields">
       ${F('Saloon HVAC units per car', 'hvac.unitsPerCar', 'num')}<div></div>
       ${F('Cab HVAC applicable (driving cars)', 'hvac.cabHvac', 'check', { wide: true })}
-    </div><p class="hint">Position, size and mass of each unit come from the equipment list (step 2): saloon units are roof rows named AC…, the cab unit a row named CAB AC or CAB HVAC. The tool checks the counts.</p>`);
+    </div><p class="hint">Position and size of each unit come from the equipment list (step 2), its mass from the weight list (step 5): saloon units are roof rows named AC…, the cab unit a row named CAB AC or CAB HVAC. The tool checks the counts.</p>`);
     h += card('Interior & seating rules', `<div class="fields">
       ${F('Seating', 'interior.seatType', 'select', { re: true, options: [['longitudinal', 'Longitudinal'], ['transverse', 'Transverse (facing bays)']] })}
       ${F('Seat width / pax', 'interior.seatWidth', 'num', { unit: 'mm' })}
@@ -115,7 +130,7 @@
     </div><p class="hint">Defaults follow common EN / PRM practice (wheelchair space 1300 × 700, Ø1500 turning circle). Confirm against the standard for each project.</p>`);
     h += '</div>';
 
-    h += `<div class="section-title"><h3>Car variants</h3><span class="hint" style="margin:0">One card per car variant. Positions run from END 1 (cab end of a driving car). Equipment and mass items are entered in step 2.</span></div>`;
+    h += `<div class="section-title"><h3>Car variants</h3><span class="hint" style="margin:0">One card per car variant. Positions run from END 1 (cab end of a driving car). Equipment positions are entered in step 2, masses in step 5.</span></div>`;
     h += `<div class="cards" id="types">${cfg.carTypes.map((t, i) => typeCard(t, i)).join('')}</div>`;
 
     h += `<div class="section-title"><h3>Load cases & mass</h3></div><div class="cards"><div class="card" style="grid-column:1/-1"><div class="fields" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">
@@ -134,7 +149,7 @@
     <p class="hint">Density: standees = standing area × pax/m². Factor: multiplies the total of another case (TPN = 1.8 × AW2).</p>
     <button class="btn small" id="addCase">Add load case</button></div></div>`;
 
-    h += `<div class="genbar"><p>All inputs are saved in this browser. Next, check the equipment and mass list, then generate all drawings and calculations.</p><button class="btn primary big" data-pane="2">Next: Equipment Inputs →</button></div>`;
+    h += `<div class="genbar"><p>All inputs are saved in this browser. Next, check the equipment list, then generate all drawings and calculations.</p><button class="btn primary big" data-pane="2">Next: Equipment Inputs →</button></div>`;
     $('pane-1').innerHTML = h;
     refreshPane1Info();
   }
@@ -150,10 +165,11 @@
         ${F('Driving car (with cab)', 'cab', 'check', { wide: true, re: true })}
         ${F('Length over couplers', 'couplerLength', 'num', { unit: 'mm' })}${F('Body length', 'bodyLength', 'num', { unit: 'mm' })}
         ${t.cab ? F('Cab length (body end → partition)', 'cabLength', 'num', { unit: 'mm', wide: true }) : ''}
-        ${F('Bogie centres', 'bogieCentres', 'num', { unit: 'mm' })}${F('Motor bogies', 'motorBogies', 'select', { numeric: true, options: [['0', '0 (trailer)'], ['1', '1'], ['2', '2']] })}
+        ${F('Bogie centres (own bogies)', 'bogieCentres', 'num', { unit: 'mm' })}${F('Motor bogies', 'motorBogies', 'select', { numeric: true, options: [['0', '0 (trailer)'], ['1', '1'], ['2', '2']] })}
+        ${F('END 1 support', 'support1', 'select', { options: [['own', 'Own bogie'], ['shared', 'Shared (Jacobs) bogie']] })}${F('END 2 support', 'support2', 'select', { options: [['own', 'Own bogie'], ['shared', 'Shared (Jacobs) bogie']] })}
         ${F('Doors per side', 'doorsPerSide', 'num')}${F('Door pitch in car', 'doorPitch', 'num', { unit: 'mm' })}
         ${F('END 2 coupler face → nearest door centre', 'doorRearOffset', 'num', { unit: 'mm', wide: true })}
-        ${F('Tare mass AW0', 'tare', 'num', { unit: 't' })}<div></div>
+        ${F('Tare mass AW0 (used for capacity)', 'tare', 'num', { unit: 't', wide: true })}
         ${F('Spec. seats (check)', 'specSeats', 'num')}${F('Spec. standees AW2 (check)', 'specStanding', 'num')}
         ${F('Bay rules', 'bays', 'area', { rows: 2, hint: 'One per line: <code>bay side value</code> — side A, B or AB; value = max seats, <code>none</code>, <code>wheelchair</code> or <code>cabinet:800:600:LABEL</code>. Bays B0…Bn from END 1.' })}
       </div></div>`;
@@ -193,7 +209,6 @@
     const types = cfg.carTypes.map(t => t.name);
     if (!n.car || !types.includes(n.car)) return ['bad', 'Unknown car variant'];
     if (!n.name) return ['bad', 'No name'];
-    if (n.cat === 'mass') return Number.isFinite(n.mass) ? (R && !R.used.includes(n.car) ? ['info', 'Not in formation'] : ['ok', 'OK']) : ['bad', 'Mass missing'];
     if (!Number.isFinite(n.x) || !(n.length > 0)) return ['bad', 'X or length missing'];
     const hw = TLT.num(cfg.common.bodyWidth, 2950) / 2;
     if (Number.isFinite(n.width) && Math.abs(n.y) + n.width / 2 > hw + 1) return ['bad', 'Outside body width'];
@@ -206,33 +221,33 @@
     const st = rows.map(r => rowStatus(r, R));
     const bad = st.filter(s => s[0] === 'bad').length;
     const perCar = cfg.carTypes.map(t => `${t.name}: ${rows.filter(r => String(r.car).trim() === t.name).length}`).join(' · ');
-    let h = `<div class="pane-head"><h2>Equipment Inputs</h2><p>Load the equipment and mass list from Excel. Equipment rows are drawn on the layouts; mass items (carbody, bogies, cables, interior …) are used only in the weight calculation.</p></div>`;
+    let h = `<div class="pane-head"><h2>Equipment Inputs</h2><p>Load the equipment list from Excel. It positions the underframe and roof equipment on the layouts. Masses are entered in step 5.</p></div>`;
     h += '<div class="cards">';
     h += card('1. Excel format', `<div class="scroll-x"><table class="data"><thead><tr><th>Column</th><th>Meaning</th></tr></thead><tbody>${EQ_COLS.map(c => `<tr><td class="cols">${esc(c.head)}</td><td>${esc(c.hint)}</td></tr>`).join('')}</tbody></table></div>
-      <p class="hint">One sheet with all cars. Column order does not matter; headers are recognised by name. Mass items only need Car Type, Category, Item, X and Mass. The template contains the current list, so you can edit it and upload it again.</p>
-      <button class="btn" id="dlTemplate">Download Excel template</button>`);
-    h += card('2. Upload equipment list', `<div class="drop" id="drop"><p><b>Drop the .xlsx or .csv file here</b></p><p class="hint">or</p><button class="btn primary" id="pickXls">Choose file…</button><input type="file" id="fileXls" accept=".xlsx,.xls,.csv" hidden></div>
-      <p class="hint" style="margin-top:10px">Current list: <b>${esc(cfg.equipmentSource || '—')}</b><br>${rows.length} rows · ${esc(perCar)}${bad ? ` · <span class="pill bad">${bad} row${bad > 1 ? 's' : ''} to fix</span>` : ''}</p>`);
+      <p class="hint">One sheet with all cars. Column order does not matter; headers are recognised by name. The template contains the current list, so you can edit it and upload it again.</p>
+      <button class="btn" data-tpl="equipment">Download Excel template</button>`);
+    h += card('2. Upload equipment list', dropZone('equipment') + `<p class="hint" style="margin-top:10px">Current list: <b>${esc(cfg.equipmentSource || '—')}</b><br>${rows.length} rows · ${esc(perCar)}${bad ? ` · <span class="pill bad">${bad} row${bad > 1 ? 's' : ''} to fix</span>` : ''}</p>`);
     h += '</div>';
-    h += `<div class="section-title"><h3>3. Equipment &amp; mass list</h3><span class="hint" style="margin:0">Small corrections can be made here; the Excel file stays your master copy.</span><span class="grow"></span><button class="btn small" id="addRow">Add row</button></div>`;
+    h += `<div class="section-title"><h3>3. Equipment list</h3><span class="hint" style="margin:0">Small corrections can be made here; the Excel file stays your master copy.</span><span class="grow"></span><button class="btn small" id="addRow">Add row</button></div>`;
     h += `<div class="card"><div class="scroll-x"><table class="data"><thead><tr><th>Status</th>${EQ_COLS.map(c => `<th>${esc(c.head)}</th>`).join('')}<th></th></tr></thead><tbody>`;
     rows.forEach((r, i) => {
       const [cls, txt] = st[i];
-      h += `<tr class="${/^m/i.test(r.cat || '') ? 'cat-mass' : ''}"><td><span class="pill ${cls}">${esc(txt)}</span></td>` + EQ_COLS.map(c => {
+      h += `<tr><td><span class="pill ${cls}">${esc(txt)}</span></td>` + EQ_COLS.map(c => {
         const id = `eq-${i}-${c.key}`;
-        if (c.key === 'car') return `<td><select id="${id}" data-path="equipment.${i}.car" data-kind="text" data-eq="1">${[...new Set(cfg.carTypes.map(t => t.name).concat([String(r.car)]))].map(n => `<option${n === String(r.car) ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></td>`;
-        if (c.key === 'cat') return `<td><select id="${id}" data-path="equipment.${i}.cat" data-kind="text" data-eq="1" data-rerender2="1"><option${!/^m/i.test(r.cat || '') ? ' selected' : ''}>Equipment</option><option${/^m/i.test(r.cat || '') ? ' selected' : ''}>Mass item</option></select></td>`;
-        if (c.key === 'loc') return `<td><select id="${id}" data-path="equipment.${i}.loc" data-kind="text" data-eq="1"><option value="under"${r.loc !== 'roof' ? ' selected' : ''}>Underframe</option><option value="roof"${r.loc === 'roof' ? ' selected' : ''}>Roof</option></select></td>`;
-        if (c.key === 'kind') return `<td><select id="${id}" data-path="equipment.${i}.kind" data-kind="text" data-eq="1">${[['', 'auto'], ['box', 'box'], ['ac', 'ac'], ['panto', 'panto']].map(([v, l]) => `<option value="${v}"${String(r.kind || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>`;
+        if (c.key === 'car') return `<td>${carSelect(id, `equipment.${i}.car`, r.car)}</td>`;
+        if (c.key === 'loc') return `<td><select id="${id}" data-path="equipment.${i}.loc" data-kind="text"><option value="under"${r.loc !== 'roof' ? ' selected' : ''}>Underframe</option><option value="roof"${r.loc === 'roof' ? ' selected' : ''}>Roof</option></select></td>`;
+        if (c.key === 'kind') return `<td><select id="${id}" data-path="equipment.${i}.kind" data-kind="text">${[['', 'auto'], ['box', 'box'], ['ac', 'ac'], ['panto', 'panto']].map(([v, l]) => `<option value="${v}"${String(r.kind || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>`;
         const numeric = c.key !== 'name';
-        return `<td><input id="${id}" ${numeric ? 'class="num" type="number" step="any"' : ''} data-path="equipment.${i}.${c.key}" data-kind="${numeric ? 'num' : 'text'}" data-eq="1" value="${esc(r[c.key])}"></td>`;
+        return `<td><input id="${id}" ${numeric ? 'class="num" type="number" step="any"' : ''} data-path="equipment.${i}.${c.key}" data-kind="${numeric ? 'num' : 'text'}" value="${esc(r[c.key])}"></td>`;
       }).join('') + `<td><button class="btn small" data-delrow="${i}" aria-label="Delete row ${i + 1}">×</button></td></tr>`;
     });
     if (!rows.length) h += `<tr><td colspan="${EQ_COLS.length + 2}" class="hint" style="padding:16px">No equipment yet. Download the template, fill it in and upload it.</td></tr>`;
     h += '</tbody></table></div></div>';
-    h += `<div class="genbar"><p>Generates the train and car layouts with capacity (step 3), the underframe layouts (step 4) and the weight calculation (step 5).</p><button class="btn primary big" id="genAll">Generate Results →</button></div>`;
+    h += `<div class="genbar"><p>Generates the train layouts and capacity (step 3), the underframe layouts (step 4) and the weight calculation sheets (step 5).</p><button class="btn primary big" id="genAll">Generate Results →</button></div>`;
     $('pane-2').innerHTML = h;
   }
+  const dropZone = list => `<div class="drop" data-drop="${list}"><p><b>Drop the .xlsx or .csv file here</b></p><p class="hint">or</p><button class="btn primary" data-pick="${list}">Choose file…</button><input type="file" id="file-${list}" data-file="${list}" accept=".xlsx,.xls,.csv" hidden></div>`;
+  const carSelect = (id, path, val) => `<select id="${id}" data-path="${path}" data-kind="text">${[...new Set(cfg.carTypes.map(t => t.name).concat([String(val)]))].map(n => `<option${n === String(val) ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
   function refreshRowStatus() {
     let R = null; try { R = TLT.compute(cfg); } catch (e) { /* */ }
     (cfg.equipment || []).forEach((r, i) => {
@@ -243,12 +258,13 @@
     });
   }
 
-  /* ---------- Excel / CSV ---------- */
+  /* ---------- Excel / CSV (equipment list and weight list) ---------- */
   function headerKey(h) {
     const s = String(h || '').trim().toLowerCase();
     if (!s) return null;
     if (/^x(\s|$|\(|_)|x\s*from|longitud/.test(s)) return 'x';
     if (/^y(\s|$|\(|_)|y\s*from|lateral|transvers/.test(s)) return 'y';
+    if (/^z(\s|$|\(|_)|z\s*(from|above)|above rail|vertical/.test(s)) return 'z';
     if (/^l(\s|$|\()|length/.test(s)) return 'length';
     if (/^w(\s|$|\()|width/.test(s)) return 'width';
     if (/^h(\s|$|\()|height/.test(s)) return 'height';
@@ -260,27 +276,33 @@
     if (/equip|name|item|descr/.test(s)) return 'name';
     return null;
   }
-  function rowsFromAoa(aoa) {
+  function rowsFromAoa(aoa, spec) {
     let hi = -1, map = null;
     for (let i = 0; i < Math.min(aoa.length, 15); i++) {
       const m = {};
       (aoa[i] || []).forEach((h, j) => { const k = headerKey(h); if (k && m[k] == null) m[k] = j; });
-      if (['car', 'name', 'x'].every(k => m[k] != null) && (m.length != null || m.mass != null)) { hi = i; map = m; break; }
+      if (spec.required.every(k => m[k] != null)) { hi = i; map = m; break; }
     }
-    if (hi < 0) throw new Error('No header row found. It needs at least Car Type, Equipment / Item, X from car centre and Length or Mass columns.');
+    if (hi < 0) throw new Error(`No header row found. It needs at least ${spec.required.map(k => spec.cols.find(c => c.key === k).head).join(', ')} columns.`);
     const out = [];
     const clean = v => (typeof v === 'string' ? v.replace(/[,\s]/g, '') : v);
     aoa.slice(hi + 1).forEach(r => {
       if (!r || r.every(c => c === '' || c == null)) return;
       const o = {};
-      EQ_COLS.forEach(c => { if (map[c.key] != null) o[c.key] = r[map[c.key]]; });
+      spec.cols.concat([{ key: 'cat' }]).forEach(c => { if (map[c.key] != null) o[c.key] = r[map[c.key]]; });
       if (!String(o.car || '').trim() && !String(o.name || '').trim()) return;
-      ['length', 'width', 'height', 'x', 'y', 'mass'].forEach(k => { const v = parseFloat(clean(o[k])); o[k] = Number.isFinite(v) ? v : ''; });
+      if (spec.key === 'equipment' && /^(m|w)/i.test(String(o.cat || '').trim())) return; // old mass-item rows are not equipment
+      ['length', 'width', 'height', 'x', 'y', 'z', 'mass'].forEach(k => { if (!(k in o)) return; const v = parseFloat(clean(o[k])); o[k] = Number.isFinite(v) ? v : ''; });
       o.car = String(o.car == null ? '' : o.car).trim(); o.name = String(o.name == null ? '' : o.name).trim();
-      o.loc = /^r/i.test(String(o.loc || '')) ? 'roof' : 'under';
-      o.cat = /^(m|w)/i.test(String(o.cat || '').trim()) ? 'Mass item' : 'Equipment';
-      o.kind = String(o.kind || '').trim().toLowerCase();
-      if (!['box', 'ac', 'panto'].includes(o.kind)) o.kind = '';
+      delete o.cat;
+      if (spec.key === 'equipment') {
+        o.loc = /^r/i.test(String(o.loc || '')) ? 'roof' : 'under';
+        o.kind = String(o.kind || '').trim().toLowerCase();
+        if (!['box', 'ac', 'panto'].includes(o.kind)) o.kind = '';
+        delete o.mass;
+      } else {
+        o.loc = TLT.normWeightLoc(o.loc);
+      }
       out.push(o);
     });
     return out;
@@ -299,7 +321,8 @@
     if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
     return rows;
   }
-  function importFile(file) {
+  function importFile(file, listName) {
+    const spec = LISTS[listName];
     const isCsv = /\.csv$/i.test(file.name);
     if (!isCsv && !window.XLSX) { toast('The Excel reader could not load (no internet connection). Save the sheet as CSV and upload that instead.', true); return; }
     const rd = new FileReader();
@@ -309,89 +332,131 @@
         if (isCsv) aoa = parseCsv(String(rd.result));
         else {
           const wb = window.XLSX.read(new Uint8Array(rd.result), { type: 'array' });
-          const name = wb.SheetNames.find(n => /equip/i.test(n)) || wb.SheetNames[0];
+          const name = wb.SheetNames.find(n => spec.sheetRe.test(n)) || wb.SheetNames[0];
           aoa = window.XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '', raw: true });
         }
-        const rows = rowsFromAoa(aoa);
-        if (!rows.length) throw new Error('The sheet has a header row but no equipment rows.');
-        cfg.equipment = rows;
-        cfg.equipmentSource = `${file.name} (${new Date().toISOString().slice(0, 10)})`;
-        renderPane2(); markChanged();
+        const rows = rowsFromAoa(aoa, spec);
+        if (!rows.length) throw new Error('The sheet has a header row but no data rows.');
+        cfg[spec.key] = rows;
+        cfg[spec.srcKey] = `${file.name} (${new Date().toISOString().slice(0, 10)})`;
+        if (listName === 'equipment') renderPane2(); else renderWeightEdit();
+        markChanged();
         const unknown = [...new Set(rows.map(r => r.car).filter(c => !cfg.carTypes.some(t => t.name === c)))];
         toast(`${rows.length} rows loaded from ${file.name}.` + (unknown.length ? ` Unknown car variants: ${unknown.join(', ')}.` : ''), unknown.length > 0);
       } catch (e) { toast(`Could not read ${file.name}: ${e.message}`, true); }
     };
     if (isCsv) rd.readAsText(file); else rd.readAsArrayBuffer(file);
   }
-  function downloadTemplate() {
-    const head = EQ_COLS.map(c => c.head);
-    const isMass = r => /^m/i.test(r.cat || '');
-    const body = (cfg.equipment || []).map(r => EQ_COLS.map(c => (c.key === 'cat' ? (isMass(r) ? 'Mass item' : 'Equipment') : c.key === 'loc' ? (isMass(r) ? '' : r.loc === 'roof' ? 'Roof' : 'Underframe') : r[c.key] == null ? '' : r[c.key])));
-    if (!body.length) body.push([cfg.carTypes[0] ? cfg.carTypes[0].name : 'Tc', 'Equipment', 'VVVF', 'Underframe', 3400, 1400, 600, 1700, -700, 900, '']);
+  function downloadTemplate(listName) {
+    const spec = LISTS[listName];
+    const head = spec.cols.map(c => c.head);
+    const body = (cfg[spec.key] || []).map(r => spec.cols.map(c => (listName === 'equipment' && c.key === 'loc' ? (r.loc === 'roof' ? 'Roof' : 'Underframe') : r[c.key] == null ? '' : r[c.key])));
+    const notes = listName === 'equipment'
+      ? [['Sign convention', 'X + towards END 1 (cab end of a driving car); Y + towards side A (top of the plan view)'], ['Mounting face', `${cfg.common.mountDepth} mm below floor; Height is measured down from it`]]
+      : [['Sign convention', 'X + towards END 1; Y + towards side A; Z above top of rail'], ['Locations', TLT.WEIGHT_LOCS.join(', ')],
+        ['Bogie rows', 'Location Bogie; X = bogie centre (e.g. +6900 / -6900). For a shared (Jacobs) bogie enter its mass on one car only, with X at that car end (± half the length over couplers).'],
+        ['Typical rows', 'Carbody shell, doors, glazing, interior ceiling & lining, floor, seats, cables & cabinets, piping, couplers, cab equipment, each equipment box, bogies … Other items last']];
     if (window.XLSX) {
       const X = window.XLSX;
       const wb = X.utils.book_new();
       const ws = X.utils.aoa_to_sheet([head].concat(body));
       ws['!cols'] = head.map(h => ({ wch: Math.max(10, h.length + 2) }));
-      X.utils.book_append_sheet(wb, ws, 'Equipment');
-      const ins = [['Column', 'Meaning']].concat(EQ_COLS.map(c => [c.head, c.hint]),
-        [[], ['Car variants', cfg.carTypes.map(t => t.name).join(', ')], ['Sign convention', 'X + towards END 1 (cab end of a driving car); Y + towards side A (top of the plan view)'], ['Mounting face', `${cfg.common.mountDepth} mm below floor; Height is measured down from it`],
-          ['Mass items', 'Typical rows: Carbody shell, Bogie END 1, Bogie END 2, Electrical cables & cabinets, Pneumatic piping, Interior ceiling & lining, Floor, Seats, Passenger doors & operators, Glazing, Couplers & draft gear, … and Other items last'],
-          ['Bogie X', 'Bogie END 1 at + half the bogie centres, Bogie END 2 at - half (e.g. +6900 / -6900)']]);
-      const wi = X.utils.aoa_to_sheet(ins); wi['!cols'] = [{ wch: 26 }, { wch: 80 }];
+      X.utils.book_append_sheet(wb, ws, spec.sheet);
+      const wi = X.utils.aoa_to_sheet([['Column', 'Meaning']].concat(spec.cols.map(c => [c.head, c.hint]), [[], ['Car variants', cfg.carTypes.map(t => t.name).join(', ')]], notes));
+      wi['!cols'] = [{ wch: 26 }, { wch: 90 }];
       X.utils.book_append_sheet(wb, wi, 'Instructions');
-      const out = X.write(wb, { type: 'array', bookType: 'xlsx' });
-      offerFile(baseName() + '_equipment.xlsx', new Uint8Array(out), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      offerFile(baseName() + spec.suffix + '.xlsx', new Uint8Array(X.write(wb, { type: 'array', bookType: 'xlsx' })), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     } else {
       const csv = [head].concat(body).map(r => r.map(v => (/[",;\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v)).join(',')).join('\r\n');
-      offerFile(baseName() + '_equipment.csv', new TextEncoder().encode(csv), 'text/csv');
+      offerFile(baseName() + spec.suffix + '.csv', new TextEncoder().encode(csv), 'text/csv');
       toast('Excel library unavailable offline — downloaded the template as CSV.');
     }
   }
 
-  /* ================= Pane 5: Weight calculations (editable list + live results) ================= */
+  /* ================= Pane 5: Weight calculations ================= */
+  function weightOrder(car) {
+    const list = cfg.weightItems || [];
+    const idx = list.map((r, i) => i).filter(i => String(list[i].car).trim() === car);
+    const other = i => /^other/i.test(list[i].name || '');
+    return TLT.WEIGHT_LOCS.flatMap(lc => idx.filter(i => TLT.normWeightLoc(list[i].loc) === lc && !other(i))).concat(idx.filter(other));
+  }
   function renderWeightEdit() {
     let R = null; try { R = TLT.compute(cfg); } catch (e) { /* */ }
     const names = R ? R.used : cfg.carTypes.map(t => t.name);
     if (!names.includes(ui.wcar)) ui.wcar = names[0];
     const car = ui.wcar;
-    const list = cfg.equipment || [];
-    const isMass = r => /^m/i.test(r.cat || '');
-    const idx = list.map((r, i) => i).filter(i => list[i].car === car);
-    const order = idx.filter(i => isMass(list[i]) && !/^other/i.test(list[i].name))
-      .concat(idx.filter(i => !isMass(list[i]) && list[i].loc !== 'roof'), idx.filter(i => !isMass(list[i]) && list[i].loc === 'roof'), idx.filter(i => isMass(list[i]) && /^other/i.test(list[i].name)));
-    let h = `<div class="chips" role="group" aria-label="Car variant">${names.map(n => `<button class="chip" data-wcar="${esc(n)}" aria-pressed="${n === car}">${esc(n)}</button>`).join('')}</div>`;
-    h += `<div class="wgrid"><div class="card"><h3>Mass list — ${esc(car)}</h3><div class="scroll-x"><table class="data"><thead><tr><th>Category</th><th>Item</th><th>X from centre (mm)</th><th>Mass (kg)</th><th></th></tr></thead><tbody>`;
-    order.forEach(i => {
+    const list = cfg.weightItems || [];
+    const F = (...a) => field('', ...a);
+    let h = '<div class="cards">';
+    h += card('Settings', `<div class="fields">
+      ${F('Passenger mass', 'loads.paxMass', 'num', { unit: 'kg', idp: 'wf-' })}${F('Max. axle load', 'loads.maxAxleLoad', 'num', { unit: 't', idp: 'wf-' })}
+      ${F('Wheel load spacing (rail contact)', 'loads.wheelSpacing', 'num', { unit: 'mm', idp: 'wf-' })}${F('Wheel load imbalance limit', 'loads.imbalanceLimit', 'num', { unit: '%', idp: 'wf-' })}
+    </div><p class="hint">Bogie supports (own or shared Jacobs) are set per car variant in step 1. Tare for the capacity sheet stays the value typed in step 1.</p>`);
+    h += card('Weight list from Excel', `<p class="hint">A separate Excel file: Car Type, Location (Car body, Roof, Interior, UF, Cab, End, Bogie), Item, L, W, H, X, Y, Z, Mass. The template contains the current list.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn" data-tpl="weights">Download weight template</button><button class="btn" id="copyEq" title="Add rows for equipment boxes from step 2 that are not in the weight list yet">Copy equipment from step 2</button></div>
+      ${dropZone('weights')}<p class="hint" style="margin-top:8px">Current list: <b>${esc(cfg.weightSource || '—')}</b> · ${list.length} rows</p>`);
+    h += '</div>';
+    h += `<div class="section-title"><h3>Weight list per car</h3></div><div class="chips" role="group" aria-label="Car variant">${names.map(n => `<button class="chip" data-wcar="${esc(n)}" aria-pressed="${n === car}">${esc(n)}</button>`).join('')}</div>`;
+    h += `<div class="card"><div class="scroll-x"><table class="data"><thead><tr><th>Location</th><th>Item</th><th>L (mm)</th><th>W (mm)</th><th>H (mm)</th><th>X (mm)</th><th>Y (mm)</th><th>Z above rail (mm)</th><th>Mass (kg)</th><th></th></tr></thead><tbody>`;
+    weightOrder(car).forEach(i => {
       const r = list[i];
-      const m = isMass(r);
-      h += `<tr class="${m ? 'cat-mass' : ''}"><td>${m ? 'Mass item' : (r.loc === 'roof' ? 'Equipment · roof' : 'Equipment · underframe')}</td>
-        <td><input id="w-${i}-name" data-path="equipment.${i}.name" data-kind="text" value="${esc(r.name)}"></td>
-        <td><input class="num" id="w-${i}-x" type="number" step="any" data-path="equipment.${i}.x" data-kind="num" value="${esc(r.x)}"></td>
-        <td><input class="num" id="w-${i}-m" type="number" step="any" data-path="equipment.${i}.mass" data-kind="num" value="${esc(r.mass)}"></td>
-        <td>${m ? `<button class="btn small" data-delw="${i}" aria-label="Delete ${esc(r.name)}">×</button>` : ''}</td></tr>`;
+      const loc = TLT.normWeightLoc(r.loc);
+      const num = (k, ph) => `<td><input class="num" id="w-${i}-${k}" type="number" step="any" data-path="weightItems.${i}.${k}" data-kind="num" value="${esc(r[k])}"${ph ? ` placeholder="${ph}"` : ''}></td>`;
+      h += `<tr class="${loc === 'Bogie' ? 'cat-mass' : ''}"><td><select id="w-${i}-loc" data-path="weightItems.${i}.loc" data-kind="text" data-rerender5="1">${TLT.WEIGHT_LOCS.map(l => `<option${l === loc ? ' selected' : ''}>${l}</option>`).join('')}</select></td>
+        <td><input id="w-${i}-name" data-path="weightItems.${i}.name" data-kind="text" value="${esc(r.name)}"></td>
+        ${num('length')}${num('width')}${num('height')}${num('x')}${num('y')}${num('z', 'auto ' + Math.round(TLT.weightZ(loc, TLT.num(r.height, NaN), cfg)))}${num('mass')}
+        <td><button class="btn small" data-delw="${i}" aria-label="Delete ${esc(r.name)}">×</button></td></tr>`;
     });
-    h += `<tr class="total"><td></td><td>Calculated tare (AW0)</td><td class="num-out" id="wt-xg"></td><td class="num-out" id="wt-tare"></td><td></td></tr>`;
-    h += `<tr><td></td><td>Target tare (Main Dimensions)</td><td></td><td class="num-out" id="wt-target"></td><td></td></tr>`;
-    h += `<tr><td></td><td>Difference</td><td></td><td class="num-out" id="wt-diff"></td><td></td></tr>`;
-    h += `</tbody></table></div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px"><button class="btn primary small" id="addMass">Add line item</button><span class="hint" style="margin:0">New items go above "Other items". Equipment rows (drawn) are edited in step 2.</span></div></div>`;
-    h += `<div class="card"><h3>Axle load per load case — ${esc(car)}</h3><div class="scroll-x" id="wt-cases"></div>
-      <p class="hint">Passengers ${TLT.num(cfg.loads.paxMass, 60)} kg each, seated at the seat centroid and standing at the standing-area centroid. Bogie loads from the centre of gravity; axle load = heavier bogie ÷ 2. Limit ${TLT.num(cfg.loads.maxAxleLoad, 16)} t.</p>
-      <h3 style="margin-top:14px">Train</h3><div class="scroll-x" id="wt-train"></div></div></div>`;
+    h += `<tr class="total"><td></td><td>Car body (sprung)</td><td colspan="6"></td><td class="num-out" id="wt-body"></td><td></td></tr>`;
+    h += `<tr class="total"><td></td><td>Bogies (unsprung)</td><td colspan="6"></td><td class="num-out" id="wt-bog"></td><td></td></tr>`;
+    h += `<tr class="total"><td></td><td>Calculated tare · CoG X / Y / Z</td><td colspan="3"></td><td class="num-out" id="wt-cx"></td><td class="num-out" id="wt-cy"></td><td class="num-out" id="wt-cz"></td><td class="num-out" id="wt-tare"></td><td></td></tr>`;
+    h += `<tr><td></td><td>Target tare (step 1) · difference</td><td colspan="6" class="num-out" id="wt-diff"></td><td class="num-out" id="wt-target"></td><td></td></tr>`;
+    h += `</tbody></table></div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px"><button class="btn primary small" id="addMass">Add line item</button><span class="hint" style="margin:0">New items go above "Other items". Blank Z uses the default height for the location.</span></div></div>`;
+    h += `<div class="cards" style="margin-top:14px"><div class="card" style="grid-column:1/-1"><h3>Support, axle and wheel loads — ${esc(car)}</h3><div class="scroll-x" id="wt-cases"></div></div>
+      <div class="card" style="grid-column:1/-1"><h3>Train — axle load per bogie (t) / wheel load imbalance</h3><div class="scroll-x" id="wt-train"></div><div id="wt-warn"></div></div></div>`;
     $('weight-edit').innerHTML = h;
     refreshWeightResults();
   }
   function refreshWeightResults() {
     let R = null; try { R = TLT.compute(cfg); } catch (e) { return; }
-    const w = R.weights.perType.get(ui.wcar); if (!w || !$('wt-tare')) return;
+    const W = R.weights;
+    const w = W.perType.get(ui.wcar); if (!w || !$('wt-tare')) return;
     const t = kg => (kg / 1000).toFixed(2) + ' t';
+    const sg = v => (v > 0 ? '+' : '') + Math.round(v);
+    $('wt-body').textContent = t(w.bodyMass);
+    $('wt-bog').textContent = `${t(w.bogieMass)}  (END 1 ${t(w.bogAt[0])} · END 2 ${t(w.bogAt[1])})`;
     $('wt-tare').textContent = t(w.tareKg);
-    $('wt-xg').textContent = (w.xg0 > 0 ? '+' : '') + Math.round(w.xg0);
+    $('wt-cx').textContent = sg(w.cg.x); $('wt-cy').textContent = sg(w.cg.y); $('wt-cz').textContent = sg(w.cg.z);
     $('wt-target').textContent = Number.isFinite(w.target) ? t(w.target) : '—';
     $('wt-diff').innerHTML = Number.isFinite(w.diff) ? `<span class="pill ${Math.abs(w.diff) > 0.03 * w.target ? 'bad' : 'ok'}">${w.diff > 0 ? '+' : ''}${(w.diff / 1000).toFixed(2)} t (${((w.diff / w.target) * 100).toFixed(1)} %)</span>` : '—';
-    $('wt-cases').innerHTML = `<table class="data"><thead><tr><th>Case</th><th>Pax</th><th>Gross</th><th>CoG X</th><th>Bogie 1</th><th>Bogie 2</th><th>Max axle</th><th></th></tr></thead><tbody>${w.cases.map(q => `<tr><td>${esc(q.name)}</td><td class="num">${q.pax}</td><td class="num">${t(q.mass)}</td><td class="num">${q.xg > 0 ? '+' : ''}${Math.round(q.xg)}</td><td class="num">${t(q.b1)}</td><td class="num">${t(q.b2)}</td><td class="num"><b>${t(q.axle)}</b></td><td><span class="pill ${q.ok ? 'ok' : 'bad'}">${q.ok ? 'OK' : 'Exceeded'}</span></td></tr>`).join('')}</tbody></table>`;
-    $('wt-train').innerHTML = `<table class="data"><thead><tr><th>Case</th><th>Train mass</th><th>Max axle</th><th></th></tr></thead><tbody>${R.weights.train.map(q => `<tr><td>${esc(q.name)}</td><td class="num">${t(q.mass)}</td><td class="num">${t(q.axle)}</td><td><span class="pill ${q.ok ? 'ok' : 'bad'}">${q.ok ? 'OK' : 'Exceeded'}</span></td></tr>`).join('')}</tbody></table>`;
+    const lim = W.limit, maxA = W.maxAxle * 1000;
+    const sl = k => `${k ? 'END 2' : 'END 1'}${w.lay.shared[k] ? ' (shared share)' : ''}`;
+    $('wt-cases').innerHTML = `<table class="data"><thead><tr><th>Case</th><th>Pax</th><th>Gross</th><th>CoG X / Y / Z</th><th>${sl(0)}</th><th>${sl(1)}</th><th>Max axle</th><th>Wheel imbalance</th><th></th></tr></thead><tbody>${w.cases.map(q => {
+      const ax = Math.max(q.sup[0].axle, q.sup[1].axle), im = Math.max(q.sup[0].imb, q.sup[1].imb);
+      const own = !w.lay.shared[0] && !w.lay.shared[1];
+      const ok = ax <= maxA + 1e-6 && im <= lim + 1e-9;
+      return `<tr><td>${esc(q.name)}</td><td class="num">${q.pax}</td><td class="num">${t(q.mass)}</td><td class="num">${sg(q.xg)} / ${sg(q.yg)} / ${sg(q.zg)}</td><td class="num">${t(q.sup[0].F)}</td><td class="num">${t(q.sup[1].F)}</td><td class="num"><b>${t(ax)}</b></td><td class="num">${im.toFixed(1)} %</td><td>${own ? `<span class="pill ${ok ? 'ok' : 'bad'}">${ok ? 'OK' : 'Check'}</span>` : '<span class="pill info">see train</span>'}</td></tr>`;
+    }).join('')}</tbody></table>`;
+    const cs = cfg.cases || [];
+    $('wt-train').innerHTML = `<table class="data"><thead><tr><th>Bogie</th><th>Location</th>${cs.map(c => `<th>${esc(c.name)}</th>`).join('')}</tr></thead><tbody>${W.bogies.map(bg => `<tr><td>${bg.no}</td><td>${esc(bg.label)}</td>${bg.cases.map(q => `<td class="num"${q.ok && q.imbOk ? '' : ' style="color:var(--warn);font-weight:600"'}>${(q.axle / 1000).toFixed(2)} / ${q.imb.toFixed(1)}%</td>`).join('')}</tr>`).join('')}
+      <tr class="total"><td></td><td>Train mass</td>${W.train.map(q => `<td class="num">${t(q.mass)}</td>`).join('')}</tr>
+      <tr class="total"><td></td><td>Check (axle ≤ ${W.maxAxle} t, imbalance ≤ ${lim} %)</td>${W.train.map(q => `<td><span class="pill ${q.ok && q.imbOk ? 'ok' : 'bad'}">${q.ok && q.imbOk ? 'OK' : 'Exceeded'}</span></td>`).join('')}</tr></tbody></table>`;
+    $('wt-warn').innerHTML = W.warnings.length ? `<div class="warns" style="margin-top:10px"><ul>${W.warnings.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '';
     if (gen.wt) { const st = $('stale-wt'); if (st) st.innerHTML = gen.wt.stamp !== stamp() ? `<div class="stale"><span>Inputs have changed since the weight sheets were generated.</span><button class="btn primary small" data-regen="all">Generate again</button></div>` : ''; }
+  }
+  function copyEquipmentToWeights() {
+    const W = cfg.weightItems = cfg.weightItems || [];
+    let added = 0;
+    (cfg.equipment || []).forEach(r => {
+      const loc = r.loc === 'roof' ? 'Roof' : 'UF';
+      if (W.some(w => String(w.car).trim() === String(r.car).trim() && String(w.name).trim() === String(r.name).trim())) return;
+      const oi = W.findIndex(w => String(w.car).trim() === String(r.car).trim() && /^other/i.test(w.name || ''));
+      const row = { car: r.car, loc, name: r.name, length: r.length, width: r.width, height: r.height, x: r.x, y: r.y, z: '', mass: '' };
+      if (oi >= 0) W.splice(oi, 0, row); else W.push(row);
+      added++;
+    });
+    renderWeightEdit(); markChanged();
+    toast(added ? `Added ${added} equipment rows. Enter their masses.` : 'All equipment from step 2 is already in the weight list.');
   }
 
   /* ================= Results panes (3, 4, 5) ================= */
@@ -445,9 +510,8 @@
     let h = '';
     R.used.forEach(n => {
       const l = R.layouts.get(n);
-      const u = l.equipment.items.filter(e => e.loc === 'under');
-      const m = u.reduce((a, e) => a + (Number.isFinite(e.mass) ? e.mass : 0), 0);
-      h += kp(`${n} underframe`, `${u.length} items · ${fmt(m)} kg`, u.length ? '' : 'bad');
+      const u = l.equipment.items.filter(e => e.loc === 'under'), rf = l.equipment.items.filter(e => e.loc === 'roof');
+      h += kp(`${n}`, `${u.length} underframe · ${rf.length} roof`, u.length ? '' : 'bad');
     });
     const errs = [];
     R.used.forEach(n => R.layouts.get(n).equipment.errors.forEach(e => errs.push(`${n}: ${e}`)));
@@ -544,8 +608,20 @@
       o.carTypes.forEach(t => TLT.parseEquipment(t.equipment).items.forEach(e => o.equipment.push({ car: t.name, name: e.name, loc: e.loc, length: e.length, width: e.width, height: e.height, x: e.x, y: e.y, mass: '', kind: e.kind })));
       o.equipmentSource = o.equipmentSource || 'Converted from an older input file';
     }
-    o.equipment.forEach(r => { r.cat = /^m/i.test(r.cat || '') ? 'Mass item' : 'Equipment'; });
-    o.carTypes.forEach(t => { delete t.equipment; });
+    // equipment list is for layout only; older files kept masses there — move them to the weight list
+    if (!Array.isArray(o.weightItems)) {
+      o.weightItems = [];
+      o.equipment.forEach(r => {
+        const m = parseFloat(r.mass);
+        const isMass = /^m/i.test(r.cat || '');
+        if (!isMass && !Number.isFinite(m)) return;
+        const loc = isMass ? (/bogie/i.test(r.name) ? 'Bogie' : /seat|floor|ceiling|lining|interior/i.test(r.name) ? 'Interior' : /cab/i.test(r.name) ? 'Cab' : /coupler/i.test(r.name) ? 'End' : 'Car body') : (r.loc === 'roof' ? 'Roof' : 'UF');
+        o.weightItems.push({ car: r.car, loc, name: r.name, length: isMass ? '' : r.length, width: isMass ? '' : r.width, height: isMass ? '' : r.height, x: r.x, y: r.y || 0, z: '', mass: Number.isFinite(m) ? m : '' });
+      });
+      o.weightSource = o.weightItems.length ? 'Converted from the earlier equipment list' : '—';
+    }
+    o.equipment = o.equipment.filter(r => !/^m/i.test(r.cat || '')).map(r => { const q = Object.assign({}, r); delete q.cat; delete q.mass; return q; });
+    o.carTypes.forEach(t => { delete t.equipment; if (!t.support1) t.support1 = 'own'; if (!t.support2) t.support2 = 'own'; });
     delete o.detail;
     return o;
   }
@@ -571,6 +647,7 @@
   /* ---------- events ---------- */
   function onInput(e) {
     const el = e.target;
+    if (el.dataset && el.dataset.file) return;
     if (el.id === 'variantCount') { if (e.type === 'change') setVariantCount(parseFloat(el.value) || 1); return; }
     const path = el.dataset && el.dataset.path;
     if (!path) return;
@@ -581,9 +658,9 @@
     const nameMatch = /^carTypes\.(\d+)\.name$/.exec(path);
     const oldName = nameMatch ? get(cfg, path) : null;
     set(cfg, path, v);
-    if (nameMatch && oldName !== v) (cfg.equipment || []).forEach(r => { if (String(r.car).trim() === oldName) r.car = v; });
+    if (nameMatch && oldName !== v) [cfg.equipment || [], cfg.weightItems || []].forEach(L => L.forEach(r => { if (String(r.car).trim() === oldName) r.car = v; }));
     if (e.type === 'change' && (el.dataset.rerender || nameMatch)) { if (ui.pane === 1) renderPane1(); }
-    if (e.type === 'change' && el.dataset.rerender2) renderPane2();
+    if (e.type === 'change' && el.dataset.rerender5) renderWeightEdit();
     markChanged();
   }
 
@@ -598,13 +675,18 @@
       if (b.dataset.regen) { if (generateAll()) showPane(ui.pane); return; }
       if (b.dataset.wcar) { ui.wcar = b.dataset.wcar; renderWeightEdit(); return; }
       if (b.id === 'addMass') {
-        const car = ui.wcar; const list = cfg.equipment = cfg.equipment || [];
-        const oi = list.findIndex(r => r.car === car && /^m/i.test(r.cat || '') && /^other/i.test(r.name));
-        const row = { cat: 'Mass item', car, name: 'New item', loc: 'under', length: '', width: '', height: '', x: 0, y: 0, mass: 0, kind: '' };
+        const car = ui.wcar; const list = cfg.weightItems = cfg.weightItems || [];
+        const oi = list.findIndex(r => String(r.car).trim() === car && /^other/i.test(r.name || ''));
+        const row = { car, loc: 'Car body', name: 'New item', length: '', width: '', height: '', x: 0, y: 0, z: '', mass: 0 };
         if (oi >= 0) list.splice(oi, 0, row); else list.push(row);
-        renderWeightEdit(); markChanged(); return;
+        renderWeightEdit(); markChanged();
+        const el = $('w-' + (oi >= 0 ? oi : list.length - 1) + '-name'); if (el) { el.focus(); el.select(); }
+        return;
       }
-      if (b.dataset.delw != null) { cfg.equipment.splice(+b.dataset.delw, 1); renderWeightEdit(); markChanged(); return; }
+      if (b.dataset.delw != null) { cfg.weightItems.splice(+b.dataset.delw, 1); renderWeightEdit(); markChanged(); return; }
+      if (b.id === 'copyEq') return copyEquipmentToWeights();
+      if (b.dataset.tpl) return downloadTemplate(b.dataset.tpl);
+      if (b.dataset.pick) return $('file-' + b.dataset.pick).click();
       if (b.dataset.sheet) { const [w, i] = b.dataset.sheet.split(':'); ui.sheet[w] = +i; renderResults(w); return; }
       if (b.dataset.zoom) {
         const [w, op] = b.dataset.zoom.split(':');
@@ -619,6 +701,7 @@
         const i = +b.dataset.duptype; const t = clone(cfg.carTypes[i]); t.name = uniqueName(t.name.replace(/\d+$/, '') || 'V');
         cfg.carTypes.splice(i + 1, 0, t);
         (cfg.equipment || []).filter(r => r.car === cfg.carTypes[i].name).forEach(r => cfg.equipment.push(Object.assign({}, r, { car: t.name })));
+        (cfg.weightItems || []).filter(r => r.car === cfg.carTypes[i].name).forEach(r => cfg.weightItems.push(Object.assign({}, r, { car: t.name })));
         renderPane1(); markChanged(); return;
       }
       if (b.dataset.deltype != null) {
@@ -626,15 +709,13 @@
         if (b.dataset.confirm !== '1') { b.dataset.confirm = '1'; b.textContent = 'Confirm delete'; setTimeout(() => { if (b.isConnected) { b.dataset.confirm = ''; b.textContent = 'Delete'; } }, 3000); return; }
         cfg.carTypes.splice(+b.dataset.deltype, 1); renderPane1(); markChanged(); return;
       }
-      if (b.id === 'dlTemplate') return downloadTemplate();
-      if (b.id === 'pickXls') return $('fileXls').click();
       if (b.id === 'addRow') { (cfg.equipment = cfg.equipment || []).push({ cat: 'Equipment', car: cfg.carTypes[0].name, name: 'NEW', loc: 'under', length: 1000, width: 800, height: 500, x: 0, y: 0, mass: '', kind: '' }); renderPane2(); markChanged(); return; }
       if (b.dataset.delrow != null) { cfg.equipment.splice(+b.dataset.delrow, 1); renderPane2(); markChanged(); return; }
     });
-    document.addEventListener('change', e => { if (e.target.id === 'fileXls') { const f = e.target.files[0]; if (f) importFile(f); e.target.value = ''; } });
-    document.addEventListener('dragover', e => { const d = e.target.closest && e.target.closest('#drop'); if (d) { e.preventDefault(); d.classList.add('over'); } });
-    document.addEventListener('dragleave', e => { const d = e.target.closest && e.target.closest('#drop'); if (d) d.classList.remove('over'); });
-    document.addEventListener('drop', e => { const d = e.target.closest && e.target.closest('#drop'); if (!d) return; e.preventDefault(); d.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) importFile(f); });
+    document.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.file) { const f = e.target.files[0]; if (f) importFile(f, e.target.dataset.file); e.target.value = ''; } });
+    document.addEventListener('dragover', e => { const d = e.target.closest && e.target.closest('[data-drop]'); if (d) { e.preventDefault(); d.classList.add('over'); } });
+    document.addEventListener('dragleave', e => { const d = e.target.closest && e.target.closest('[data-drop]'); if (d) d.classList.remove('over'); });
+    document.addEventListener('drop', e => { const d = e.target.closest && e.target.closest('[data-drop]'); if (!d) return; e.preventDefault(); d.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) importFile(f, d.dataset.drop); });
 
     $('btnSave').addEventListener('click', () => offerFile(baseName() + '_inputs.json', new TextEncoder().encode(JSON.stringify(cfg, null, 2)), 'application/json'));
     $('btnLoad').addEventListener('click', () => $('fileLoad').click());

@@ -153,8 +153,11 @@
     const Lb = Math.min(num(type.bodyLength, Lc), Lc);
     const prot = (Lc - Lb) / 2;
     const bodyF = prot, bodyR = Lc - prot, mid = Lc / 2;
-    const bc = num(type.bogieCentres, 13800);
-    const bogies = [mid - bc / 2, mid + bc / 2];
+    // Supports: own bogie at bogie centres, or shared (Jacobs) bogie at the car end (coupler face / joint)
+    const sh1 = type.support1 === 'shared', sh2 = type.support2 === 'shared';
+    const bcIn = num(type.bogieCentres, 13800);
+    const bogies = [sh1 ? 0 : mid - bcIn / 2, sh2 ? Lc : mid + bcIn / 2];
+    const bc = bogies[1] - bogies[0];
     const W = num(c.bodyWidth, 2950);
     const Wi = W - 2 * num(c.wallThk, 60);
     const DC = TLT.doorCfg(cfg);
@@ -282,7 +285,7 @@
       warn.push(`${type.name}: cab-to-saloon door does not fit across the car at offset ${DC.cabSaloon.y} mm.`);
 
     return {
-      type, Lc, Lb, bodyF, bodyR, mid, bogies, bc, W, Wi, doors, dw, cabLen, salStart, salEnd, bays,
+      type, Lc, Lb, bodyF, bodyR, mid, bogies, bc, shared: [sh1, sh2], W, Wi, doors, dw, cabLen, salStart, salEnd, bays,
       seatBlocks, wheelchairs, cabinets, screens, standRects, seats, doorCfg: DC, cabDoorX,
       areas: { saloon: aSaloon / 1e6, seat: aSeat / 1e6, foot: aFoot / 1e6, wheelchair: aWc / 1e6, cabinet: aCab / 1e6, standing: aStand / 1e6 },
       aisle, warnings: warn,
@@ -395,54 +398,140 @@
   };
 
   /* ---------------- Weight calculation ----------------
-   * Tare from the equipment list (drawn equipment + mass items), passenger mass placed at the
-   * seat and standing-area centroids, bogie loads from the centre of gravity along the car.
-   * x convention: from car centre, + towards END 1.
+   * Weight list rows: { car, loc, name, length, width, height, x, y, z, mass }
+   * x from car centre (+ towards END 1), y from centre line (+ towards side A), z above top of rail.
+   * loc 'Bogie' rows sit directly on the nearest support (bogie); all other rows are carried by the car body.
    */
+  TLT.WEIGHT_LOCS = ['Car body', 'Roof', 'Interior', 'UF', 'Cab', 'End', 'Bogie'];
+  TLT.normWeightLoc = function (v) {
+    const s = String(v || '').trim().toLowerCase();
+    if (/^bog/.test(s)) return 'Bogie';
+    if (/^roof/.test(s)) return 'Roof';
+    if (/^int/.test(s)) return 'Interior';
+    if (/^(uf|under)/.test(s)) return 'UF';
+    if (/^cab/.test(s)) return 'Cab';
+    if (/^end/.test(s)) return 'End';
+    return 'Car body';
+  };
+  TLT.weightZ = function (loc, h, cfg) {
+    const c = cfg.common || {};
+    const fh = num(c.floorHeight, 1130), rh = num(c.roofHeight, 3650), sole = fh - num(c.mountDepth, 250);
+    const H = Number.isFinite(h) && h > 0 ? h : 0;
+    switch (loc) {
+      case 'Roof': return rh + (H ? H / 2 : 200);
+      case 'UF': return sole - (H ? H / 2 : 250);
+      case 'Bogie': return num(c.wheelDia, 860) / 2 + 250;
+      case 'Interior': case 'Cab': case 'End': return fh + (H ? H / 2 : 900);
+      default: return (fh + rh) / 2;
+    }
+  };
+
   TLT.weights = function (R) {
     const cfg = R.cfg;
     const L = cfg.loads || {};
     const paxKg = num(L.paxMass, 60);
-    const maxAxle = num(L.maxAxleLoad, 16);
-    const rows = Array.isArray(cfg.equipment) ? cfg.equipment.map(TLT.normEquipRow) : [];
+    const maxAxle = num(L.maxAxleLoad, 16) * 1000;
+    const b = num(L.wheelSpacing, 1500);
+    const limit = num(L.imbalanceLimit, 15);
+    const fh = num((cfg.common || {}).floorHeight, 1130);
+    const rows = (Array.isArray(cfg.weightItems) ? cfg.weightItems : []).map(r => {
+      const loc = TLT.normWeightLoc(r.loc);
+      const h = num(r.height, NaN);
+      const z = num(r.z, NaN);
+      return {
+        car: String(r.car == null ? '' : r.car).trim(), loc, name: String(r.name || '').trim(),
+        length: num(r.length, NaN), width: num(r.width, NaN), height: h,
+        x: num(r.x, 0), y: num(r.y, 0), z: Number.isFinite(z) ? z : TLT.weightZ(loc, h, cfg), zAuto: !Number.isFinite(z),
+        mass: num(r.mass, 0), hasMass: Number.isFinite(num(r.mass, NaN)),
+      };
+    });
+    const isOther = r => /^other/i.test(r.name);
     const perType = new Map();
+    const warn = [];
     R.used.forEach(name => {
       const lay = R.layouts.get(name);
-      const items = rows.filter(r => r.car === name).map(r => ({
-        cat: r.cat, name: r.name, loc: r.loc, x: Number.isFinite(r.x) ? r.x : 0, mass: Number.isFinite(r.mass) ? r.mass : 0, hasMass: Number.isFinite(r.mass),
-      }));
-      const ordered = items.filter(i => i.cat === 'mass' && !/^other/i.test(i.name))
-        .concat(items.filter(i => i.cat === 'equip' && i.loc === 'under'), items.filter(i => i.cat === 'equip' && i.loc === 'roof'), items.filter(i => i.cat === 'mass' && /^other/i.test(i.name)));
-      const tareKg = ordered.reduce((a, i) => a + i.mass, 0);
-      const momTare = ordered.reduce((a, i) => a + i.mass * i.x, 0);
-      const xg0 = tareKg > 0 ? momTare / tareKg : 0;
-      // passenger centroids (car-centre coordinates)
-      const seatN = lay.seatBlocks.reduce((a, b) => a + b.n, 0);
-      const seatX = seatN ? lay.seatBlocks.reduce((a, b) => a + b.n * (lay.mid - (b.x0 + b.x1) / 2), 0) / seatN : 0;
+      const all = rows.filter(r => r.car === name);
+      const order = TLT.WEIGHT_LOCS.flatMap(lc => all.filter(r => r.loc === lc && !isOther(r))).concat(all.filter(isOther));
+      // support positions in car-centre coordinates (+ END 1)
+      const s1 = lay.mid - lay.bogies[0], s2 = lay.mid - lay.bogies[1];
+      const bodyItems = order.filter(r => r.loc !== 'Bogie'), bogItems = order.filter(r => r.loc === 'Bogie');
+      const sum = (a, f) => a.reduce((t, r) => t + f(r), 0);
+      const Mb = sum(bodyItems, r => r.mass);
+      const bogAt = [0, 0], bogLat = [0, 0];
+      bogItems.forEach(r => { const k = Math.abs(r.x - s1) <= Math.abs(r.x - s2) ? 0 : 1; bogAt[k] += r.mass; bogLat[k] += r.mass * r.y; });
+      const Mbog = bogAt[0] + bogAt[1];
+      const tare = Mb + Mbog;
+      const cg = a => { const m = sum(a, r => r.mass); return m > 0 ? { x: sum(a, r => r.mass * r.x) / m, y: sum(a, r => r.mass * r.y) / m, z: sum(a, r => r.mass * r.z) / m } : { x: 0, y: 0, z: 0 }; };
+      const cgAll = cg(order), cgBody = cg(bodyItems);
+      // passenger centroids
+      const seatN = lay.seatBlocks.reduce((a, q) => a + q.n, 0);
+      const seatX = seatN ? lay.seatBlocks.reduce((a, q) => a + q.n * (lay.mid - (q.x0 + q.x1) / 2), 0) / seatN : 0;
       const stA = lay.standRects.reduce((a, q) => a + (q.x1 - q.x0) * (q.y1 - q.y0), 0);
       const standX = stA ? lay.standRects.reduce((a, q) => a + (q.x1 - q.x0) * (q.y1 - q.y0) * (lay.mid - (q.x0 + q.x1) / 2), 0) / stA : 0;
-      const half = lay.bc / 2;
       const cases = (cfg.cases || []).map(cs => {
         const cap = lay.capacity[String(cs.name).toLowerCase()];
         const seated = Number.isFinite(cap.seated) ? cap.seated : 0, standing = Number.isFinite(cap.standing) ? cap.standing : 0;
-        const paxMass = (seated + standing) * paxKg;
-        const M = tareKg + paxMass;
-        const mom = momTare + seated * paxKg * seatX + standing * paxKg * standX;
-        const xg = M > 0 ? mom / M : 0;
-        const b1 = M * (half + xg) / (2 * half), b2 = M - b1;   // b1 = END 1 bogie
-        const axle = Math.max(b1, b2) / 2;
-        return { name: cs.name, seated, standing, pax: seated + standing, paxMass, mass: M, xg, b1, b2, axle, ok: axle / 1000 <= maxAxle + 1e-9 };
+        const pm = (seated + standing) * paxKg;
+        const MB = Mb + pm;
+        const xB = MB > 0 ? (Mb * cgBody.x + seated * paxKg * seatX + standing * paxKg * standX) / MB : 0;
+        const yB = MB > 0 ? (Mb * cgBody.y) / MB : 0;
+        const zAll = (tare * cgAll.z + seated * paxKg * (fh + 600) + standing * paxKg * (fh + 1000)) / Math.max(1, tare + pm);
+        const span = s1 - s2;
+        const R1 = span ? MB * (xB - s2) / span : MB / 2, R2 = MB - R1;   // car-body reactions at the supports
+        const sup = [0, 1].map(k => {
+          const Rb = k ? R2 : R1;
+          const F = Rb + bogAt[k];
+          const lat = Rb * yB + bogLat[k];
+          return { F, lat, shared: lay.shared[k], axle: F / 2, imb: F > 0 ? (200 * Math.abs(lat)) / (b * F) : 0 };
+        });
+        return { name: cs.name, pax: seated + standing, paxMass: pm, mass: tare + pm, xg: (tare * cgAll.x + seated * paxKg * seatX + standing * paxKg * standX) / Math.max(1, tare + pm),
+          yg: (tare * cgAll.y) / Math.max(1, tare + pm), zg: zAll, sup, bodyMass: MB };
       });
       const target = num(lay.type.tare, NaN) * 1000;
-      perType.set(name, { name, lay, items: ordered, tareKg, xg0, target, diff: Number.isFinite(target) ? tareKg - target : NaN, seatX, standX, cases, missing: items.filter(i => !i.hasMass).length });
-      if (!items.length) R.warnings.push(`${name}: no rows in the equipment / mass list, so the weight calculation is empty.`);
+      perType.set(name, { name, lay, items: order, s1, s2, bodyMass: Mb, bogieMass: Mbog, bogAt, tareKg: tare, cg: cgAll, target, diff: Number.isFinite(target) ? tare - target : NaN,
+        seatX, standX, cases, missing: all.filter(r => !r.hasMass).length });
+      if (!all.length) warn.push(`${name}: the weight list has no rows for this car.`);
+    });
+
+    // Physical bogies along the train (shared supports at a joint are merged)
+    const sup = [];
+    R.form.cars.forEach(car => {
+      const w = perType.get(car.type.name); if (!w) return;
+      const lay = w.lay;
+      [0, 1].forEach(k => {
+        const p = lay.bogies[k];
+        const tx = car.x0 + (car.flip ? lay.Lc - p : p);
+        sup.push({ car, k, tx, shared: lay.shared[k], w });
+      });
+    });
+    sup.sort((a, b2) => a.tx - b2.tx);
+    const bogies = [];
+    sup.forEach(sp => {
+      const last = bogies[bogies.length - 1];
+      if (sp.shared && last && last.shared && Math.abs(last.tx - sp.tx) < 1 && last.parts.every(q => q.car !== sp.car)) { last.parts.push(sp); return; }
+      bogies.push({ tx: sp.tx, shared: sp.shared, parts: [sp] });
+    });
+    bogies.forEach((bg, i) => {
+      bg.no = i + 1;
+      const endName = q => `car ${q.car.no} END ${q.k + 1}`;
+      if (bg.shared && bg.parts.length === 1) warn.push(`Shared bogie at ${endName(bg.parts[0])} has no matching shared end on the next car.`);
+      if (bg.parts.length > 1 && bg.parts.filter(q => q.w.bogAt[q.k] > 0).length > 1) warn.push(`Shared bogie ${bg.no} (${bg.parts.map(endName).join(' + ')}): bogie mass is entered on both cars. Enter it on one car only.`);
+      bg.label = bg.parts.length > 1 ? `Cars ${bg.parts.map(q => q.car.no).join('/')} (shared)` : `Car ${bg.parts[0].car.no}, ${bg.parts[0].car.flip ? (bg.parts[0].k ? 'front' : 'rear') : (bg.parts[0].k ? 'rear' : 'front')}`;
+      bg.cases = (cfg.cases || []).map((cs, ci) => {
+        let F = 0, lat = 0;
+        bg.parts.forEach(q => { const s0 = q.w.cases[ci].sup[q.k]; F += s0.F; lat += q.car.flip ? -s0.lat : s0.lat; });
+        const imb = F > 0 ? (200 * Math.abs(lat)) / (b * F) : 0;
+        return { name: cs.name, F, axle: F / 2, imb, ok: F / 2 <= maxAxle + 1e-6, imbOk: imb <= limit + 1e-9 };
+      });
     });
     const train = (cfg.cases || []).map((cs, ci) => {
-      let mass = 0, axle = 0, pax = 0;
-      R.form.cars.forEach(car => { const w = perType.get(car.type.name); if (!w) return; const q = w.cases[ci]; mass += q.mass; pax += q.pax; axle = Math.max(axle, q.axle); });
-      return { name: cs.name, mass, pax, axle, ok: axle / 1000 <= maxAxle + 1e-9 };
+      const mass = R.form.cars.reduce((a, car) => { const w = perType.get(car.type.name); return a + (w ? w.cases[ci].mass : 0); }, 0);
+      const pax = R.form.cars.reduce((a, car) => { const w = perType.get(car.type.name); return a + (w ? w.cases[ci].pax : 0); }, 0);
+      const axle = bogies.reduce((m, bg) => Math.max(m, bg.cases[ci].axle), 0);
+      const imb = bogies.reduce((m, bg) => Math.max(m, bg.cases[ci].imb), 0);
+      return { name: cs.name, mass, pax, axle, imb, ok: axle <= maxAxle + 1e-6, imbOk: imb <= limit + 1e-9 };
     });
     const tareTrain = R.form.cars.reduce((a, car) => a + (perType.get(car.type.name) ? perType.get(car.type.name).tareKg : 0), 0);
-    return { perType, train, tareTrain, maxAxle, paxKg };
+    return { perType, bogies, train, tareTrain, maxAxle: maxAxle / 1000, paxKg, wheelSpacing: b, limit, warnings: warn };
   };
 })();
