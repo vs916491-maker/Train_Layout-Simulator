@@ -121,7 +121,7 @@
   function drawCarSide(v, lay, cfg, o) {
     const c = cfg.common;
     const fh = num(c.floorHeight, 1130), rh = num(c.roofHeight, 3650);
-    const sole = fh - 250;
+    const sole = fh - num(c.mountDepth, 250);
     const D = num(c.wheelDia, 860), wb = num(c.wheelbase, 2100);
     const dh = num(c.doorHeight, 1850), dw = lay.dw;
     const { bodyF, bodyR, Lc, type } = lay;
@@ -372,7 +372,7 @@
     p.text(x0 + 3, y1 - 21.4, trunc(sheet.title, 3, 174), 3, { bold: true });
     p.line(x0 + 70, y1 - 24, x0 + 70, y0, 'TITLE'); p.line(x0 + 120, y1 - 24, x0 + 120, y0, 'TITLE'); p.line(x0 + 150, y1 - 24, x0 + 150, y0, 'TITLE');
     const cell = (x, y, lab, val, w) => { p.text(x + 1.5, y - 2.4, lab, 1.5, { color: '#666666' }); p.text(x + 1.5, y - 5.9, trunc(val, 2.3, w - 3), 2.3, { bold: true }); };
-    cell(x0, y1 - 24, 'DRAWING No.', pr.drawingNo || '', 70);
+    cell(x0, y1 - 24, 'DRAWING No.', sheet.drawingNo != null ? sheet.drawingNo : (pr.drawingNo || ''), 70);
     cell(x0 + 70, y1 - 24, 'CLIENT', pr.client || '', 50);
     cell(x0 + 120, y1 - 24, 'REV', pr.revision || '', 30);
     cell(x0 + 150, y1 - 24, 'SHEET', `${sheet.no} of ${sheet.of}`, 30);
@@ -454,15 +454,20 @@
     const sheets = [];
     if (!R.form.cars.length) return sheets;
     sheets.push(trainSheet(R, paper));
-    const drv = R.layouts.get(cfg.detail && cfg.detail.driving) || [...R.layouts.values()].find(l => l.type.cab && R.used.includes(l.type.name));
-    const mid = R.layouts.get(cfg.detail && cfg.detail.intermediate) || [...R.layouts.values()].find(l => !l.type.cab && R.used.includes(l.type.name));
-    if (drv) sheets.push(carSheet(R, paper, drv, 'DRIVING CAR'));
-    if (mid && mid !== drv) sheets.push(carSheet(R, paper, mid, 'INTERMEDIATE CAR'));
+    // One layout sheet per car variant used in the formation, in formation order
+    R.used.forEach(name => {
+      const lay = R.layouts.get(name);
+      sheets.push(carSheet(R, paper, lay, lay.type.cab ? 'DRIVING CAR' : 'INTERMEDIATE CAR'));
+    });
     sheets.push(capacitySheet(R, paper));
-    sheets.forEach((s, i) => { s.no = i + 1; s.of = sheets.length; });
-    sheets.forEach(s => { frame(s.paper, s.size[0], s.size[1]); titleBlock(s.paper, s.size[0], cfg, s); });
+    finish(sheets, cfg, '');
     return sheets;
   };
+
+  function finish(sheets, cfg, suffix) {
+    sheets.forEach((s, i) => { s.no = i + 1; s.of = sheets.length; s.drawingNo = (cfg.project.drawingNo || '') + suffix; });
+    sheets.forEach(s => { frame(s.paper, s.size[0], s.size[1]); titleBlock(s.paper, s.size[0], cfg, s); });
+  }
 
   /* ---------- Sheet 1: train formation / vehicle layout ---------- */
   function trainSheet(R, size) {
@@ -711,7 +716,7 @@
       { ly: 'CABINET', label: 'Cubicle / cabinet', kind: 'box' },
     ]);
     p.text(20, yB1 - 22, 'Bays are numbered B0 … Bn from END 1. Seat blocks dimensioned along side B with seat count in brackets.', 1.8, { color: '#555555' });
-    return { title: `${kindLabel.toLowerCase().replace(/^./, m => m.toUpperCase())} ${t.name} — interior layout`, short: `${t.name} car`, size, scale, views: [v], paper: p };
+    return { title: `${kindLabel.toLowerCase().replace(/^./, m => m.toUpperCase())} ${t.name} — interior layout`, short: `${t.name} layout`, size, scale, views: [v], paper: p };
   }
 
   function caseBasis(cs) {
@@ -824,4 +829,142 @@
     }
     return { title: 'Passenger capacity calculation', short: 'Capacity', size, scale: 0, dxfScale: 100, views: [], paper: p };
   }
+
+  /* ================= Underframe sheets ================= */
+  TLT.buildUnderframeSheets = function (R) {
+    const cfg = R.cfg;
+    const paper = TLT.PAPER[cfg.project.paper] || TLT.PAPER.A3;
+    const sheets = R.used.map(n => underframeSheet(R, paper, R.layouts.get(n)));
+    finish(sheets, cfg, '-UF');
+    return sheets;
+  };
+
+  function drawUnderframePlan(v, lay, cfg) {
+    const c = cfg.common;
+    const { bodyF, bodyR, Lc, W, type, mid } = lay;
+    const hw = W / 2;
+    const D = num(c.wheelDia, 860), wb = num(c.wheelbase, 2100);
+    // body outline
+    if (type.cab) v.poly([[bodyF + 650, hw], [bodyR, hw], [bodyR, -hw], [bodyF + 650, -hw], [bodyF + 200, -hw + 260], [bodyF, -hw + 750], [bodyF, hw - 750], [bodyF + 200, hw - 260]], true, 'BODY', { fill: '#fafbfc' });
+    else v.rect(bodyF, -hw, bodyR, hw, 'BODY', { fill: '#fafbfc' });
+    // couplers
+    v.rect(0, -60, bodyF + 250, 60, 'BODY_THIN');
+    v.rect(bodyR - 250, -60, Lc, 60, 'BODY_THIN');
+    // centre lines
+    v.line(-200, 0, Lc + 200, 0, 'CENTER');
+    v.line(mid, -hw - 400, mid, hw + 400, 'CENTER');
+    // bogies
+    lay.bogies.forEach((xb, bi) => {
+      const motor = lay.motorBogies === 2 || (lay.motorBogies === 1 && bi === 1);
+      v.rect(xb - wb / 2 - 420, -1050, xb + wb / 2 + 420, 1050, 'BOGIE', { fill: '#fdf1ef' });
+      [-1, 1].forEach(k => {
+        const xa = xb + k * wb / 2;
+        v.line(xa, -900, xa, 900, 'BOGIE');
+        [-1, 1].forEach(sd => v.rect(xa - D / 2, sd * 717.5, xa + D / 2, sd * 852.5, 'BOGIE', { fill: '#ffffff' }));
+        if (motor) v.rect(xb + k * (wb / 2 - 520) - 260, -550, xb + k * (wb / 2 - 520) + 260, 550, 'BOGIE', { fill: '#f3c6c0' });
+      });
+      v.line(xb, -hw - 250, xb, hw + 250, 'CENTER');
+    });
+    // equipment boxes (underframe only)
+    lay.equipment.items.filter(e => e.loc === 'under').forEach(e => {
+      const xc = mid - e.x, x0 = xc - e.length / 2, x1 = xc + e.length / 2;
+      const y0 = e.y - e.width / 2, y1 = e.y + e.width / 2;
+      v.rect(x0, y0, x1, y1, 'EQUIP', { fill: true });
+      labelIn(v, e.name, x0, x1, e.y, 1.8, 'EQUIP');
+    });
+  }
+
+  function underframeSheet(R, size, lay) {
+    const cfg = R.cfg, c = cfg.common;
+    const [PW, PH] = size;
+    const scale = pickScale((lay.Lc + 2500) / (PW - 60));
+    const s = scale;
+    const maxH = Math.max(num(c.maxHeight, 4100), num(c.roofHeight, 3650) + 450);
+    const ox = 25 + ((PW - 60) - lay.Lc / s) / 2;
+    const oy = PH - 42 - maxH / s;
+    const v = new View(scale, ox, oy);
+    const p = new View(1, 0, 0);
+    const t = lay.type;
+    const items = lay.equipment.items;
+    const under = items.filter(e => e.loc === 'under'), roof = items.filter(e => e.loc === 'roof');
+    const sumM = a => a.reduce((m, e) => m + (Number.isFinite(e.mass) ? e.mass : 0), 0);
+    const fh = num(c.floorHeight, 1130), sole = fh - num(c.mountDepth, 250);
+    p.text(20, PH - 19, `UNDERFRAME & ROOF EQUIPMENT LAYOUT — ${t.name.toUpperCase()} CAR`, 4.2, { bold: true });
+    p.text(20, PH - 24.5, `${t.desc || ''}  ·  ${under.length} underframe items, ${fmtKg(sumM(under))}  ·  ${roof.length} roof items, ${fmtKg(sumM(roof))}  ·  source: ${cfg.equipmentSource || 'equipment list'}`, 2.2, { color: '#444444' });
+
+    // Side elevation
+    v.line(-1200, 0, lay.Lc + 1200, 0, 'RAIL');
+    v.setTf(0, false, lay.Lc, false, 0);
+    drawCarSide(v, lay, cfg, { detail: true });
+    v.clearTf();
+    v.line(lay.mid, -300, lay.mid, maxH + 300, 'CENTER');
+    v.text(lay.mid, maxH + 2.2 * s, 'CAR CENTRE', 1.8, { anchor: 'middle', color: '#555555' });
+    v.text(-9 * s, fh + 1400, 'END 1', 2.2, { anchor: 'end', bold: true });
+    v.text(lay.Lc + 19 * s, fh + 1400, 'END 2', 2.2, { anchor: 'start', bold: true });
+    v.dimChainH([0, lay.bogies[0], lay.mid, lay.bogies[1], lay.Lc], 0, -5 * s, { h: 1.9 });
+    v.dimChainH([0, lay.Lc], 0, -10 * s, { h: 2.1 });
+    v.dimV(lay.Lc, 0, fh, lay.Lc + 6 * s, { h: 1.8 });
+    v.dimV(lay.Lc, 0, sole, lay.Lc + 11 * s, { h: 1.8 });
+    const low = under.reduce((m, e) => (!m || e.height > m.height ? e : m), null);
+    if (low) {
+      const xc = lay.mid - low.x;
+      v.dimV(xc - low.length / 2, 0, sole - low.height, xc - low.length / 2 - 2.5 * s, { h: 1.7, label: `${Math.round(sole - low.height)}` });
+    }
+
+    // Underframe plan (viewed from above, floor removed)
+    const W = lay.W;
+    const planY = -(30 * s) - W / 2;
+    v.setTf(0, false, lay.Lc, true, planY);
+    drawUnderframePlan(v, lay, cfg);
+    v.clearTf();
+    const top = planY + W / 2, bot = planY - W / 2;
+    // ordinate dimensions of box centres from car centre: side A above, side B below
+    const ord = (list, sign) => {
+      const yRow = sign > 0 ? top + 5 * s : bot - 5 * s;
+      v.add({ t: 'L', x1: lay.mid, y1: planY + sign * W / 2, x2: lay.mid, y2: yRow + sign * 1 * s, ly: 'DIM' });
+      v.add({ t: 'T', x: lay.mid - 0.6 * s, y: yRow + sign * 1.2 * s + (sign > 0 ? 0 : -1.4 * s), s: '0', h: 1.7 * s, anchor: 'end', valign: 'base', rot: 0, ly: 'DIM' });
+      list.forEach(e => {
+        const xc = lay.mid - e.x;
+        const yEdge = planY + e.y + sign * e.width / 2;
+        v.add({ t: 'L', x1: xc, y1: yEdge + sign * 0.6 * s, x2: xc, y2: yRow + sign * 1 * s, ly: 'DIM' });
+        v.add({ t: 'L', x1: xc - 0.6 * s, y1: yRow - 0.6 * s, x2: xc + 0.6 * s, y2: yRow + 0.6 * s, ly: 'DIM', lw: 0.3 });
+        const lab = `${e.x > 0 ? '+' : ''}${Math.round(e.x)}`;
+        const tw = v.tw(lab, 1.7);
+        v.add({ t: 'T', x: xc - 0.5 * s, y: sign > 0 ? yRow + 1.2 * s : yRow - 1.2 * s - tw, s: lab, h: 1.7 * s, anchor: 'start', valign: 'base', rot: 90, ly: 'DIM' });
+      });
+      if (list.length) {
+        const xs = list.map(e => lay.mid - e.x).concat([lay.mid]);
+        v.add({ t: 'L', x1: Math.min(...xs), y1: yRow, x2: Math.max(...xs), y2: yRow, ly: 'DIM' });
+      }
+    };
+    ord(under.filter(e => e.y >= 0), 1);
+    ord(under.filter(e => e.y < 0), -1);
+    v.text(-9 * s, planY + W / 2 - 300, 'SIDE A', 1.8, { anchor: 'end', bold: true, color: '#555555' });
+    v.text(-9 * s, planY - W / 2 + 100, 'SIDE B', 1.8, { anchor: 'end', bold: true, color: '#555555' });
+    v.dimV(lay.Lc, planY - W / 2, planY + W / 2, lay.Lc + 6 * s, { h: 1.8 });
+    v.text(0, bot - 14 * s, 'UNDERFRAME PLAN — viewed from above, floor removed. X values = equipment centre from car centre (+ towards END 1).', 1.8, { color: '#555555' });
+
+    // Equipment table
+    const yT = oy + (bot / s) - 24;
+    const all = under.concat(roof);
+    const avail = yT - 52;
+    const rowH = Math.min(4.4, avail / Math.max(1, all.length + 2));
+    const th = Math.min(1.9, rowH * 0.45);
+    const cols = [{ h: 'No.', w: 9, align: 'middle' }, { h: 'Equipment', w: 30 }, { h: 'Location', w: 20 }, { h: 'L', w: 14, align: 'end' }, { h: 'W', w: 14, align: 'end' },
+      { h: 'H', w: 14, align: 'end' }, { h: 'X from centre', w: 22, align: 'end' }, { h: 'Y from CL', w: 20, align: 'end' }, { h: 'Bottom / top ATR', w: 26, align: 'end' }, { h: 'Mass (kg)', w: 18, align: 'end' }];
+    const rows = all.map((e, i) => [i + 1, e.name, e.loc === 'roof' ? 'Roof' : 'Underframe', i0(e.length), i0(e.width), i0(e.height), `${e.x > 0 ? '+' : ''}${Math.round(e.x)}`, `${e.y > 0 ? '+' : ''}${Math.round(e.y)}`,
+      e.loc === 'roof' ? `top ${Math.round(num(c.roofHeight, 3650) + e.height)}` : `${Math.round(sole - e.height)}`, Number.isFinite(e.mass) ? i0(e.mass) : '—']);
+    rows.push(['', 'TOTAL', '', '', '', '', '', '', `UF ${fmtKg(sumM(under))}`, i0(sumM(all))]);
+    if (all.length) table(p, 20, yT, cols, rows, { rowH, h: th, boldRows: [rows.length - 1], shade: [rows.length - 1] });
+    else p.text(20, yT - 5, 'No equipment rows for this car type. Upload or edit the equipment list in the Underframe Input tab.', 2.2, { color: '#b3261e' });
+    legend(p, 240, yT - 2, [
+      { ly: 'EQUIP', label: 'Underframe equipment', kind: 'box' },
+      { ly: 'ROOF', label: 'Roof equipment (side view)', kind: 'box' },
+      { ly: 'BOGIE', label: 'Bogie envelope / motor', kind: 'box' },
+      { ly: 'CENTER', label: 'Car / bogie centre line', kind: 'line' },
+    ]);
+    p.text(240, yT - 26, `Mounting face ${num(c.mountDepth, 250)} mm below floor (${Math.round(sole)} mm ATR).`, 1.8, { color: '#555555' });
+    return { title: `Underframe & roof equipment — ${t.name}`, short: `${t.name} underframe`, size, scale, views: [v], paper: p };
+  }
+  const fmtKg = m => `${Math.round(m).toLocaleString('en-US')} kg`;
 })();

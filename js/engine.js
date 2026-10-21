@@ -92,7 +92,39 @@
       let kind = (p[5] || '').toLowerCase();
       if (!kind) kind = loc === 'roof' && /^pan/i.test(p[0]) ? 'panto' : loc === 'roof' && /^(ac|hvac|a\/c)/i.test(p[0]) ? 'ac' : 'box';
       const height = num(p[4], loc === 'roof' ? 450 : 550);
-      items.push({ name: p[0], loc, x: num(p[2], 0), length: Math.max(50, num(p[3], 1000)), height, kind });
+      items.push({ name: p[0], loc, x: num(p[2], 0), y: 0, width: 800, mass: NaN, length: Math.max(50, num(p[3], 1000)), height, kind });
+    });
+    return { items, errors };
+  };
+
+  /* ---------------- Equipment table (Excel rows) ----------------
+   * Row: { car, name, loc: 'roof'|'under', length, width, height, x, y, mass, kind }
+   * x = centre offset from car centre, + towards END 1; y = offset from centre line, + towards side A.
+   */
+  TLT.guessKind = (name, loc) => (loc === 'roof' && /^pan/i.test(name) ? 'panto' : loc === 'roof' && /^(ac|hvac|a\/c)/i.test(name) ? 'ac' : 'box');
+  TLT.normEquipRow = function (r) {
+    const loc = /^r/i.test(String(r.loc || '')) ? 'roof' : 'under';
+    const kind = String(r.kind || '').trim().toLowerCase();
+    return {
+      car: String(r.car == null ? '' : r.car).trim(),
+      name: String(r.name == null ? '' : r.name).trim(),
+      loc,
+      length: num(r.length, NaN), width: num(r.width, NaN), height: num(r.height, NaN),
+      x: num(r.x, NaN), y: num(r.y, 0), mass: num(r.mass, NaN),
+      kind: ['box', 'ac', 'panto'].includes(kind) ? kind : TLT.guessKind(String(r.name || ''), loc),
+    };
+  };
+  TLT.equipmentFor = function (type, cfg) {
+    if (!Array.isArray(cfg.equipment)) return TLT.parseEquipment(type.equipment);
+    const items = [], errors = [];
+    cfg.equipment.map(TLT.normEquipRow).filter(r => r.car === type.name).forEach(r => {
+      if (!r.name || !Number.isFinite(r.x) || !(r.length > 0)) { errors.push(`Equipment row "${r.name || '?'}" needs a name, X and length.`); return; }
+      items.push({
+        name: r.name, loc: r.loc, x: r.x, y: r.y, length: r.length,
+        width: Number.isFinite(r.width) && r.width > 0 ? r.width : 800,
+        height: Number.isFinite(r.height) && r.height > 0 ? r.height : (r.loc === 'roof' ? 450 : 550),
+        mass: r.mass, kind: r.kind,
+      });
     });
     return { items, errors };
   };
@@ -229,7 +261,7 @@
       seatBlocks, wheelchairs, cabinets, screens, standRects, seats,
       areas: { saloon: aSaloon / 1e6, seat: aSeat / 1e6, foot: aFoot / 1e6, wheelchair: aWc / 1e6, cabinet: aCab / 1e6, standing: aStand / 1e6 },
       aisle, warnings: warn,
-      equipment: TLT.parseEquipment(type.equipment),
+      equipment: TLT.equipmentFor(type, cfg),
       motorBogies: Math.max(0, Math.min(2, Math.round(num(type.motorBogies, 0)))),
     };
   };

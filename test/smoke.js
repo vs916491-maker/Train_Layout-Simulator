@@ -8,6 +8,9 @@ for (const id of Object.keys(TLT.PRESETS)) {
   const cfg = TLT.PRESETS[id](); const R = TLT.compute(cfg); const sheets = TLT.buildSheets(R);
   fs.writeFileSync(path.join(out, id + '.pdf'), TLT.exportPDF(sheets, { title: id }));
   fs.writeFileSync(path.join(out, id + '.dxf'), TLT.exportDXF(sheets));
+  const uf = TLT.buildUnderframeSheets(R);
+  fs.writeFileSync(path.join(out, id + '_underframe.pdf'), TLT.exportPDF(uf, { title: id }));
+  fs.writeFileSync(path.join(out, id + '_underframe.dxf'), TLT.exportDXF(uf));
   sheets.forEach((s, i) => fs.writeFileSync(path.join(out, `${id}-${i + 1}.svg`), TLT.renderSVG(s)));
   console.log(id, sheets.map(s => `${s.short} 1:${s.scale} ents=${s.views.reduce((a, v) => a + v.ents.length, 0) + s.paper.ents.length}`).join(' | '));
   console.log('  warnings:', R.warnings);
