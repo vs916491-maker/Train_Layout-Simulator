@@ -130,6 +130,31 @@
     return { items, errors };
   };
 
+  /* ---------------- Interior items (per car variant) ----------------
+   * type.interiorItems: [{ kind: wheelchair|cabinet|max|none, bay, side: A|B|AB, place: door|end1|middle|end2, length, depth, height, label, n }]
+   * Older inputs used a text field type.bays ("1 A wheelchair"); it is converted here.
+   */
+  TLT.interiorItems = function (type) {
+    const out = [], errors = [];
+    let src = type.interiorItems;
+    if (!Array.isArray(src)) {
+      const p = TLT.parseBays(type.bays);
+      p.errors.forEach(e => errors.push(e));
+      src = p.rules.map(q => ({ kind: q.kind === 'max' ? (q.n === 0 ? 'none' : 'max') : q.kind, bay: q.bay, side: q.side, place: 'door', length: q.length, depth: q.depth, label: q.label, n: q.n }));
+    }
+    src.forEach(q => {
+      const kind = ['wheelchair', 'cabinet', 'max', 'none'].includes(q.kind) ? q.kind : 'cabinet';
+      const bay = Math.round(num(q.bay, 0));
+      const side = String(q.side || 'A').toUpperCase();
+      const sides = side === 'AB' || side === 'BA' ? ['A', 'B'] : side === 'B' ? ['B'] : ['A'];
+      const it = { kind: kind === 'none' ? 'max' : kind, bay, sides, place: ['door', 'end1', 'middle', 'end2'].includes(q.place) ? q.place : 'door',
+        length: num(q.length, 900), depth: num(q.depth, 600), height: num(q.height, NaN), label: String(q.label || 'ELEC. CABINET'), n: kind === 'none' ? 0 : Math.max(0, Math.round(num(q.n, 0))) };
+      if (kind === 'cabinet' && !(it.length > 0 && it.depth > 0)) { errors.push(`cabinet "${it.label}" needs a length and depth.`); return; }
+      out.push(it);
+    });
+    return { items: out, errors };
+  };
+
   /* ---------------- Door system ---------------- */
   TLT.doorCfg = function (cfg) {
     const c = cfg.common || {}, d = cfg.doors || {};
@@ -187,9 +212,9 @@
     doors.forEach(d => { bays.push({ i: bays.length, x0: prev.x, x1: d - dw / 2, k0: prev.kind, k1: 'door' }); prev = { x: d + dw / 2, kind: 'door' }; });
     bays.push({ i: bays.length, x0: prev.x, x1: salEnd, k0: prev.kind, k1: 'end' });
 
-    const bayParse = TLT.parseBays(type.bays);
-    bayParse.errors.forEach(e => warn.push(`${type.name}: ${e}`));
-    bayParse.rules.forEach(rule => { if (rule.bay < 0 || rule.bay >= bays.length) warn.push(`${type.name}: bay rule refers to B${rule.bay}, but this car has B0–B${bays.length - 1}.`); });
+    const itemsIn = TLT.interiorItems(type);
+    itemsIn.errors.forEach(e => warn.push(`${type.name}: ${e}`));
+    itemsIn.items.forEach(it => { if (it.bay < 0 || it.bay >= bays.length) warn.push(`${type.name}: interior item refers to B${it.bay}, but this car has B0–B${bays.length - 1}.`); });
 
     const seatW = num(r.seatWidth, 430), seatD = num(r.seatDepth, 550), foot = num(r.footZone, 300);
     const dClr = num(r.doorClearance, 330), eClr = num(r.endClearance, 0);
@@ -201,51 +226,92 @@
     const cabDepthDef = num(r.cabinetDepth, 600);
     const clr = k => (k === 'door' ? dClr : eClr);
 
-    const seatBlocks = [];   // longitudinal: {side,x0,x1,n}; transverse: {side,x0,x1,n,rows:[...]}
-    const wheelchairs = [];  // {side,x0,x1,depth}
-    const cabinets = [];     // {side,x0,x1,depth,label}
+    const seatBlocks = [];   // {side,x0,x1,n,bay,depth,foot[,groups,trans]}
+    const wheelchairs = [];  // {side,x0,x1,depth,bay,place}
+    const cabinets = [];     // {side,x0,x1,depth,height,label,bay,place}
     const screens = [];      // draft screens {side,x}
+    const placeName = { door: 'next to door', end1: 'END 1 side', middle: 'middle', end2: 'END 2 side' };
 
     bays.forEach(bay => {
       ['A', 'B'].forEach(side => {
-        let a = bay.x0 + clr(bay.k0), b = bay.x1 - clr(bay.k1);
-        if (b - a <= EPS) return;
-        const rules = bayParse.rules.filter(q => q.bay === bay.i && q.side === side);
-        // Things placed against the door end of the bay first (wheelchair next to the door)
-        const atStart = bay.k0 === 'door' || bay.k1 !== 'door';
-        rules.filter(q => q.kind === 'wheelchair' || q.kind === 'cabinet').forEach(q => {
-          const len = q.kind === 'wheelchair' ? wcL : q.length;
-          if (b - a < len - EPS) { warn.push(`${type.name}: B${bay.i} side ${side} is too short for the ${q.kind} (${Math.round(len)} mm).`); return; }
-          const x0 = atStart ? a : b - len, x1 = x0 + len;
-          if (q.kind === 'wheelchair') wheelchairs.push({ side, x0, x1, depth: wcW, bay: bay.i });
-          else cabinets.push({ side, x0, x1, depth: Number.isFinite(q.depth) ? q.depth : cabDepthDef, label: q.label, bay: bay.i });
-          if (atStart) a = x1; else b = x0;
-        });
-        const maxRule = rules.filter(q => q.kind === 'max').reduce((m, q) => Math.min(m, q.n), Infinity);
-        const avail = b - a;
-        if (avail <= EPS) return;
-        if (!trans) {
-          let n = Math.floor(avail / seatW + EPS);
-          n = Math.min(n, maxRule);
-          if (n <= 0) return;
-          const len = n * seatW, x0 = a + (avail - len) / 2;
-          seatBlocks.push({ side, x0, x1: x0 + len, n, bay: bay.i, depth: seatD, foot });
-        } else {
-          const groupL = 2 * tDepth + tLeg;
-          let g = Math.floor(avail / groupL + EPS);
-          let maxN = maxRule;
-          if (Number.isFinite(maxN)) g = Math.min(g, Math.floor(maxN / (2 * tPerSide)));
-          if (g <= 0) return;
-          const len = g * groupL, x0 = a + (avail - len) / 2;
-          const groups = [];
-          for (let k = 0; k < g; k++) groups.push({ x0: x0 + k * groupL, x1: x0 + (k + 1) * groupL });
-          seatBlocks.push({ side, x0, x1: x0 + len, n: g * 2 * tPerSide, bay: bay.i, depth: tPerSide * seatW, foot: 0, groups, trans: true });
+        const a = bay.x0 + clr(bay.k0), b = bay.x1 - clr(bay.k1);
+        const mine = itemsIn.items.filter(q => q.bay === bay.i && q.sides.includes(side));
+        if (b - a <= EPS) {
+          mine.filter(q => q.kind !== 'max').forEach(q => warn.push(`${type.name}: B${bay.i} side ${side} has no free length (${Math.round(bay.x1 - bay.x0)} mm bay) for the ${q.kind === 'wheelchair' ? 'wheelchair space' : 'cabinet "' + q.label + '"'}.`));
+          return;
         }
+        const boxes = mine.filter(q => q.kind === 'wheelchair' || q.kind === 'cabinet').map(q => {
+          let place = q.place;
+          if (place === 'door') place = bay.k0 === 'door' ? 'end1' : bay.k1 === 'door' ? 'end2' : 'middle';
+          return Object.assign({}, q, { at: place, len: q.kind === 'wheelchair' ? wcL : q.length });
+        });
+        let lo = a, hi = b;
+        const mids = [];
+        const put = (q, x0) => {
+          const x1 = x0 + q.len;
+          if (q.kind === 'wheelchair') wheelchairs.push({ side, x0, x1, depth: wcW, bay: bay.i, place: q.place });
+          else cabinets.push({ side, x0, x1, depth: q.depth, height: q.height, label: q.label, bay: bay.i, place: q.place });
+        };
+        const tooShort = q => warn.push(`${type.name}: B${bay.i} side ${side} has no room for the ${q.kind === 'wheelchair' ? 'wheelchair space' : 'cabinet "' + q.label + '"'} (${Math.round(q.len)} mm, ${placeName[q.place] || q.place}).`);
+        boxes.filter(q => q.at === 'end1').forEach(q => { if (hi - lo < q.len - EPS) return tooShort(q); put(q, lo); lo += q.len; });
+        boxes.filter(q => q.at === 'end2').forEach(q => { if (hi - lo < q.len - EPS) return tooShort(q); put(q, hi - q.len); hi -= q.len; });
+        boxes.filter(q => q.at === 'middle').forEach(q => {
+          const x0 = (a + b) / 2 - q.len / 2;
+          if (x0 < lo - EPS || x0 + q.len > hi + EPS || mids.some(m => x0 < m[1] - EPS && x0 + q.len > m[0] + EPS)) return tooShort(q);
+          put(q, x0); mids.push([x0, x0 + q.len]);
+        });
+        // Free intervals between the placed boxes → seat blocks
+        const free = [];
+        let cur = lo;
+        mids.sort((p, q) => p[0] - q[0]).forEach(([m0, m1]) => { if (m0 > cur + EPS) free.push([cur, m0]); cur = Math.max(cur, m1); });
+        if (hi > cur + EPS) free.push([cur, hi]);
+        let left = mine.filter(q => q.kind === 'max').reduce((m, q) => Math.min(m, q.n), Infinity);
+        free.forEach(([f0, f1]) => {
+          const avail = f1 - f0;
+          if (avail <= EPS || left <= 0) return;
+          if (!trans) {
+            const n = Math.min(Math.floor(avail / seatW + EPS), left);
+            if (n <= 0) return;
+            const len = n * seatW, x0 = f0 + (avail - len) / 2;
+            seatBlocks.push({ side, x0, x1: x0 + len, n, bay: bay.i, depth: seatD, foot });
+            left -= n;
+          } else {
+            const groupL = 2 * tDepth + tLeg;
+            let g = Math.floor(avail / groupL + EPS);
+            if (Number.isFinite(left)) g = Math.min(g, Math.floor(left / (2 * tPerSide)));
+            if (g <= 0) return;
+            const len = g * groupL, x0 = f0 + (avail - len) / 2;
+            const groups = [];
+            for (let k = 0; k < g; k++) groups.push({ x0: x0 + k * groupL, x1: x0 + (k + 1) * groupL });
+            seatBlocks.push({ side, x0, x1: x0 + len, n: g * 2 * tPerSide, bay: bay.i, depth: tPerSide * seatW, foot: 0, groups, trans: true });
+            left -= g * 2 * tPerSide;
+          }
+        });
       });
       // draft screens at door ends of the bay
       if (bay.k0 === 'door') { screens.push({ side: 'A', x: bay.x0 + Math.min(dClr, 150) }); screens.push({ side: 'B', x: bay.x0 + Math.min(dClr, 150) }); }
       if (bay.k1 === 'door') { screens.push({ side: 'A', x: bay.x1 - Math.min(dClr, 150) }); screens.push({ side: 'B', x: bay.x1 - Math.min(dClr, 150) }); }
     });
+
+    // Wheelchair turning circle: find a centre inside the wheelchair space whose circle stays clear of seats and cabinets
+    {
+      const R = num(r.wcTurning, 1500) / 2, hh = Wi / 2;
+      const obst = seatBlocks.map(q => ({ x0: q.x0, x1: q.x1, y0: q.side === 'A' ? hh - q.depth : -hh, y1: q.side === 'A' ? hh : -hh + q.depth }))
+        .concat(cabinets.map(q => ({ x0: q.x0, x1: q.x1, y0: q.side === 'A' ? hh - q.depth : -hh, y1: q.side === 'A' ? hh : -hh + q.depth })));
+      const hits = (cx, cy) => cx - R < salStart - EPS || cx + R > salEnd + EPS || obst.some(o => {
+        const dx = Math.max(o.x0 - cx, 0, cx - o.x1), dy = Math.max(o.y0 - cy, 0, cy - o.y1);
+        return dx * dx + dy * dy < (R - 1) * (R - 1);
+      });
+      wheelchairs.forEach(w => {
+        const cy = w.side === 'A' ? hh - R : -hh + R, mid = (w.x0 + w.x1) / 2;
+        let best = null;
+        for (let d = 0; d <= (w.x1 - w.x0) / 2 + EPS && best == null; d += 25) {
+          if (!hits(mid - d, cy)) best = mid - d; else if (!hits(mid + d, cy)) best = mid + d;
+        }
+        w.cx = best == null ? mid : best; w.cy = cy; w.clear = best != null;
+        if (!w.clear) warn.push(`${type.name}: Ø${Math.round(2 * R)} turning circle at the B${w.bay} side ${w.side} wheelchair space overlaps seats, a cabinet or the end wall. Try another placement.`);
+      });
+    }
 
     const seats = seatBlocks.reduce((s, b) => s + b.n, 0);
     const half = Wi / 2;

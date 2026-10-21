@@ -131,7 +131,7 @@
     h += '</div>';
 
     h += `<div class="section-title"><h3>Car variants</h3><span class="hint" style="margin:0">One card per car variant. Positions run from END 1 (cab end of a driving car). Equipment positions are entered in step 2, masses in step 5.</span></div>`;
-    h += `<div class="cards" id="types">${cfg.carTypes.map((t, i) => typeCard(t, i)).join('')}</div>`;
+    h += `<div class="cards" id="types">${cfg.carTypes.map((t, i) => typeCard(t, i)).join('')}${interiorGuide()}</div>`;
 
     h += `<div class="section-title"><h3>Load cases & mass</h3></div><div class="cards"><div class="card" style="grid-column:1/-1"><div class="fields" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">
       ${F('Passenger mass', 'loads.paxMass', 'num', { unit: 'kg' })}${F('Max. axle load', 'loads.maxAxleLoad', 'num', { unit: 't' })}
@@ -171,8 +171,64 @@
         ${F('END 2 coupler face → nearest door centre', 'doorRearOffset', 'num', { unit: 'mm', wide: true })}
         ${F('Tare mass AW0 (used for capacity)', 'tare', 'num', { unit: 't', wide: true })}
         ${F('Spec. seats (check)', 'specSeats', 'num')}${F('Spec. standees AW2 (check)', 'specStanding', 'num')}
-        ${F('Bay rules', 'bays', 'area', { rows: 2, hint: 'One per line: <code>bay side value</code> — side A, B or AB; value = max seats, <code>none</code>, <code>wheelchair</code> or <code>cabinet:800:600:LABEL</code>. Bays B0…Bn from END 1.' })}
+        <div class="f wide"><span class="sub">Interior items</span>${interiorItemsHtml(t, i)}</div>
       </div></div>`;
+  }
+
+  /* Interior items editor (wheelchair spaces, electrical cabinets, seat limits) */
+  const ITEM_KINDS = [['wheelchair', 'Wheelchair space'], ['cabinet', 'Electrical cabinet'], ['max', 'Seat limit'], ['none', 'No seats']];
+  const PLACES = [['door', 'Next to door'], ['end1', 'END 1 side of bay'], ['middle', 'Middle of bay'], ['end2', 'END 2 side of bay']];
+  function interiorItemsHtml(t, i) {
+    let lay = null; try { lay = TLT.layoutCar(t, cfg); } catch (e) { /* */ }
+    const bays = lay ? lay.bays : Array.from({ length: Math.round(TLT.num(t.doorsPerSide, 4)) + 1 }, (x, k) => ({ i: k, x0: 0, x1: 0 }));
+    const items = Array.isArray(t.interiorItems) ? t.interiorItems : [];
+    const sel = (id, path, opts, val, re) => `<select id="${id}" data-path="${path}" data-kind="text"${re ? ' data-rerender="1"' : ''}>${opts.map(([v, l]) => `<option value="${esc(v)}"${String(v) === String(val) ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+    const inp = (id, path, val, lab, unit) => `<div class="f"><label for="${id}">${lab}</label><div class="in"><input id="${id}" data-path="${path}" data-kind="${unit === '' ? 'text' : 'num'}" ${unit === '' ? '' : 'type="number" step="any"'} value="${esc(val)}">${unit ? `<span class="unit">${unit}</span>` : ''}</div></div>`;
+    let h = '<div class="items">';
+    items.forEach((it, j) => {
+      const base = `carTypes.${i}.interiorItems.${j}`, idb = `ii-${i}-${j}`;
+      const bayOpts = bays.map(b => [b.i, `B${b.i}${b.x1 > b.x0 ? ' (' + Math.round(b.x1 - b.x0) + ')' : ''}`]);
+      h += `<div class="item"><div class="row">
+        <div class="f"><label for="${idb}-k">Item</label><div class="in">${sel(idb + '-k', base + '.kind', ITEM_KINDS, it.kind, true)}</div></div>
+        <div class="f"><label for="${idb}-b">Bay</label><div class="in">${sel(idb + '-b', base + '.bay', bayOpts, it.bay)}</div></div>
+        <div class="f"><label for="${idb}-s">Side</label><div class="in">${sel(idb + '-s', base + '.side', [['A', 'A'], ['B', 'B'], ['AB', 'A + B']], it.side)}</div></div>
+        <button class="btn small" data-delitem="${i}:${j}" aria-label="Remove item" style="align-self:end">×</button></div>`;
+      if (it.kind === 'wheelchair' || it.kind === 'cabinet') {
+        const plc = `<div class="f"><label for="${idb}-p">Placement</label><div class="in">${sel(idb + '-p', base + '.place', PLACES, it.place || 'door')}</div></div>`;
+        h += it.kind === 'cabinet'
+          ? `<div class="row2 c2">${plc}${inp(idb + '-lab', base + '.label', it.label, 'Label', '')}</div><div class="row2 c3">${inp(idb + '-l', base + '.length', it.length, 'Length', 'mm') + inp(idb + '-d', base + '.depth', it.depth, 'Depth', 'mm') + inp(idb + '-h', base + '.height', it.height, 'Height', 'mm')}</div>`
+          : `<div class="row2 c2">${plc}<p class="hint" style="margin:16px 0 0">${TLT.num(cfg.interior.wcLength, 1300)} × ${TLT.num(cfg.interior.wcWidth, 700)} mm, Ø${TLT.num(cfg.interior.wcTurning, 1500)} circle (Interior rules)</p></div>`;
+      }
+      if (it.kind === 'max') h += `<div class="row2">${inp(idb + '-n', base + '.n', it.n, 'Max. seats per side', 'pax')}</div>`;
+      h += '</div>';
+    });
+    h += `<div class="additems"><button class="btn small" data-additem="${i}:wheelchair">+ Wheelchair space</button><button class="btn small" data-additem="${i}:cabinet">+ Electrical cabinet</button><button class="btn small" data-additem="${i}:max">+ Seat limit</button></div></div>`;
+    return h;
+  }
+  function interiorGuide() {
+    const bayX = [12, 52, 112, 172, 232, 268];
+    const doors = [52, 112, 172, 232];
+    let svg = `<svg viewBox="0 0 300 120" role="img" aria-label="Bay numbering on a car plan" style="width:100%;height:auto;display:block">
+      <rect x="10" y="30" width="270" height="56" rx="4" fill="var(--soft)" stroke="var(--ink)" stroke-width="1"/>`;
+    doors.forEach(d => { svg += `<rect x="${d - 7}" y="27" width="14" height="6" fill="var(--panel)" stroke="#8e24aa"/><rect x="${d - 7}" y="83" width="14" height="6" fill="var(--panel)" stroke="#8e24aa"/>`; });
+    for (let k = 0; k < bayX.length - 1; k++) {
+      const m = (bayX[k] + bayX[k + 1]) / 2;
+      svg += `<text x="${m}" y="62" font-size="11" text-anchor="middle" fill="var(--ink)" font-weight="600">B${k}</text>`;
+      if (k > 0 && k < 4) svg += `<rect x="${bayX[k] + 12}" y="31" width="${bayX[k + 1] - bayX[k] - 24}" height="9" fill="#d5efe7" stroke="#0f7a63" stroke-width=".6"/><rect x="${bayX[k] + 12}" y="76" width="${bayX[k + 1] - bayX[k] - 24}" height="9" fill="#d5efe7" stroke="#0f7a63" stroke-width=".6"/>`;
+    }
+    svg += `<rect x="64" y="31" width="22" height="13" fill="#dce9fb" stroke="#1565c0"/><rect x="244" y="74" width="16" height="11" fill="#e2e2e2" stroke="#4a4a4a"/>
+      <text x="4" y="22" font-size="10" fill="var(--muted)">END 1</text><text x="296" y="22" font-size="10" fill="var(--muted)" text-anchor="end">END 2</text>
+      <text x="150" y="22" font-size="10" fill="var(--muted)" text-anchor="middle">Side A (top of plan)</text><text x="150" y="104" font-size="10" fill="var(--muted)" text-anchor="middle">Side B</text>
+      <text x="75" y="116" font-size="9" fill="#1565c0" text-anchor="middle">wheelchair</text><text x="252" y="116" font-size="9" fill="#4a4a4a" text-anchor="middle">cabinet</text></svg>`;
+    return `<div class="card guide"><h3>Interior items — how they work</h3>${svg}
+      <ul class="hint" style="padding-left:18px;margin:8px 0 0;line-height:1.5">
+        <li><b>Bays</b> are the spaces between doors, numbered B0…Bn from END 1. B0 runs from the cab partition or end wall to the first door. Side A is the top of the plan.</li>
+        <li><b>Seats</b> fill each bay side automatically: bay length minus the door clearance at each door, divided by the seat width.</li>
+        <li><b>Wheelchair space</b> takes its length from the bay (size set in Interior rules); seats fill the rest. The tool places the turning circle clear of seats and warns if it cannot.</li>
+        <li><b>Electrical cabinet</b>: give label, length, depth and height. It is drawn and dimensioned on the layout, removed from the standing area, and seats fill the rest of the bay.</li>
+        <li><b>Placement</b>: next to the door (default), END 1 side, middle or END 2 side of the bay.</li>
+        <li><b>Seat limit / No seats</b> caps the seats on that bay side.</li>
+      </ul></div>`;
   }
 
   function refreshPane1Info() {
@@ -195,7 +251,7 @@
     n = Math.max(1, Math.min(12, Math.round(n)));
     while (cfg.carTypes.length < n) {
       const last = cfg.carTypes[cfg.carTypes.length - 1];
-      const t = clone(last); t.name = uniqueName(last.cab ? 'M' : (last.name.replace(/\d+$/, '') || 'M')); t.cab = false; t.bays = ''; t.specSeats = ''; t.specStanding = '';
+      const t = clone(last); t.name = uniqueName(last.cab ? 'M' : (last.name.replace(/\d+$/, '') || 'M')); t.cab = false; t.interiorItems = []; t.specSeats = ''; t.specStanding = '';
       cfg.carTypes.push(t);
     }
     if (cfg.carTypes.length > n) cfg.carTypes.splice(n);
@@ -621,7 +677,15 @@
       o.weightSource = o.weightItems.length ? 'Converted from the earlier equipment list' : '—';
     }
     o.equipment = o.equipment.filter(r => !/^m/i.test(r.cat || '')).map(r => { const q = Object.assign({}, r); delete q.cat; delete q.mass; return q; });
-    o.carTypes.forEach(t => { delete t.equipment; if (!t.support1) t.support1 = 'own'; if (!t.support2) t.support2 = 'own'; });
+    o.carTypes.forEach(t => {
+      delete t.equipment; if (!t.support1) t.support1 = 'own'; if (!t.support2) t.support2 = 'own';
+      if (!Array.isArray(t.interiorItems)) {
+        t.interiorItems = TLT.parseBays(t.bays).rules.map(q => q.kind === 'wheelchair' ? { kind: 'wheelchair', bay: q.bay, side: q.side, place: 'door' }
+          : q.kind === 'cabinet' ? { kind: 'cabinet', bay: q.bay, side: q.side, place: 'door', label: q.label, length: q.length, depth: Number.isFinite(q.depth) ? q.depth : 600, height: '' }
+            : { kind: q.n === 0 ? 'none' : 'max', bay: q.bay, side: q.side, n: q.n });
+      }
+      delete t.bays;
+    });
     delete o.detail;
     return o;
   }
@@ -697,6 +761,15 @@
       if (b.dataset.dxf) return downloadDxf(b.dataset.dxf);
       if (b.id === 'addCase') { cfg.cases.push({ name: 'Case ' + (cfg.cases.length + 1), kind: 'density', density: 5, note: '' }); renderPane1(); markChanged(); return; }
       if (b.dataset.delcase != null) { cfg.cases.splice(+b.dataset.delcase, 1); renderPane1(); markChanged(); return; }
+      if (b.dataset.additem) {
+        const [i, kind] = b.dataset.additem.split(':');
+        const t = cfg.carTypes[+i]; t.interiorItems = t.interiorItems || [];
+        t.interiorItems.push(kind === 'wheelchair' ? { kind, bay: 1, side: 'A', place: 'door' }
+          : kind === 'cabinet' ? { kind, bay: 0, side: 'A', place: 'end1', label: 'ELEC. CABINET', length: 900, depth: 600, height: 1900 }
+            : { kind, bay: 1, side: 'A', n: 3 });
+        renderPane1(); markChanged(); return;
+      }
+      if (b.dataset.delitem) { const [i, j] = b.dataset.delitem.split(':').map(Number); cfg.carTypes[i].interiorItems.splice(j, 1); renderPane1(); markChanged(); return; }
       if (b.dataset.duptype != null) {
         const i = +b.dataset.duptype; const t = clone(cfg.carTypes[i]); t.name = uniqueName(t.name.replace(/\d+$/, '') || 'V');
         cfg.carTypes.splice(i + 1, 0, t);

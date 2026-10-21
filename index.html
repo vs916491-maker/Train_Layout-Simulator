@@ -104,6 +104,16 @@ table.data td.num { text-align: right; font-family: var(--f-mono); }
 table.data input, table.data select { width: 100%; border: 1px solid var(--line); border-radius: 4px; background: var(--soft); padding: 4px 6px; min-width: 60px; }
 table.data input.num { font-family: var(--f-mono); }
 table.data select { min-width: 104px; }
+.items { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.item { border: 1px solid var(--line); border-radius: var(--r); padding: 8px; display: flex; flex-direction: column; gap: 6px; background: var(--soft); }
+.item .row { display: grid; grid-template-columns: 1.5fr 1fr 0.9fr auto; gap: 6px; align-items: end; }
+.item .row2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px; }
+.item .row2.c2 { grid-template-columns: 1.2fr 1fr; }
+.item .row2.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.item .f .in { background: var(--panel); }
+.additems { display: flex; gap: 6px; flex-wrap: wrap; }
+.card.guide { background: var(--accent-soft); border-color: var(--accent); }
+.card.guide li { margin-bottom: 4px; }
 .scroll-x { overflow-x: auto; }
 .pill { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--line); white-space: nowrap; }
 .pill.ok { color: var(--ok); border-color: var(--ok); background: var(--ok-soft); }

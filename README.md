@@ -39,16 +39,15 @@ Edits are also remembered in the browser between visits.
 
 Set **Number of car variants** in the formation card; a card appears for each. Each variant has its own lengths, bogie centres, door count and pitch, tare mass and bay rules. Door positions come from the **door pitch** and the distance from the **END 2 coupler face to the nearest door centre**.
 
-**Bay rules** — one per line, `bay side value`:
+**Interior items** (per car variant) — added with the buttons on each card:
 
-```
-1 A wheelchair             wheelchair space in bay 1, side A (seats fill the rest)
-0 A cabinet:900:600:ELEC   900 mm long, 600 mm deep cubicle labelled ELEC
-4 AB 2                     at most 2 seats per side in bay 4
-3 B none                   no seats in bay 3, side B
-```
+| Item | Settings | Effect |
+|---|---|---|
+| Wheelchair space | Bay, side (A / B / A+B), placement | Size from Interior rules (default 1300 × 700). Seats fill the rest of the bay. The Ø1500 turning circle is placed clear of seats and cabinets; a warning appears if that is not possible. |
+| Electrical cabinet | Bay, side, placement, label, length, depth, height | Drawn with label and L × D × H on the layout, listed on the sheet, removed from the standing area; seats fill the rest of the bay. |
+| Seat limit / No seats | Bay, side, max seats | Caps the seats on that bay side. |
 
-Bays are numbered B0 … Bn from END 1 (B0 is between the cab / end wall and the first door). Side A is the top of the plan view.
+Placement: next to the door (default), END 1 side, middle or END 2 side of the bay. Bays are numbered B0 … Bn from END 1 (B0 is between the cab / end wall and the first door); the bay list in each item shows the bay lengths. Side A is the top of the plan view. Older input files with text bay rules (`1 A wheelchair`) are converted automatically.
 
 ### Equipment Excel file
 

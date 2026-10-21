@@ -347,8 +347,9 @@
       v.rect(w.x0, y0, w.x1, y1, 'WC', { fill: true });
       if (detail) {
         const R = num(r.wcTurning, 1500) / 2;
-        const ym = w.side === 'A' ? hi - R : -hi + R;
-        v.circle((w.x0 + w.x1) / 2, ym, R, 'WC_DASH');
+        const ym = Number.isFinite(w.cy) ? w.cy : (w.side === 'A' ? hi - R : -hi + R);
+        const xm = Number.isFinite(w.cx) ? w.cx : (w.x0 + w.x1) / 2;
+        v.circle(xm, ym, R, 'WC_DASH', w.clear === false ? { color: '#b3261e' } : undefined);
         v.text((w.x0 + w.x1) / 2, (y0 + y1) / 2, 'WHEELCHAIR', 1.6, { anchor: 'middle', valign: 'middle', ly: 'WC', color: '#1565c0' });
       }
     });
@@ -357,7 +358,14 @@
       const [y0, y1] = sy(cb.side, cb.depth);
       v.rect(cb.x0, y0, cb.x1, y1, 'CABINET', { fill: true });
       v.line(cb.x0, y0, cb.x1, y1, 'CABINET', { lw: 0.13 }); v.line(cb.x0, y1, cb.x1, y0, 'CABINET', { lw: 0.13 });
-      if (detail) labelIn(v, cb.label, cb.x0, cb.x1, (y0 + y1) / 2, 1.5, 'CABINET');
+      if (detail) {
+        const dims = `${Math.round(cb.x1 - cb.x0)}×${Math.round(cb.depth)}${Number.isFinite(cb.height) ? '×' + Math.round(cb.height) : ''}`;
+        const ym = (y0 + y1) / 2;
+        if (v.tw(cb.label, 1.4) < (cb.x1 - cb.x0) * 0.92 && (y1 - y0) / v.s > 4.2) {
+          v.text((cb.x0 + cb.x1) / 2, ym + 0.9 * v.s, cb.label, 1.4, { anchor: 'middle', valign: 'middle', ly: 'CABINET', color: '#333333', bold: true });
+          v.text((cb.x0 + cb.x1) / 2, ym - 1.1 * v.s, dims, 1.25, { anchor: 'middle', valign: 'middle', ly: 'CABINET', color: '#333333' });
+        } else labelIn(v, cb.label, cb.x0, cb.x1, ym, 1.4, 'CABINET');
+      }
     });
     // Centre line & bay labels
     v.line(-150, 0, Lc + 150, 0, 'CENTER');
@@ -722,6 +730,14 @@
       { ly: 'CABINET', label: 'Cubicle / cabinet', kind: 'box' },
     ]);
     p.text(20, yB1 - 22, 'Bays are numbered B0 … Bn from END 1. Seat blocks dimensioned along side B with seat count in brackets.', 1.8, { color: '#555555' });
+    const plc = { door: 'next to door', end1: 'END 1 side', middle: 'middle', end2: 'END 2 side' };
+    const itemLines = lay.wheelchairs.map(w => `Wheelchair space ${Math.round(w.x1 - w.x0)} × ${Math.round(w.depth)}: B${w.bay} side ${w.side}, ${plc[w.place] || ''}; turning circle ${w.clear === false ? 'NOT clear of seats' : 'clear'}`)
+      .concat(lay.cabinets.map(c => `${c.label} ${Math.round(c.x1 - c.x0)} × ${Math.round(c.depth)}${Number.isFinite(c.height) ? ' × ' + Math.round(c.height) : ''} mm (L × D × H): B${c.bay} side ${c.side}, ${plc[c.place] || ''}`));
+    if (itemLines.length) {
+      const x2 = 240, yI = yT;
+      p.text(x2 + 10, yI - 32, 'INTERIOR ITEMS', 2.2, { bold: true });
+      itemLines.slice(0, 6).forEach((tx, k) => p.text(x2 + 10, yI - 37 - k * 3.8, trunc('· ' + tx, 1.75, PW - 20 - x2 - 10), 1.75, { color: /NOT clear/.test(tx) ? '#b3261e' : '#333333' }));
+    }
     return { title: `${kindLabel.toLowerCase().replace(/^./, m => m.toUpperCase())} ${t.name} — interior layout`, short: `${t.name} layout`, size, scale, views: [v], paper: p };
   }
 
