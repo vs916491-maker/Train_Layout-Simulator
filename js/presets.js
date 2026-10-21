@@ -4,7 +4,21 @@
   const TLT = (globalThis.TLT = globalThis.TLT || {});
 
   const today = () => new Date().toISOString().slice(0, 10);
-  const rowObj = r => ({ car: r[0], name: r[1], loc: /^r/i.test(r[2]) ? 'roof' : 'under', length: r[3], width: r[4], height: r[5], x: r[6], y: r[7], mass: r[8], kind: '' });
+  const rowObj = r => ({ cat: 'Equipment', car: r[0], name: r[1], loc: /^r/i.test(r[2]) ? 'roof' : 'under', length: r[3], width: r[4], height: r[5], x: r[6], y: r[7], mass: r[8], kind: '' });
+  // Mass items (not drawn): [name, x from car centre, mass kg]
+  const massRows = (car, list) => list.map(([name, x, mass]) => ({ cat: 'Mass item', car, name, loc: 'under', length: '', width: '', height: '', x, y: 0, mass, kind: '' }));
+  const commonMass = (bogie, bc, extra) => [
+    ['Carbody shell', 0, 8400],
+    ['Bogie END 1', bc / 2, bogie], ['Bogie END 2', -bc / 2, bogie],
+    ['Electrical cables & cabinets', 0, 1900],
+    ['Pneumatic piping', 0, 600],
+    ['Interior ceiling & lining', 0, 1350],
+    ['Floor', 0, 1100],
+    ['Seats', 0, 560],
+    ['Passenger doors & operators', 0, 1600],
+    ['Glazing', 0, 700],
+    ['Couplers & draft gear', 0, 800],
+  ].concat(extra || [], [['Other items', 0, 1500]]);
 
   TLT.PRESETS = {
     'dhaka-l5n': () => ({
@@ -36,13 +50,23 @@
         ['M2', 'VVVF', 'Underframe', 3400, 1400, 600, 1700, -700, 900],
         ['M2', 'APU', 'Underframe', 2600, 1300, 600, -2800, 650, 800],
         ['M2', 'BCU', 'Underframe', 800, 600, 450, 4600, 900, 60],
-      ].map(rowObj),
+      ].map(rowObj).concat(
+        massRows('Tc', commonMass(5600, 13800, [['Cab equipment & desk', 8950, 900], ['Signalling (CBTC) equipment', 8950, 400]])),
+        massRows('M1', commonMass(7200, 13800)),
+        massRows('M2', commonMass(7200, 13800))),
       equipmentSource: 'Example values (preset)',
       common: {
         bodyWidth: 2950, wallThk: 60, floorHeight: 1130, roofHeight: 3650, maxHeight: 4100,
-        endWallThk: 150, gangwayWidth: 1100, doorWidth: 1500, doorHeight: 1850, cabDoorWidth: 600,
+        endWallThk: 150, gangwayWidth: 1100,
         wheelDia: 860, wheelbase: 2100, mountDepth: 250,
       },
+      doors: {
+        type: 'Bi-parting sliding (pocket)', width: 1500, height: 1850,
+        detrain: { on: true, width: 800, height: 1800 },
+        cabSide: { on: true, width: 600, height: 1850, pos: 1200 },
+        cabSaloon: { on: true, width: 700, height: 1900, y: 0, type: 'Hinged' },
+      },
+      hvac: { unitsPerCar: 2, cabHvac: false },
       interior: {
         seatType: 'longitudinal', seatWidth: 430, seatDepth: 550, footZone: 300, doorClearance: 330, endClearance: 0,
         transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,
@@ -101,13 +125,23 @@
         ['M', 'AC2', 'Roof', 3300, 2000, 450, -5200, 0, 700],
         ['M', 'VVVF', 'Underframe', 3400, 1400, 600, 1500, -700, 900],
         ['M', 'BCU', 'Underframe', 800, 600, 450, 5000, 900, 60],
-      ].map(rowObj),
+      ].map(rowObj).concat(
+        massRows('DM', commonMass(7400, 15000, [['Cab equipment & desk', 10000, 900]])),
+        massRows('T', commonMass(5700, 15000)),
+        massRows('M', commonMass(7400, 15000))),
       equipmentSource: 'Example values (preset)',
       common: {
         bodyWidth: 3100, wallThk: 70, floorHeight: 1100, roofHeight: 3700, maxHeight: 4050,
-        endWallThk: 150, gangwayWidth: 1400, doorWidth: 1400, doorHeight: 1900, cabDoorWidth: 600,
+        endWallThk: 150, gangwayWidth: 1400,
         wheelDia: 840, wheelbase: 2300, mountDepth: 250,
       },
+      doors: {
+        type: 'Bi-parting sliding (pocket)', width: 1400, height: 1900,
+        detrain: { on: true, width: 800, height: 1800 },
+        cabSide: { on: true, width: 600, height: 1900, pos: 1250 },
+        cabSaloon: { on: true, width: 700, height: 1900, y: 0, type: 'Hinged' },
+      },
+      hvac: { unitsPerCar: 2, cabHvac: false },
       interior: {
         seatType: 'longitudinal', seatWidth: 450, seatDepth: 550, footZone: 300, doorClearance: 340, endClearance: 0,
         transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,

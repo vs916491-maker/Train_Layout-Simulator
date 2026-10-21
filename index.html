@@ -49,6 +49,14 @@ nav.steps { display: flex; gap: 2px; overflow-x: auto; padding-top: 8px; }
 .step[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
 .step[aria-selected="true"] .n { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .step .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.chip { border: 1px solid var(--line); background: var(--panel); border-radius: 99px; padding: 5px 14px; cursor: pointer; font-weight: 500; }
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.wgrid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 1000px) { .wgrid { grid-template-columns: minmax(0, 1fr); } }
+tr.total td { font-weight: 600; background: var(--soft); }
+tr.cat-mass td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.num-out { font-family: var(--f-mono); text-align: right; white-space: nowrap; }
 
 .btn { border: 1px solid var(--line); background: var(--soft); border-radius: var(--r); padding: 7px 12px; cursor: pointer; white-space: nowrap; }
 .btn:hover { border-color: var(--accent); }
@@ -86,6 +94,8 @@ select.sel { border: 1px solid var(--line); background: var(--panel); border-rad
 .f textarea { font-family: var(--f-mono); font-size: 12px; resize: vertical; min-height: 54px; line-height: 1.45; }
 .f.check { flex-direction: row; align-items: center; gap: 8px; }
 .f.check label { font-size: 13px; color: var(--ink); }
+.f.check input { width: auto; flex: none; margin: 0; }
+.f .sub { font-size: 12px; font-weight: 600; color: var(--ink); letter-spacing: 0.02em; }
 
 table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
 table.data th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11px; padding: 6px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
@@ -154,27 +164,32 @@ table.data input.num { font-family: var(--f-mono); }
   </div>
   <nav class="steps gutter" role="tablist" aria-label="Steps">
     <button class="step" role="tab" id="step-1" data-pane="1"><span class="n">1</span>Main Dimensions</button>
-    <button class="step" role="tab" id="step-2" data-pane="2"><span class="n">2</span>Layout &amp; Calculations</button>
-    <button class="step" role="tab" id="step-3" data-pane="3"><span class="n">3</span>Underframe Input</button>
+    <button class="step" role="tab" id="step-2" data-pane="2"><span class="n">2</span>Equipment Inputs</button>
+    <button class="step" role="tab" id="step-3" data-pane="3"><span class="n">3</span>Layout &amp; Calculations</button>
     <button class="step" role="tab" id="step-4" data-pane="4"><span class="n">4</span>Underframe Layout</button>
+    <button class="step" role="tab" id="step-5" data-pane="5"><span class="n">5</span>Weight Calculations</button>
   </nav>
 </header>
 
 <main>
   <section class="pane gutter" id="pane-1" role="tabpanel" aria-labelledby="step-1"></section>
-
-  <section class="pane gutter" id="pane-2" role="tabpanel" aria-labelledby="step-2" hidden>
+  <section class="pane gutter" id="pane-2" role="tabpanel" aria-labelledby="step-2" hidden></section>
+  <section class="pane gutter" id="pane-3" role="tabpanel" aria-labelledby="step-3" hidden>
     <div class="pane-head"><h2>Layout &amp; Calculations</h2><p>Train layout, one interior layout per car variant, and the passenger capacity calculation.</p></div>
-    <div id="stale-2"></div>
-    <div id="body-2"></div>
+    <div id="stale-main"></div>
+    <div id="body-main"></div>
   </section>
-
-  <section class="pane gutter" id="pane-3" role="tabpanel" aria-labelledby="step-3" hidden></section>
-
   <section class="pane gutter" id="pane-4" role="tabpanel" aria-labelledby="step-4" hidden>
     <div class="pane-head"><h2>Underframe Layout</h2><p>Underframe plan and side elevation for each car variant, with the equipment table.</p></div>
-    <div id="stale-4"></div>
-    <div id="body-4"></div>
+    <div id="stale-uf"></div>
+    <div id="body-uf"></div>
+  </section>
+  <section class="pane gutter" id="pane-5" role="tabpanel" aria-labelledby="step-5" hidden>
+    <div class="pane-head"><h2>Weight Calculations</h2><p>Tare mass from the equipment and mass-item list, passenger mass per load case, and axle loads from the centre of gravity.</p></div>
+    <div id="weight-edit"></div>
+    <div class="section-title"><h3>Weight sheets</h3></div>
+    <div id="stale-wt"></div>
+    <div id="body-wt"></div>
   </section>
 </main>
 <div class="toast" id="toast" hidden></div>

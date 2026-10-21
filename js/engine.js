@@ -106,6 +106,7 @@
     const loc = /^r/i.test(String(r.loc || '')) ? 'roof' : 'under';
     const kind = String(r.kind || '').trim().toLowerCase();
     return {
+      cat: /^(m|w)/i.test(String(r.cat || '').trim()) ? 'mass' : 'equip',
       car: String(r.car == null ? '' : r.car).trim(),
       name: String(r.name == null ? '' : r.name).trim(),
       loc,
@@ -117,7 +118,7 @@
   TLT.equipmentFor = function (type, cfg) {
     if (!Array.isArray(cfg.equipment)) return TLT.parseEquipment(type.equipment);
     const items = [], errors = [];
-    cfg.equipment.map(TLT.normEquipRow).filter(r => r.car === type.name).forEach(r => {
+    cfg.equipment.map(TLT.normEquipRow).filter(r => r.car === type.name && r.cat === 'equip').forEach(r => {
       if (!r.name || !Number.isFinite(r.x) || !(r.length > 0)) { errors.push(`Equipment row "${r.name || '?'}" needs a name, X and length.`); return; }
       items.push({
         name: r.name, loc: r.loc, x: r.x, y: r.y, length: r.length,
@@ -127,6 +128,21 @@
       });
     });
     return { items, errors };
+  };
+
+  /* ---------------- Door system ---------------- */
+  TLT.doorCfg = function (cfg) {
+    const c = cfg.common || {}, d = cfg.doors || {};
+    const on = v => v === true || v === 'true' || v === 1;
+    const ds = d.detrain || {}, cs = d.cabSide || {}, cd = d.cabSaloon || {};
+    return {
+      type: d.type || 'Bi-parting sliding (pocket)',
+      width: num(d.width, num(c.doorWidth, 1500)),
+      height: num(d.height, num(c.doorHeight, 1850)),
+      detrain: { on: ds.on == null ? true : on(ds.on), width: num(ds.width, 800), height: num(ds.height, 1800) },
+      cabSide: { on: cs.on == null ? true : on(cs.on), width: num(cs.width, num(c.cabDoorWidth, 600)), height: num(cs.height, num(d.height, 1850)), pos: num(cs.pos, NaN) },
+      cabSaloon: { on: cd.on == null ? true : on(cd.on), width: num(cd.width, 700), height: num(cd.height, 1900), y: num(cd.y, 0), type: cd.type || 'Hinged' },
+    };
   };
 
   /* ---------------- Car geometry & interior ---------------- */
@@ -141,7 +157,8 @@
     const bogies = [mid - bc / 2, mid + bc / 2];
     const W = num(c.bodyWidth, 2950);
     const Wi = W - 2 * num(c.wallThk, 60);
-    const dw = num(c.doorWidth, 1500);
+    const DC = TLT.doorCfg(cfg);
+    const dw = DC.width;
     const nDoors = Math.max(0, Math.round(num(type.doorsPerSide, 4)));
     const pitch = num(type.doorPitch, 4820);
     const rearOff = num(type.doorRearOffset, 2770);
@@ -255,10 +272,18 @@
     const aisle = Wi - 2 * maxDepth;
     if (seatBlocks.length && aisle < num(r.minAisle, 900)) warn.push(`${type.name}: aisle between seat fronts is ${Math.round(aisle)} mm (minimum set to ${num(r.minAisle, 900)} mm).`);
     if (type.cab && cabLen < 1200) warn.push(`${type.name}: cab length ${cabLen} mm looks too short.`);
+    let cabDoorX = NaN;
+    if (type.cab && DC.cabSide.on) {
+      cabDoorX = bodyF + (Number.isFinite(DC.cabSide.pos) ? DC.cabSide.pos : Math.max(700, cabLen * 0.6));
+      if (cabDoorX - DC.cabSide.width / 2 < bodyF + 600 || cabDoorX + DC.cabSide.width / 2 > salStart - 60)
+        warn.push(`${type.name}: cab side door (${DC.cabSide.width} mm at ${Math.round(cabDoorX - bodyF)} mm) does not fit in the ${cabLen} mm cab.`);
+    }
+    if (type.cab && DC.cabSaloon.on && Math.abs(DC.cabSaloon.y) + DC.cabSaloon.width / 2 > Wi / 2 - 50)
+      warn.push(`${type.name}: cab-to-saloon door does not fit across the car at offset ${DC.cabSaloon.y} mm.`);
 
     return {
       type, Lc, Lb, bodyF, bodyR, mid, bogies, bc, W, Wi, doors, dw, cabLen, salStart, salEnd, bays,
-      seatBlocks, wheelchairs, cabinets, screens, standRects, seats,
+      seatBlocks, wheelchairs, cabinets, screens, standRects, seats, doorCfg: DC, cabDoorX,
       areas: { saloon: aSaloon / 1e6, seat: aSeat / 1e6, foot: aFoot / 1e6, wheelchair: aWc / 1e6, cabinet: aCab / 1e6, standing: aStand / 1e6 },
       aisle, warnings: warn,
       equipment: TLT.equipmentFor(type, cfg),
@@ -352,6 +377,72 @@
       return { name: cs.name, kind: cs.kind, seated, standing, total, mass, axleMax, ok: axleMax <= maxAxle + 1e-9 };
     });
     const wcCount = form.cars.reduce((s, c) => s + layouts.get(c.type.name).wheelchairs.length, 0);
-    return { cfg, form, layouts, used, totals, warnings, wcCount, maxAxle };
+    // HVAC count checks against the equipment list
+    const hv = cfg.hvac || {};
+    if (Array.isArray(cfg.equipment)) used.forEach(n => {
+      const l = layouts.get(n);
+      const ac = l.equipment.items.filter(e => e.kind === 'ac' && !/cab/i.test(e.name));
+      const want = Math.round(num(hv.unitsPerCar, 2));
+      if (ac.length !== want) warnings.push(`${n}: ${ac.length} saloon HVAC unit(s) in the equipment list, ${want} per car set in HVAC.`);
+      if (l.type.cab) {
+        const cabAc = l.equipment.items.some(e => /cab/i.test(e.name) && (e.kind === 'ac' || /ac|hvac/i.test(e.name)));
+        if (hv.cabHvac && !cabAc) warnings.push(`${n}: cab HVAC is applicable but no CAB HVAC item is in the equipment list.`);
+      }
+    });
+    const res = { cfg, form, layouts, used, totals, warnings, wcCount, maxAxle };
+    res.weights = TLT.weights(res);
+    return res;
+  };
+
+  /* ---------------- Weight calculation ----------------
+   * Tare from the equipment list (drawn equipment + mass items), passenger mass placed at the
+   * seat and standing-area centroids, bogie loads from the centre of gravity along the car.
+   * x convention: from car centre, + towards END 1.
+   */
+  TLT.weights = function (R) {
+    const cfg = R.cfg;
+    const L = cfg.loads || {};
+    const paxKg = num(L.paxMass, 60);
+    const maxAxle = num(L.maxAxleLoad, 16);
+    const rows = Array.isArray(cfg.equipment) ? cfg.equipment.map(TLT.normEquipRow) : [];
+    const perType = new Map();
+    R.used.forEach(name => {
+      const lay = R.layouts.get(name);
+      const items = rows.filter(r => r.car === name).map(r => ({
+        cat: r.cat, name: r.name, loc: r.loc, x: Number.isFinite(r.x) ? r.x : 0, mass: Number.isFinite(r.mass) ? r.mass : 0, hasMass: Number.isFinite(r.mass),
+      }));
+      const ordered = items.filter(i => i.cat === 'mass' && !/^other/i.test(i.name))
+        .concat(items.filter(i => i.cat === 'equip' && i.loc === 'under'), items.filter(i => i.cat === 'equip' && i.loc === 'roof'), items.filter(i => i.cat === 'mass' && /^other/i.test(i.name)));
+      const tareKg = ordered.reduce((a, i) => a + i.mass, 0);
+      const momTare = ordered.reduce((a, i) => a + i.mass * i.x, 0);
+      const xg0 = tareKg > 0 ? momTare / tareKg : 0;
+      // passenger centroids (car-centre coordinates)
+      const seatN = lay.seatBlocks.reduce((a, b) => a + b.n, 0);
+      const seatX = seatN ? lay.seatBlocks.reduce((a, b) => a + b.n * (lay.mid - (b.x0 + b.x1) / 2), 0) / seatN : 0;
+      const stA = lay.standRects.reduce((a, q) => a + (q.x1 - q.x0) * (q.y1 - q.y0), 0);
+      const standX = stA ? lay.standRects.reduce((a, q) => a + (q.x1 - q.x0) * (q.y1 - q.y0) * (lay.mid - (q.x0 + q.x1) / 2), 0) / stA : 0;
+      const half = lay.bc / 2;
+      const cases = (cfg.cases || []).map(cs => {
+        const cap = lay.capacity[String(cs.name).toLowerCase()];
+        const seated = Number.isFinite(cap.seated) ? cap.seated : 0, standing = Number.isFinite(cap.standing) ? cap.standing : 0;
+        const paxMass = (seated + standing) * paxKg;
+        const M = tareKg + paxMass;
+        const mom = momTare + seated * paxKg * seatX + standing * paxKg * standX;
+        const xg = M > 0 ? mom / M : 0;
+        const b1 = M * (half + xg) / (2 * half), b2 = M - b1;   // b1 = END 1 bogie
+        const axle = Math.max(b1, b2) / 2;
+        return { name: cs.name, seated, standing, pax: seated + standing, paxMass, mass: M, xg, b1, b2, axle, ok: axle / 1000 <= maxAxle + 1e-9 };
+      });
+      const target = num(lay.type.tare, NaN) * 1000;
+      perType.set(name, { name, lay, items: ordered, tareKg, xg0, target, diff: Number.isFinite(target) ? tareKg - target : NaN, seatX, standX, cases, missing: items.filter(i => !i.hasMass).length });
+      if (!items.length) R.warnings.push(`${name}: no rows in the equipment / mass list, so the weight calculation is empty.`);
+    });
+    const train = (cfg.cases || []).map((cs, ci) => {
+      let mass = 0, axle = 0, pax = 0;
+      R.form.cars.forEach(car => { const w = perType.get(car.type.name); if (!w) return; const q = w.cases[ci]; mass += q.mass; pax += q.pax; axle = Math.max(axle, q.axle); });
+      return { name: cs.name, mass, pax, axle, ok: axle / 1000 <= maxAxle + 1e-9 };
+    });
+    const tareTrain = R.form.cars.reduce((a, car) => a + (perType.get(car.type.name) ? perType.get(car.type.name).tareKg : 0), 0);
+    return { perType, train, tareTrain, maxAxle, paxKg };
   };
 })();

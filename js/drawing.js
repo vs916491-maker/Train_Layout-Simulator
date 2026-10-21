@@ -123,7 +123,8 @@
     const fh = num(c.floorHeight, 1130), rh = num(c.roofHeight, 3650);
     const sole = fh - num(c.mountDepth, 250);
     const D = num(c.wheelDia, 860), wb = num(c.wheelbase, 2100);
-    const dh = num(c.doorHeight, 1850), dw = lay.dw;
+    const DC = lay.doorCfg;
+    const dh = DC.height, dw = lay.dw;
     const { bodyF, bodyR, Lc, type } = lay;
     const detail = !!o.detail;
 
@@ -141,10 +142,11 @@
     if (type.cab) {
       v.poly([[bodyF + 380, fh + 1600], [bodyF + 820, rh - 140]], false, 'WINDOW', { lw: 0.5 });
       v.circle(bodyF + 90, fh + 450, 55, 'BODY_THIN');
-      const cx = bodyF + Math.max(700, lay.cabLen * 0.6);
-      const cw = num(c.cabDoorWidth, 600);
-      v.rect(cx - cw / 2, fh, cx + cw / 2, fh + dh, 'DOOR');
-      v.rect(cx - cw / 2 + 90, fh + 1000, cx + cw / 2 - 90, fh + 1650, 'WINDOW');
+      if (DC.cabSide.on) {
+        const cx = lay.cabDoorX, cw = DC.cabSide.width, ch = DC.cabSide.height;
+        v.rect(cx - cw / 2, fh, cx + cw / 2, fh + ch, 'DOOR');
+        v.rect(cx - cw / 2 + 90, fh + 1000, cx + cw / 2 - 90, fh + Math.min(1650, ch - 150), 'WINDOW');
+      }
     }
     // Doors
     lay.doors.forEach(d => {
@@ -275,25 +277,36 @@
     // Cab
     if (type.cab) {
       const xp = lay.salStart;
-      v.line(xp - 60, hi, xp - 60, 380, 'CAB'); v.line(xp, hi, xp, 380, 'CAB');
-      v.line(xp - 60, -380, xp - 60, -hi, 'CAB'); v.line(xp, -380, xp, -hi, 'CAB');
-      v.line(xp - 60, 380, xp, 380, 'CAB'); v.line(xp - 60, -380, xp, -380, 'CAB');
-      v.line(xp - 30, 380, xp - 30 - 700, 380 - 300, 'DOOR', { lw: 0.15 });
+      const DC = lay.doorCfg;
+      // cab partition, with the cab-to-saloon door opening when applicable
+      const g0 = DC.cabSaloon.on ? DC.cabSaloon.y - DC.cabSaloon.width / 2 : 0, g1 = DC.cabSaloon.on ? DC.cabSaloon.y + DC.cabSaloon.width / 2 : 0;
+      const segs = DC.cabSaloon.on ? [[g1, hi], [-hi, g0]] : [[-hi, hi]];
+      segs.forEach(([a, b]) => { v.line(xp - 60, a, xp - 60, b, 'CAB'); v.line(xp, a, xp, b, 'CAB'); });
+      if (DC.cabSaloon.on) {
+        v.line(xp - 60, g1, xp, g1, 'CAB'); v.line(xp - 60, g0, xp, g0, 'CAB');
+        if (/slid/i.test(DC.cabSaloon.type)) v.rect(xp - 45, g1, xp - 15, g1 + DC.cabSaloon.width * 0.9, 'DOOR', { fill: '#efd9f4' });
+        else v.line(xp - 30, g1, xp - 30 - DC.cabSaloon.width * 0.95, g1 - DC.cabSaloon.width * 0.3, 'DOOR', { lw: 0.15 });
+      }
       const con0 = bodyF + 330, con1 = bodyF + Math.min(900, lay.cabLen * 0.42);
-      v.rect(con0, 450, con1, hi - 120, 'CAB', { fill: '#ececec' });
-      v.rect(con0, -hi + 120, con1, -450, 'CAB', { fill: '#ececec' });
-      v.rect(bodyF - 10, -420, bodyF + 110, 420, 'DOOR', { fill: '#efd9f4' });
+      const dHalf = DC.detrain.on ? DC.detrain.width / 2 + 30 : 0;
+      v.rect(con0, Math.max(dHalf, 300), con1, hi - 120, 'CAB', { fill: '#ececec' });
+      v.rect(con0, -hi + 120, con1, -Math.max(dHalf, 300), 'CAB', { fill: '#ececec' });
+      if (DC.detrain.on) v.rect(bodyF - 10, -DC.detrain.width / 2, bodyF + 110, DC.detrain.width / 2, 'DOOR', { fill: '#efd9f4' });
       const sx = bodyF + Math.min(lay.cabLen - 450, Math.max(1100, lay.cabLen * 0.62));
       v.circle(sx, -hi / 2 - 100, 230, 'CAB', { fill: '#ffffff' });
       v.circle(sx, hi / 2 + 100, 200, 'CAB', { fill: '#ffffff' });
-      const cxd = bodyF + Math.max(700, lay.cabLen * 0.6), cw = num(c.cabDoorWidth, 600);
-      [1, -1].forEach(k => {
-        v.line(cxd - cw / 2, k * hi, cxd - cw / 2, k * hw, 'DOOR');
-        v.line(cxd + cw / 2, k * hi, cxd + cw / 2, k * hw, 'DOOR');
-        v.rect(cxd - cw / 2, k * (hw - 35), cxd + cw / 2, k * (hw - 5), 'DOOR', { fill: '#efd9f4' });
-      });
-      v.line(bodyF + 650, hi, cxd - cw / 2, hi, 'BODY_THIN'); v.line(cxd + cw / 2, hi, xp - 60, hi, 'BODY_THIN');
-      v.line(bodyF + 650, -hi, cxd - cw / 2, -hi, 'BODY_THIN'); v.line(cxd + cw / 2, -hi, xp - 60, -hi, 'BODY_THIN');
+      if (DC.cabSide.on) {
+        const cxd = lay.cabDoorX, cw = DC.cabSide.width;
+        [1, -1].forEach(k => {
+          v.line(cxd - cw / 2, k * hi, cxd - cw / 2, k * hw, 'DOOR');
+          v.line(cxd + cw / 2, k * hi, cxd + cw / 2, k * hw, 'DOOR');
+          v.rect(cxd - cw / 2, k * (hw - 35), cxd + cw / 2, k * (hw - 5), 'DOOR', { fill: '#efd9f4' });
+        });
+        v.line(bodyF + 650, hi, cxd - cw / 2, hi, 'BODY_THIN'); v.line(cxd + cw / 2, hi, xp - 60, hi, 'BODY_THIN');
+        v.line(bodyF + 650, -hi, cxd - cw / 2, -hi, 'BODY_THIN'); v.line(cxd + cw / 2, -hi, xp - 60, -hi, 'BODY_THIN');
+      } else {
+        v.line(bodyF + 650, hi, xp - 60, hi, 'BODY_THIN'); v.line(bodyF + 650, -hi, xp - 60, -hi, 'BODY_THIN');
+      }
       if (detail) v.text(bodyF + lay.cabLen * 0.55, 0, 'CAB', 2.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a', bold: true });
     }
 
@@ -558,26 +571,18 @@
     });
     // Formation table
     const yTab = yAfter - 4;
-    const awCase = (cfg.cases || []).find(q => q.kind === 'density');
-    const key = awCase ? String(awCase.name).toLowerCase() : null;
     const cols = [
-      { h: 'Car', w: 10, align: 'middle' }, { h: 'Type', w: 13, align: 'middle' }, { h: 'Unit', w: 10, align: 'middle' },
-      { h: 'Description', w: 44 }, { h: 'L couplers', w: 20, align: 'end' }, { h: 'L body', w: 18, align: 'end' },
-      { h: 'Bogie ctrs', w: 18, align: 'end' }, { h: 'Bogies', w: 16, align: 'middle' }, { h: 'Tare (t)', w: 16, align: 'end' },
-      { h: 'Seats', w: 13, align: 'end' }, { h: key ? `Total ${awCase.name}` : 'Standing', w: 22, align: 'end' },
-      { h: 'Roof equipment', w: 54 }, { h: 'Underframe equipment', w: PW - 40 - 254 },
+      { h: 'Car', w: 14, align: 'middle' }, { h: 'Type', w: 18, align: 'middle' }, { h: 'Unit', w: 14, align: 'middle' },
+      { h: 'Description', w: 120 }, { h: 'Cab', w: 16, align: 'middle' }, { h: 'L over couplers', w: 32, align: 'end' }, { h: 'L body', w: 28, align: 'end' },
+      { h: 'Bogie centres', w: 28, align: 'end' }, { h: 'Doors / side', w: 24, align: 'middle' }, { h: 'Bogies', w: PW - 40 - 294, align: 'middle' },
     ];
     const tRows = R.form.cars.map(car => {
       const lay = R.layouts.get(car.type.name);
       const t = car.type;
       const bog = lay.motorBogies === 2 ? 'M + M' : lay.motorBogies === 1 ? 'T + M' : 'T + T';
-      return [car.no, car.label, car.unit + 1, (t.desc || '') + (car.flip ? ' (reversed)' : ''), i0(lay.Lc), i0(lay.Lb), i0(lay.bc), bog, f1(num(t.tare, NaN)), lay.seats,
-        key ? lay.capacity[key].total : '—', equipSummary(lay, 'roof'), equipSummary(lay, 'under')];
+      return [car.no, car.label, car.unit + 1, (t.desc || '') + (car.flip ? ' (reversed)' : ''), t.cab ? 'Yes' : '—', i0(lay.Lc), i0(lay.Lb), i0(lay.bc), lay.doors.length, bog];
     });
-    const tot = R.totals.find(t => key && t.name.toLowerCase() === key);
-    tRows.push(['', '', '', 'TRAIN TOTAL', i0(R.form.length), '', '', `${R.form.cars.reduce((a, c) => a + R.layouts.get(c.type.name).motorBogies, 0)} motor`,
-      f1(R.form.cars.reduce((a, c) => a + num(c.type.tare, 0), 0)), R.form.cars.reduce((a, c) => a + R.layouts.get(c.type.name).seats, 0),
-      tot ? tot.total : '—', '', '']);
+    tRows.push(['', '', '', 'TRAIN TOTAL', R.form.cars.filter(c => c.type.cab).length, i0(R.form.length), '', '', '', `${R.form.cars.reduce((a, c) => a + R.layouts.get(c.type.name).motorBogies, 0)} motor bogies`]);
     const yB = table(p, 20, yTab, cols, tRows, { rowH: 5, h: 2, boldRows: [tRows.length - 1], shade: [tRows.length - 1] });
 
     // Legend + notes
@@ -600,7 +605,7 @@
       `1. Car lengths are over coupler faces. Bogie centres ${[...new Set(R.used.map(n => R.layouts.get(n).bc))].join(' / ')} mm; wheel Ø${num(c.wheelDia, 860)} new.`,
       `2. Floor ${num(c.floorHeight, 1130)} mm, roof ${num(c.roofHeight, 3650)} mm, max. height ${num(c.maxHeight, 4100)} mm above top of rail.`,
       `3. Equipment positions are indicative and taken from the tool inputs.`,
-      `4. Passenger capacity: see the capacity sheet. "${key ? awCase.name : ''}" total shown above.`,
+      `4. Passenger capacity, mass and axle loads: see the capacity sheet and the weight calculation.`,
     ];
     notes.forEach((t, i) => p.text(165, yy - i * 4.6, t, i ? 2 : 2.4, { bold: i === 0 }));
     return { title: `Train formation & vehicle layout (${n} cars)`, short: 'Train layout', size, scale, views, paper: p };
@@ -641,7 +646,7 @@
     v.dimV(lay.Lc, 0, fh, lay.Lc + 6 * s, { h: 1.8 });
     v.dimV(lay.Lc, 0, rh, lay.Lc + 11 * s, { h: 1.8 });
     if (mh > rh + 10) v.dimV(lay.Lc, 0, mh, lay.Lc + 16 * s, { h: 1.8 });
-    v.dimV(lay.doors.length ? lay.doors[0] : lay.mid, fh, fh + num(c.doorHeight, 1850), -6 * s, { h: 1.8 });
+    v.dimV(lay.doors.length ? lay.doors[0] : lay.mid, fh, fh + lay.doorCfg.height, -6 * s, { h: 1.8 });
 
     // Plan
     const W = lay.W;
@@ -967,4 +972,98 @@
     return { title: `Underframe & roof equipment — ${t.name}`, short: `${t.name} underframe`, size, scale, views: [v], paper: p };
   }
   const fmtKg = m => `${Math.round(m).toLocaleString('en-US')} kg`;
+
+  /* ================= Weight sheets ================= */
+  TLT.buildWeightSheets = function (R) {
+    const cfg = R.cfg;
+    const paper = TLT.PAPER[cfg.project.paper] || TLT.PAPER.A3;
+    const W = R.weights;
+    const sheets = R.used.map(n => weightSheet(R, paper, W.perType.get(n)));
+    sheets.push(weightTrainSheet(R, paper));
+    finish(sheets, cfg, '-WT');
+    return sheets;
+  };
+  const t2 = kg => (Number.isFinite(kg) ? (kg / 1000).toFixed(2) : '—');
+  const sgn = v => `${v > 0 ? '+' : ''}${Math.round(v)}`;
+
+  function weightSheet(R, size, w) {
+    const cfg = R.cfg;
+    const [PW, PH] = size;
+    const p = new View(1, 0, 0);
+    const lay = w.lay, t = lay.type;
+    p.text(20, PH - 19, `WEIGHT CALCULATION — ${t.name.toUpperCase()} CAR`, 4.2, { bold: true });
+    p.text(20, PH - 24.5, `${t.desc || ''}  ·  calculated tare ${t2(w.tareKg)} t  ·  target (Main Dimensions) ${Number.isFinite(w.target) ? t2(w.target) + ' t' : '—'}  ·  source: ${cfg.equipmentSource || 'equipment list'}`, 2.2, { color: '#444444' });
+    const yTop = PH - 32;
+    p.text(20, yTop, '1. MASS BREAKDOWN (AW0)', 2.6, { bold: true });
+    const n = w.items.length + 4;
+    const rowH = Math.min(4.4, (yTop - 3 - 54) / n);
+    const th = Math.min(1.9, rowH * 0.46);
+    const cols = [{ h: 'No.', w: 9, align: 'middle' }, { h: 'Category', w: 26 }, { h: 'Item', w: 74 }, { h: 'Location', w: 22 },
+      { h: 'X from centre (mm)', w: 30, align: 'end' }, { h: 'Mass (kg)', w: 24, align: 'end' }, { h: 'Moment (kg·m)', w: 26, align: 'end' }];
+    const rows = w.items.map((it, i) => [i + 1, it.cat === 'mass' ? 'Mass item' : 'Equipment', it.name, it.cat === 'mass' ? '—' : it.loc === 'roof' ? 'Roof' : 'Underframe',
+      sgn(it.x), it.hasMass ? fmtInt(it.mass) : 'missing', fmtInt(it.mass * it.x / 1000)]);
+    rows.push(['', '', 'CALCULATED TARE (AW0)', '', sgn(w.xg0), fmtInt(w.tareKg), fmtInt(w.tareKg * w.xg0 / 1000)]);
+    rows.push(['', '', 'Target tare from Main Dimensions', '', '', Number.isFinite(w.target) ? fmtInt(w.target) : '—', '']);
+    rows.push(['', '', 'Difference (calculated - target)', '', '', Number.isFinite(w.diff) ? (w.diff > 0 ? '+' : '') + fmtInt(w.diff) : '—', Number.isFinite(w.diff) && w.target ? `${((w.diff / w.target) * 100).toFixed(1)} %` : '']);
+    const base = rows.length - 3;
+    table(p, 20, yTop - 3, cols, rows, { rowH, h: th, boldRows: [base], shade: [base, base + 1, base + 2],
+      colorFn: (ri, ci, val) => (val === 'missing' ? '#b3261e' : ri === base + 2 && ci === 5 && Number.isFinite(w.diff) && Math.abs(w.diff) > 0.03 * (w.target || 1) ? '#b3261e' : undefined) });
+
+    // Load cases
+    const x2 = 20 + cols.reduce((a, c) => a + c.w, 0) + 9;
+    p.text(x2, yTop, '2. AXLE LOAD PER LOAD CASE', 2.6, { bold: true });
+    const colsL = [{ h: 'Case', w: 20 }, { h: 'Pax', w: 11, align: 'end' }, { h: 'Pax (t)', w: 13, align: 'end' }, { h: 'Gross (t)', w: 15, align: 'end' },
+      { h: 'CoG X', w: 14, align: 'end' }, { h: 'Bogie 1 (t)', w: 17, align: 'end' }, { h: 'Bogie 2 (t)', w: 17, align: 'end' }, { h: 'Max axle', w: 15, align: 'end' }, { h: 'Check', w: 16, align: 'middle' }];
+    const fitW = PW - 15 - x2, sumW = colsL.reduce((a, c) => a + c.w, 0);
+    colsL.forEach(c => { c.w = c.w * Math.min(1, fitW / sumW); });
+    const rowsL = w.cases.map(q => [q.name, q.pax, t2(q.paxMass), t2(q.mass), sgn(q.xg), t2(q.b1), t2(q.b2), t2(q.axle * 1), q.ok ? 'OK' : 'EXCEEDED']);
+    const yL = table(p, x2, yTop - 3, colsL, rowsL, { rowH: 4.6, h: 1.85, colorFn: (ri, ci, val) => (val === 'EXCEEDED' ? '#b3261e' : val === 'OK' ? '#0f7a63' : undefined) });
+    const notes = [
+      '3. METHOD',
+      `· Tare = sum of all mass items and equipment rows for ${t.name}.`,
+      `· Passengers ${num(cfg.loads.paxMass, 60)} kg each; seated at the seat centroid (X ${sgn(w.seatX)}),`,
+      `  standing at the standing-area centroid (X ${sgn(w.standX)}).`,
+      `· CoG X from car centre, + towards END 1. Bogie centres ±${Math.round(lay.bc / 2)} mm.`,
+      '· Bogie 1 (END 1) = M × (bc/2 + CoG) / bc ; Bogie 2 = M - Bogie 1.',
+      `· Axle load = heavier bogie ÷ 2. Limit ${num(cfg.loads.maxAxleLoad, 16)} t.`,
+      '· Capacity sheet uses the typed tare and equal sharing; this sheet is the detailed check.',
+    ];
+    notes.forEach((tx, i) => p.text(x2, yL - 8 - i * 4.4, tx, i ? 1.9 : 2.6, { bold: i === 0 }));
+    if (w.missing) p.text(x2, yL - 8 - notes.length * 4.4 - 3, `${w.missing} row(s) have no mass and count as 0 kg.`, 2, { color: '#b3261e', bold: true });
+    return { title: `Weight calculation — ${t.name}`, short: `${t.name} weight`, size, scale: 0, dxfScale: 100, views: [], paper: p };
+  }
+
+  function weightTrainSheet(R, size) {
+    const cfg = R.cfg, W = R.weights;
+    const [PW, PH] = size;
+    const p = new View(1, 0, 0);
+    const cases = cfg.cases || [];
+    p.text(20, PH - 19, 'WEIGHT CALCULATION — TRAIN SUMMARY', 4.2, { bold: true });
+    p.text(20, PH - 24.5, `Formation ${cfg.formation.replace(/\s+/g, ' ')}  ·  calculated train tare ${t2(W.tareTrain)} t  ·  passenger mass ${W.paxKg} kg`, 2.2, { color: '#444444' });
+    let y = PH - 32;
+    p.text(20, y, '1. CAR-BY-CAR — gross mass (t) / max axle load (t)', 2.6, { bold: true });
+    const wc = Math.min(30, (PW - 40 - 76) / Math.max(1, cases.length));
+    const cols = [{ h: 'Car', w: 12, align: 'middle' }, { h: 'Type', w: 16, align: 'middle' }, { h: 'Tare calc. (t)', w: 24, align: 'end' }, { h: 'Tare target (t)', w: 24, align: 'end' }]
+      .concat(cases.map(cs => ({ h: cs.name, w: wc, align: 'end' })));
+    const maxA = W.maxAxle * 1000;
+    const rows = R.form.cars.map(car => {
+      const w = W.perType.get(car.type.name);
+      return [car.no, car.label, t2(w.tareKg), t2(w.target)].concat(w.cases.map(q => `${t2(q.mass)} / ${t2(q.axle)}`));
+    });
+    rows.push(['', 'TRAIN', t2(W.tareTrain), t2(R.form.cars.reduce((a, c) => a + num(c.type.tare, 0) * 1000, 0))].concat(W.train.map(q => t2(q.mass))));
+    const yB = table(p, 20, y - 3, cols, rows, { rowH: 4.8, h: 1.95, boldRows: [rows.length - 1], shade: [rows.length - 1],
+      colorFn: (ri, ci, val) => { if (ci < 4 || ri >= rows.length - 1) return undefined; const a = parseFloat(String(val).split('/')[1]); return a * 1000 > maxA + 1e-6 ? '#b3261e' : undefined; } });
+    y = yB - 9;
+    p.text(20, y, '2. TRAIN CHECK', 2.6, { bold: true });
+    const cols2 = [{ h: 'Item', w: 52 }].concat(cases.map(cs => ({ h: cs.name, w: wc, align: 'end' })));
+    const rows2 = [
+      ['Passengers'].concat(W.train.map(q => fmtInt(q.pax))),
+      ['Train mass (t)'].concat(W.train.map(q => t2(q.mass))),
+      ['Max. axle load (t)'].concat(W.train.map(q => t2(q.axle))),
+      [`Check ≤ ${W.maxAxle} t`].concat(W.train.map(q => (q.ok ? 'OK' : 'EXCEEDED'))),
+    ];
+    table(p, 20, y - 3, cols2, rows2, { rowH: 4.8, h: 1.95, boldRows: [3], colorFn: (ri, ci, val) => (val === 'EXCEEDED' ? '#b3261e' : val === 'OK' ? '#0f7a63' : undefined) });
+    return { title: 'Weight calculation — train summary', short: 'Train weight', size, scale: 0, dxfScale: 100, views: [], paper: p };
+  }
+  const fmtInt = v => (Number.isFinite(v) ? Math.round(v).toLocaleString('en-US') : '—');
 })();

@@ -4,16 +4,17 @@ A browser tool that draws a metro train's vehicle layout, interior seat layouts 
 
 It is plain HTML + JavaScript. There is nothing to install and no server: open it in Chrome or Edge, including on a locked-down work laptop.
 
-## Workflow — four steps
+## Workflow — five steps
 
 | Step | Tab | What you do / get |
 |---|---|---|
-| 1 | **Main Dimensions** | Project and title block, formation, number of car variants, car body and bogie data, interior rules, one card per car variant, load cases. Press **Generate Results**. |
-| 2 | **Layout & Calculations** | Sheet 1 train layout (side elevation + plan of the full train, dimension chains, formation table); one interior layout sheet **per car variant** (side elevation, seats, standing area, wheelchair space, bays, dimensions, area/capacity table); last sheet the passenger capacity calculation. Download PDF / DXF. |
-| 3 | **Underframe Input** | Download the Excel template, fill in the equipment list (underframe and roof), upload it. Rows are checked (unknown car variant, missing values, outside body width) and can be corrected in the table. Press **Generate Underframe Layout**. |
-| 4 | **Underframe Layout** | One sheet per car variant: side elevation with all equipment, underframe plan (viewed from above, floor removed) with X positions from car centre, and an equipment table with sizes, positions, height above rail and mass. Download PDF / DXF. |
+| 1 | **Main Dimensions** | Project and title block, formation and number of car variants, car body and bogie, **door system** (passenger doors; front detrainment door, cab side doors and cab-to-saloon door with applicability, size and position), **HVAC** (units per car, cab HVAC), interior rules, one card per car variant, load cases. Ends with **Next**. |
+| 2 | **Equipment Inputs** | Download the Excel template, fill in equipment (drawn) and mass items (weight only), upload it. Rows are checked and can be corrected. **Generate Results** builds steps 3–5. |
+| 3 | **Layout & Calculations** | Train layout (formation table: car, type, unit, description, cab, lengths, bogie centres, doors, bogies); one interior layout per car variant; passenger capacity calculation. |
+| 4 | **Underframe Layout** | Per car variant: side elevation, underframe plan with X from car centre, equipment table. |
+| 5 | **Weight Calculations** | Per car variant: editable mass list with **Add line item** (Other items stays last), calculated tare vs target tare, passenger mass, CoG, bogie and axle loads per load case; train summary; weight sheets as PDF / DXF. |
 
-If inputs change after generating, steps 2 and 4 show a **Generate again** banner.
+If inputs change after generating, steps 3–5 show a **Generate again** banner.
 
 Paper size A3 / A2 / A1; the scale is chosen automatically to fit.
 
@@ -56,15 +57,23 @@ One sheet (named `Equipment`, or the first sheet) with a header row. Column orde
 | Column | Meaning |
 |---|---|
 | Car Type | Car variant name, e.g. `Tc`, `M1`, `M2` |
-| Equipment | Name shown on the drawing |
+| Category | `Equipment` (drawn on the layouts) or `Mass item` (carbody, bogies, cables & cabinets, piping, ceiling, floor, seats, doors, … `Other items` last) |
+| Equipment / Item | Name shown on the drawing or in the weight list |
 | Location | `Underframe` or `Roof` |
 | Length (mm) / Width (mm) / Height (mm) | Box size; underframe height is measured down from the mounting face, roof height up from the roof |
 | X from car centre (mm) | Equipment centre, **+ towards END 1** |
 | Y from centre line (mm) | Equipment centre, **+ towards side A** |
-| Mass (kg) | Optional, totalled on the sheet |
+| Mass (kg) | Used for tare mass, centre of gravity and axle loads |
 | Symbol | Optional `box`, `ac` or `panto` (otherwise guessed from names starting `AC` / `PAN`) |
 
 The template you download contains the current list, so you can edit it and upload it again. CSV files with the same columns are also accepted.
+
+### Weight calculation
+
+* Tare = sum of all rows (equipment + mass items) of a car variant; compared with the typed target tare.
+* Passengers are placed at the seat centroid (seated) and the standing-area centroid (standing).
+* Centre of gravity along the car from each row's X; Bogie 1 (END 1) = M × (bc/2 + CoG) / bc, Bogie 2 = M − Bogie 1; axle load = heavier bogie ÷ 2, checked against the axle-load limit.
+* The capacity sheet keeps using the typed tare with equal axle sharing; the weight sheets are the detailed check.
 
 ### Capacity rules
 
