@@ -563,7 +563,7 @@
     let h = '<div class="cards">';
     h += card('Settings', `<div class="fields">
       ${F('Passenger mass', 'loads.paxMass', 'num', { unit: 'kg', idp: 'ff-' })}${F('Max. axle load', 'loads.maxAxleLoad', 'num', { unit: 't', idp: 'ff-' })}
-    </div><p class="hint">Tare at the car centre, seated and standing passengers at their area centroids, lever rule to the bogies. Shared (Jacobs) bogies carry both cars; suspended modules hang on their neighbours. Bogies are set per car variant in step 1.</p>`);
+    </div><p class="hint">Mass per car and axle load = car mass ÷ axles. The load per bogie and wheel from the equipment distribution is in step 6.</p>`);
     h += card('Load cases to calculate', `<div class="checks">${cfg.cases.map((c, i) => `<label class="f check" style="display:flex;gap:8px;align-items:center;margin:4px 0"><input type="checkbox" id="fc-${i}" data-path="cases.${i}.inFixed" data-kind="check" data-rerender="1"${c.inFixed !== false ? ' checked' : ''}><span><b>${esc(c.name)}</b> <span class="hint" style="margin:0">${esc(TLT.caseBasis(c))}</span></span></label>`).join('')}</div>
       <p class="hint">Load cases are defined in step 1 (Load cases).</p>`);
     h += '</div>';
@@ -573,27 +573,24 @@
         return `<tr><td><b>${esc(t.name)}</b></td><td>${esc(t.desc || '')}</td><td class="num">${nCars(t.name)}</td><td>${bg}</td><td class="num">${l ? l.axles : ''}</td>
         <td><input class="num" id="ft-${i}-tare" type="number" step="any" data-path="carTypes.${i}.tare" data-kind="num" value="${esc(t.tare)}"></td></tr>`; }).join('')}
       </tbody></table></div></div>
-      <div class="card" style="grid-column:1/-1"><h3>Mass and axle load per car variant</h3><div class="scroll-x" id="ft-cars"></div></div>
-      <div class="card" style="grid-column:1/-1"><h3>Train — axle load per bogie (t)</h3><div class="scroll-x" id="ft-train"></div><div id="ft-warn"></div></div></div>`;
+      <div class="card" style="grid-column:1/-1"><h3>Mass and axle load per car</h3><div class="scroll-x" id="ft-cars"></div><div id="ft-warn"></div>
+      <p class="hint">Car mass = tare + passengers × passenger mass. Axle load = car mass ÷ axles of the car (the equipment distribution is not known at this stage). A shared Jacobs bogie counts as one axle per car; a suspended module adds half its mass to each neighbour.</p></div></div>`;
     $('fixed-edit').innerHTML = h;
     refreshFixedResults();
   }
   function refreshFixedResults() {
     let R = null; try { R = TLT.compute(cfg); } catch (e) { return; }
     const F = R.fixed; if (!$('ft-cars')) return;
-    const t = kg => (kg / 1000).toFixed(2);
+    const d1 = v => (Number.isFinite(v) ? v.toFixed(1) : '—');
     const cs = F.cases;
-    if (!cs.length) { $('ft-cars').innerHTML = '<p class="hint">Select at least one load case.</p>'; $('ft-train').innerHTML = ''; $('ft-warn').innerHTML = ''; return; }
-    $('ft-cars').innerHTML = `<table class="data"><thead><tr><th>Variant</th><th>Tare (t)</th>${cs.map(c => `<th>${esc(c.name)}<br><span class="hint" style="margin:0;font-weight:400">pax · mass t · max axle t</span></th>`).join('')}</tr></thead><tbody>
-      ${R.used.map(n => { const w = F.perType.get(n), lay = w.lay; const own = !lay.shared[0] && !lay.shared[1] && !lay.hinge[0] && !lay.hinge[1];
-        return `<tr><td><b>${esc(n)}</b></td><td class="num">${t(w.tareKg)}</td>${w.cases.map(q => { const ax = q.sup.reduce((m, sp) => Math.max(m, sp.axle), 0); const bad = own && ax > F.maxAxle * 1000 + 1e-6;
-          return `<td class="num"${bad ? ' style="color:var(--warn);font-weight:600"' : ''}>${q.pax} · ${t(q.mass)} · ${own ? t(ax) : 'see train'}</td>`; }).join('')}</tr>`; }).join('')}
-    </tbody></table>`;
-    $('ft-train').innerHTML = `<table class="data"><thead><tr><th>Bogie</th><th>Location</th>${cs.map(c => `<th>${esc(c.name)}</th>`).join('')}</tr></thead><tbody>${F.bogies.map(bg => `<tr><td>${bg.no}</td><td>${esc(bg.label)}</td>${bg.cases.map(q => `<td class="num"${q.ok ? '' : ' style="color:var(--warn);font-weight:600"'}>${t(q.axle)}</td>`).join('')}</tr>`).join('')}
-      <tr class="total"><td></td><td>Passengers</td>${F.train.map(q => `<td class="num">${fmt(q.pax)}</td>`).join('')}</tr>
-      <tr class="total"><td></td><td>Train mass</td>${F.train.map(q => `<td class="num">${t(q.mass)} t</td>`).join('')}</tr>
-      <tr class="total"><td></td><td>Max. axle load</td>${F.train.map(q => `<td class="num"><b>${t(q.axle)} t</b></td>`).join('')}</tr>
-      <tr class="total"><td></td><td>Check (axle ≤ ${F.maxAxle} t)</td>${F.train.map(q => `<td><span class="pill ${q.ok ? 'ok' : 'bad'}">${q.ok ? 'OK' : 'Exceeded'}</span></td>`).join('')}</tr></tbody></table>`;
+    if (!cs.length) { $('ft-cars').innerHTML = '<p class="hint">Select at least one load case.</p>'; $('ft-warn').innerHTML = ''; return; }
+    const bad = v => (v > F.maxAxle + 1e-9 ? ' class="bad"' : '');
+    let h = `<table class="grid"><thead><tr><th rowspan="2">Car</th><th rowspan="2">Type</th><th rowspan="2">Tare (t)</th><th rowspan="2">Axles</th>${cs.map(c => `<th colspan="3" class="grp">${esc(c.name)}</th>`).join('')}</tr>
+      <tr>${cs.map(() => '<th class="g0">Pax</th><th>Mass (t)</th><th>Axle (t)</th>').join('')}</tr></thead><tbody>`;
+    F.cars.forEach(c => { h += `<tr><td class="c">${c.no}</td><td class="c"><b>${esc(c.label)}</b></td><td>${d1(c.tare)}</td><td class="c">${c.axles || '—'}</td>${c.rows.map(r => `<td class="g0">${fmt(r.pax)}</td><td>${d1(r.mass)}</td><td${bad(r.axle)}>${d1(r.axle)}</td>`).join('')}</tr>`; });
+    h += `<tr class="tot"><td></td><td class="c">Train</td><td>${d1(F.tareTrain)}</td><td class="c">${F.cars.reduce((a, c) => a + c.axles, 0)}</td>${F.train.map(q => `<td class="g0">${fmt(q.pax)}</td><td>${d1(q.mass)}</td><td${bad(q.axle)}>${d1(q.axle)}</td>`).join('')}</tr>
+      <tr class="tot"><td></td><td class="c" colspan="3">Check: axle ≤ ${F.maxAxle} t</td>${F.train.map(q => `<td colspan="3" class="c g0"><span class="pill ${q.ok ? 'ok' : 'bad'}">${q.ok ? 'OK' : 'Exceeded'}</span></td>`).join('')}</tr></tbody></table>`;
+    $('ft-cars').innerHTML = h;
     $('ft-warn').innerHTML = F.warnings.length ? `<div class="warns" style="margin-top:10px"><ul>${F.warnings.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '';
     if (gen.ft) { const st = $('stale-ft'); if (st) st.innerHTML = gen.ft.stamp !== stamp() ? `<div class="stale"><span>Inputs have changed since the fixed-tare sheet was generated.</span><button class="btn primary small" data-regen="all">Generate again</button></div>` : ''; }
   }
@@ -785,8 +782,8 @@
   }
   function summaryFixed(R) {
     const F = R.fixed;
-    let h = kp('Train tare', (F.tareTrain / 1000).toFixed(1) + ' t');
-    F.train.forEach(t => { h += kp(`${t.name} mass / axle`, `${(t.mass / 1000).toFixed(1)} t · ${(t.axle / 1000).toFixed(2)} t`, t.ok ? 'ok' : 'bad'); });
+    let h = kp('Train tare', F.tareTrain.toFixed(1) + ' t');
+    F.train.forEach(t => { h += kp(`${t.name} mass / axle`, `${t.mass.toFixed(1)} t · ${t.axle.toFixed(1)} t`, t.ok ? 'ok' : 'bad'); });
     if (F.warnings.length) h += `<div class="warns"><b>${F.warnings.length} check${F.warnings.length > 1 ? 's' : ''} to review</b><ul>${F.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>`;
     return h;
   }

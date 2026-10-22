@@ -716,16 +716,41 @@
   /* Weight calculation with the fixed (target) tare: tare at the car centre, passengers at their centroids,
    * lever rule per bogie (shared Jacobs bogies and suspended modules as in the design weight calculation). */
   TLT.fixedTare = function (R) {
-    const cfg = R.cfg;
+    // Fixed (target) tare: the equipment distribution is not known, so each car is taken as a whole:
+    // car mass = tare + passengers × passenger mass; axle load = car mass ÷ axles of the car
+    // (a shared Jacobs bogie counts as one axle per car; a suspended module adds half its mass to each neighbour).
+    const cfg = R.cfg, L = cfg.loads || {};
     const cases = (cfg.cases || []).filter(c => c.inFixed !== false);
-    const rows = R.used.map(n => ({ car: n, loc: 'Car body', name: 'Tare mass (fixed)', x: 0, y: 0, z: '', mass: num(R.layouts.get(n).type.tare, 0) * 1000 }));
-    const W = TLT.weights(R, { rows, cases });
-    W.warnings = W.warnings.filter(w => !/bogie mass is entered|weight list has no rows/.test(w));
-    R.used.forEach(n => { if (!(num(R.layouts.get(n).type.tare, 0) > 0)) W.warnings.push(`${n}: no fixed tare mass entered.`); });
-    W.train.forEach(t => { if (!t.ok) W.warnings.push(`${t.name}: maximum axle load ${(t.axle / 1000).toFixed(2)} t exceeds the ${W.maxAxle} t limit.`); });
-    W.cases = cases;
-    return W;
+    const paxKg = num(L.paxMass, 60), maxAxle = num(L.maxAxleLoad, 16);
+    const warnings = [];
+    const lay = c => R.layouts.get(c.type.name);
+    R.used.forEach(n => { if (!(num(R.layouts.get(n).type.tare, 0) > 0)) warnings.push(`${n}: no fixed tare mass entered.`); });
+    const cars = R.form.cars.map((car, i) => {
+      const l = lay(car), tare = num(car.type.tare, 0);
+      const rows = cases.map(cs => {
+        const cap = l.capacity[String(cs.name).toLowerCase()];
+        const seated = Number.isFinite(cap.seated) ? cap.seated : 0, standing = Number.isFinite(cap.standing) ? cap.standing : 0;
+        const mass = tare + ((seated + standing) * paxKg) / 1000;
+        return { name: cs.name, pax: seated + standing, seated, standing, mass };
+      });
+      return { car, no: car.no, label: car.label, type: car.type.name, tare, axles: l.axles, rows };
+    });
+    cars.forEach((c, i) => c.rows.forEach((r, ci) => {
+      if (!c.axles) { r.axle = NaN; return; }
+      let m = r.mass;
+      [cars[i - 1], cars[i + 1]].forEach(n => { if (n && !n.axles) m += n.rows[ci].mass / 2; });
+      r.axleMass = m; r.axle = m / c.axles;
+    }));
+    const train = cases.map((cs, ci) => {
+      const mass = cars.reduce((a, c) => a + c.rows[ci].mass, 0), pax = cars.reduce((a, c) => a + c.rows[ci].pax, 0);
+      const axle = cars.reduce((m, c) => (Number.isFinite(c.rows[ci].axle) ? Math.max(m, c.rows[ci].axle) : m), 0);
+      const ok = axle <= maxAxle + 1e-9;
+      if (!ok) warnings.push(`${cs.name}: maximum axle load ${axle.toFixed(1)} t exceeds the ${maxAxle} t limit.`);
+      return { name: cs.name, mass, pax, axle, ok };
+    });
+    return { cases, cars, train, warnings, maxAxle, paxKg, tareTrain: cars.reduce((a, c) => a + c.tare, 0) };
   };
+
 
   /* Power collection check: pantographs per unit and per train, third-rail shoe span */
   TLT.powerCheck = function (R) {
