@@ -8,7 +8,7 @@ It is plain HTML + JavaScript. There is nothing to install and no server: open i
 
 | Step | Tab | What you do / get |
 |---|---|---|
-| 1 | **Main Dimensions** | Project and title block, formation and number of car variants, car body and bogie, door system, HVAC, interior rules, one card per car variant (incl. tare mass for capacity and END 1 / END 2 support: own or shared Jacobs bogie), load cases. Ends with **Next**. |
+| 1 | **Main Dimensions** | Project and title block, product type and template, formation and number of car variants, power collection, car body and bogie, door system, HVAC, interior rules, one card per car variant (incl. tare mass for capacity and END 1 / END 2 support: own or shared Jacobs bogie), load cases. Ends with **Next**. |
 | 2 | **Equipment Inputs** | Equipment list for **layout only** (positions and sizes of underframe and roof boxes), from Excel or edited in the table. **Generate Results** builds steps 3–5. |
 | 3 | **Train Layouts & Capacity** | Train layout, one interior layout per car variant, passenger capacity calculation (uses the tare typed in step 1). |
 | 4 | **Underframe Layout** | Per car variant: side elevation, roof plan (when the car has roof equipment), underframe plan with X from car centre, equipment table. Any roof or underframe row added in step 2 appears on these sheets and on the train and car layouts. |
@@ -48,6 +48,37 @@ Set **Number of car variants** in the formation card; a card appears for each. E
 | Seat limit / No seats | Bay, side, max seats | Caps the seats on that bay side. |
 
 Placement: next to the door (default), END 1 side, middle or END 2 side of the bay. Bays are numbered B0 … Bn from END 1 (B0 is between the cab / end wall and the first door); the bay list in each item shows the bay lengths. Side A is the top of the plan view. Older input files with text bay rules (`1 A wheelchair`) are converted automatically.
+
+### Product types and templates
+
+**Train formation → Product type**: Metro, LRV, Tram or Mainline EMU / DMU. The product type switches the relevant inputs (mainline interior only for Mainline). **Load template** replaces all inputs with an example of that type (Undo restores the previous inputs):
+
+| Template | Formation | Shows |
+|---|---|---|
+| Metro — example 6-car | `DM-T-M \| M*-T*-DM` | own bogies, gangways, pantograph |
+| LRV — 3-section | `A-B-A'` | double-ended, Jacobs bogies at the articulations |
+| Tram — 5-module, 100 % low floor | `C-S-M-S-C'` | bogie modules (centre bogie) and suspended modules |
+| Mainline EMU — 4-car, 25 kV | `DT-M-TP-DT'` | 1st / standard class, toilets, vestibules, main transformer |
+
+Template values are indicative; replace them with project data.
+
+### Car ends and running gear (per car variant)
+
+* **END 1 / END 2 type**: driving cab, auxiliary driving desk, gangway to the next car, end wall (no gangway) or articulation joint. Cabs at both ends give a double-ended car; an END 2 cab is drawn turned round. The auxiliary desk (size and side in the Driver's cab card) is placed against the end wall and taken out of the seats and standing area.
+* **Support per end**: own bogie, shared (Jacobs) bogie at the joint, or no bogie (cab overhang, or carried by the articulation). **Centre bogie** puts one bogie under the car centre (tram bogie module). A car with no bogie is a **suspended module**.
+* **Motor bogies**: 0, 1 (END 2 side), 1 (END 1 side), 2 or 3.
+* Axles per car come from the running gear (a shared bogie counts as one axle per car). Weights: two bogies share the body load by the lever rule; one bogie carries the whole module; a suspended module's load goes to its two joints and on to the neighbouring modules' bogies.
+
+### Power collection
+
+Supply 25 kV AC, 1500 V DC or 750 V DC; collection by pantograph, third rail (CCD shoe gear, top / bottom / side contact) or both (DC). Checks: pantograph per unit, maximum pantographs per train, 25 kV main transformer and VCB present, third-rail shoe span of the train and of each unit against the longest conductor-rail gap. **Add … equipment** adds the typical collection equipment to the equipment and weight lists (typical masses, to be replaced). Shoe gear is drawn on the bogies, and the conductor rail in the front view.
+
+### Mainline interior (Mainline EMU / DMU only)
+
+* Seat rows across the car: standard and 1st class abreast (2+2, 2+1, 3+2 …), seat pitch, facing bays or airline rows, 1st class seat width.
+* Class per car variant: standard, 1st, or 1st class from END 1 for a given length then standard.
+* Vestibules at the doors (length, internal door width), with partitions; extended to the end wall when less than 1200 mm would remain. Vestibule floor counts as standing area.
+* Toilets (standard / PRM, length × depth) as interior items, with a passage check against the minimum aisle.
 
 ### Driver's cab, windows, front view
 
@@ -126,7 +157,7 @@ On a free GitHub plan, Pages needs a **public** repository. If the repository mu
 ```
 index.html            page and styles
 js/engine.js          geometry, seat fitting, standing area, capacity, mass
-js/presets.js         input presets (Dhaka MRT Line-5N CP-08, example 6-car) incl. example equipment lists
+js/presets.js         input presets (Dhaka MRT Line-5N CP-08) and product templates (metro, LRV, tram, mainline EMU)
 js/drawing.js         sheet composition, views, dimensions, tables, title block
 js/render-svg.js      on-screen preview
 js/export-pdf.js      vector PDF writer (no libraries)
