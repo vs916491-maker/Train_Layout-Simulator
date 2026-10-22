@@ -255,7 +255,10 @@
     return { wipers: Math.max(0, Math.min(3, Math.round(num(f.wipers, 2)))), wiperType: f.wiperType === 'pantograph' ? 'pantograph' : 'single',
       lightsZ: num(f.lightsZ, 350), lightsInset: num(f.lightsInset, 420), destination: f.destination == null ? true : (f.destination === true || f.destination === 'true'),
       couplerHeight: num(f.couplerHeight, 720), gaugeWidth: num(f.gaugeWidth, 3000), gaugeHeight: num(f.gaugeHeight, num(c.maxHeight, 4100)),
-      showGauge: f.showGauge == null ? true : (f.showGauge === true || f.showGauge === 'true') };
+      showGauge: f.showGauge == null ? true : (f.showGauge === true || f.showGauge === 'true'),
+      // windscreen: bottom / top above floor (top 0 = up to the destination display), split, gap to an offset detrainment door
+      wsBottom: num(f.wsBottom, 900), wsTop: num(f.wsTop, 0), wsSplit: f.wsSplit === 'two' ? 'two' : 'single', wsDoorGap: num(f.wsDoorGap, 150),
+      wiperLength: num(f.wiperLength, 0) };
   };
 
   /* Mainline interior (product type Mainline EMU / DMU only) */

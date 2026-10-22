@@ -153,8 +153,13 @@
       ${F('Windows in passenger door leaves', 'windows.doorWin', 'check', { wide: true, re: true })}
       ${WC.doorWin ? F('Door window width (0 = auto)', 'windows.doorWinWidth', 'num', { unit: 'mm' }) + F('Door window height', 'windows.doorWinHeight', 'num', { unit: 'mm' }) + F('Door window sill above floor', 'windows.doorWinSill', 'num', { unit: 'mm' }) : ''}
     </div>`);
-    if (anyCab) h += card('Front view (sheet 1)', `<div class="fields">
+    if (anyCab) h += card('Windscreen & wipers', `<div class="fields">
+      ${F('Windscreen', 'front.wsSplit', 'select', { options: [['single', 'One pane'], ['two', 'Two panes (centre mullion)']] })}${F('Gap to side detrainment door', 'front.wsDoorGap', 'num', { unit: 'mm' })}
+      ${F('Windscreen bottom above floor', 'front.wsBottom', 'num', { unit: 'mm' })}${F('Windscreen top above floor (0 = auto)', 'front.wsTop', 'num', { unit: 'mm' })}
       ${F('Wipers', 'front.wipers', 'select', { numeric: true, options: [['0', 'None'], ['1', '1'], ['2', '2'], ['3', '3']] })}${F('Wiper type', 'front.wiperType', 'select', { options: [['single', 'Single arm'], ['pantograph', 'Pantograph arm']] })}
+      ${F('Wiper blade length (0 = auto)', 'front.wiperLength', 'num', { unit: 'mm' })}<div></div>
+    </div><p class="hint">With a centred detrainment door the windscreen is split into two side windows around it. With the door at the side, the windscreen ends before the door (gap above) and the door has its own window at the same height; the lamps become slim columns at both outer edges. Wipers are shared evenly over the panes (one wiper goes in front of the driver).</p>`);
+    if (anyCab) h += card('Front view (sheet 1)', `<div class="fields">
       ${F('Head / tail lights above floor', 'front.lightsZ', 'num', { unit: 'mm' })}${F('Lights inset from body side', 'front.lightsInset', 'num', { unit: 'mm' })}
       ${F('Coupler height ATR', 'front.couplerHeight', 'num', { unit: 'mm' })}${F('Destination display', 'front.destination', 'check')}
       ${F('Show vehicle gauge outline', 'front.showGauge', 'check', { wide: true, re: true })}
@@ -572,7 +577,10 @@
     ['Windows', 'Drop-down windows', 'windows.drop', ['none', 'ends', 'all']], ['Windows', 'Drop-down depth', 'windows.dropDepth', 'num', 'mm'],
     ['Windows', 'Windows in door leaves', 'windows.doorWin', 'bool'], ['Windows', 'Door window width (0 = auto)', 'windows.doorWinWidth', 'num', 'mm'],
     ['Windows', 'Door window height', 'windows.doorWinHeight', 'num', 'mm'], ['Windows', 'Door window sill above floor', 'windows.doorWinSill', 'num', 'mm'],
-    ['Front view', 'Wipers', 'front.wipers', ['0', '1', '2', '3']], ['Front view', 'Wiper type', 'front.wiperType', ['single', 'pantograph']],
+    ['Windscreen & wipers', 'Windscreen', 'front.wsSplit', ['single', 'two']], ['Windscreen & wipers', 'Gap to side detrainment door', 'front.wsDoorGap', 'num', 'mm'],
+    ['Windscreen & wipers', 'Windscreen bottom above floor', 'front.wsBottom', 'num', 'mm'], ['Windscreen & wipers', 'Windscreen top above floor (0 = auto)', 'front.wsTop', 'num', 'mm'],
+    ['Windscreen & wipers', 'Wipers', 'front.wipers', ['0', '1', '2', '3']], ['Windscreen & wipers', 'Wiper type', 'front.wiperType', ['single', 'pantograph']],
+    ['Windscreen & wipers', 'Wiper blade length (0 = auto)', 'front.wiperLength', 'num', 'mm'],
     ['Front view', 'Head / tail lights above floor', 'front.lightsZ', 'num', 'mm'], ['Front view', 'Lights inset from body side', 'front.lightsInset', 'num', 'mm'],
     ['Front view', 'Coupler height ATR', 'front.couplerHeight', 'num', 'mm'], ['Front view', 'Destination display', 'front.destination', 'bool'],
     ['Front view', 'Show vehicle gauge outline', 'front.showGauge', 'bool'], ['Front view', 'Gauge width', 'front.gaugeWidth', 'num', 'mm'], ['Front view', 'Gauge height ATR', 'front.gaugeHeight', 'num', 'mm'],

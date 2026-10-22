@@ -508,7 +508,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return { wipers: Math.max(0, Math.min(3, Math.round(num(f.wipers, 2)))), wiperType: f.wiperType === 'pantograph' ? 'pantograph' : 'single',
       lightsZ: num(f.lightsZ, 350), lightsInset: num(f.lightsInset, 420), destination: f.destination == null ? true : (f.destination === true || f.destination === 'true'),
       couplerHeight: num(f.couplerHeight, 720), gaugeWidth: num(f.gaugeWidth, 3000), gaugeHeight: num(f.gaugeHeight, num(c.maxHeight, 4100)),
-      showGauge: f.showGauge == null ? true : (f.showGauge === true || f.showGauge === 'true') };
+      showGauge: f.showGauge == null ? true : (f.showGauge === true || f.showGauge === 'true'),
+      // windscreen: bottom / top above floor (top 0 = up to the destination display), split, gap to an offset detrainment door
+      wsBottom: num(f.wsBottom, 900), wsTop: num(f.wsTop, 0), wsSplit: f.wsSplit === 'two' ? 'two' : 'single', wsDoorGap: num(f.wsDoorGap, 150),
+      wiperLength: num(f.wiperLength, 0) };
   };
 
   /* Mainline interior (product type Mainline EMU / DMU only) */
@@ -1503,7 +1506,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       doors: { type: 'Bi-parting sliding plug', width: 1300, height: 2000, detrain: { on: false, width: 700, height: 1800 }, cabSide: { on: true, width: 650, height: 1900, pos: 1700 }, cabSaloon: { on: true, width: 700, height: 1950, y: 0, type: 'Sliding' } },
       cab: Object.assign({}, baseCab),
       windows: Object.assign({}, baseWindows, { inner: 'double', doubleWidth: 1500, sill: 800, height: 900, drop: 'none' }),
-      front: { wipers: 2, wiperType: 'pantograph', lightsZ: 300, lightsInset: 420, destination: true, couplerHeight: 1025, showGauge: true, gaugeWidth: 3150, gaugeHeight: 4300 },
+      front: { wsBottom: 1050, wipers: 2, wiperType: 'pantograph', lightsZ: 300, lightsInset: 420, destination: true, couplerHeight: 1025, showGauge: true, gaugeWidth: 3150, gaugeHeight: 4300 },
       hvac: { unitsPerCar: 2, cabHvac: true },
       interior: { seatType: 'transverse', seatWidth: 450, seatDepth: 500, footZone: 300, doorClearance: 200, endClearance: 0, minDoorClearance: 100, transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,
         wcLength: 1300, wcWidth: 750, wcTurning: 1500, wcAsStanding: true, minAisle: 600, cabinetDepth: 600,
@@ -2136,7 +2139,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       let cnt = panes.map(() => 0);
       if (n === 1 && panes.length > 1) { const side = CB.desk === 'central' ? 0 : (CB.deskSide === 'B' ? 1 : -1); let best = 0; panes.forEach((p, i) => { if (Math.abs((p[0] + p[1]) / 2 - side * hw) < Math.abs((panes[best][0] + panes[best][1]) / 2 - side * hw)) best = i; }); cnt[best] = 1; }
       else { cnt = widths.map(w => Math.floor((n * w) / tot)); let left = n - cnt.reduce((x, y) => x + y, 0); widths.map((w, i) => [i, (n * w) / tot - cnt[i]]).sort((p, q) => q[1] - p[1]).forEach(([i]) => { if (left > 0) { cnt[i]++; left--; } }); }
-      panes.forEach(([a, b], i) => { const k = cnt[i]; const seg = (b - a) / Math.max(1, k); for (let j = 0; j < k; j++) { const c0 = a + seg * (j + 0.5); wiper(c0 + seg * 0.22, z0 + 90, Math.min((z1 - z0) * 0.62, seg * 0.9), -1); } });
+      panes.forEach(([a, b], i) => { const k = cnt[i]; const seg = (b - a) / Math.max(1, k); for (let j = 0; j < k; j++) { const c0 = a + seg * (j + 0.5); wiper(c0 + seg * 0.22, z0 + 90, F.wiperLength > 0 ? F.wiperLength * 0.75 : Math.min((z1 - z0) * 0.62, seg * 0.9), -1); } });
     };
     const doorOutline = (x, glassTop) => {
       v.poly(rr(x - dw2, fh - 40, x + dw2, dTop, 70), true, 'DOOR', { lw: 0.3 });
@@ -2160,36 +2163,56 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       v.poly(rr(-bx, bz0, bx, bz1, 90), true, 'WINDOW', { fill: glass, lw: 0.25 });
       if (F.destination) v.rect(-650, bz0 + 50, 650, bz1 - 50, 'BODY_THIN', { fill: '#2b2f33' });
       // windows / windscreen
-      const z0 = fh + 900, z1 = rh - 720, ox = hw - 170;
+      const ox = hw - 170, z0 = fh + F.wsBottom, z1 = F.wsTop > 0 ? Math.min(fh + F.wsTop, bz0 - 80) : rh - 720;
+      const glassPane = ([a, b2]) => v.poly(rr(a, z0, b2, z1, 70), true, 'WINDOW', { fill: glass, lw: 0.3 });
+      const offset = DC.detrain.on && !centred;
       let panes;
       if (centred) {
         panes = [[-ox, -dw2 - 140], [dw2 + 140, ox]];
-        panes.forEach(([a, b2]) => v.poly(rr(a, z0, b2, z1, 70), true, 'WINDOW', { fill: glass, lw: 0.3 }));
+        panes.forEach(glassPane);
         doorOutline(0, null);
         v.poly(rr(-dw2 + 50, fh - 10, dw2 - 50, dTop - 50, 50), true, 'DOOR', { lw: 0.15 });
-        v.poly(rr(-dw2 + 110, z0 - 60, dw2 - 110, Math.min(z1 + 60, dTop - 150), 45), true, 'WINDOW', { fill: glass, lw: 0.3 });
+        v.poly(rr(-dw2 + 110, z0, dw2 - 110, Math.min(z1, dTop - 150), 45), true, 'WINDOW', { fill: glass, lw: 0.3 });
+      } else if (offset) {
+        // windscreen ends before the detrainment door; the door has its own window at the same height
+        const dL = detX - dw2, dR = detX + dw2, gp = F.wsDoorGap;
+        panes = detX < 0 ? [[dR + gp, ox]] : [[-ox, dL - gp]];
+        if (F.wsSplit === 'two') { const [a, b2] = panes[0], m = (a + b2) / 2; panes = [[a, m - 60], [m + 60, b2]]; }
+        panes.forEach(glassPane);
+        doorOutline(detX, null);
+        v.poly(rr(dL + 50, fh - 10, dR - 50, dTop - 50, 50), true, 'DOOR', { lw: 0.15 });
+        v.poly(rr(dL + 110, z0, dR - 110, Math.min(z1, dTop - 150), 45), true, 'WINDOW', { fill: glass, lw: 0.3 });
       } else {
-        // same symmetric windscreen as a front without a door; an offset door is shown by its outline only
-        panes = [[-ox, ox]];
-        v.poly(rr(-ox, z0, ox, z1, 80), true, 'WINDOW', { fill: glass, lw: 0.3 });
-        if (DC.detrain.on) doorOutline(detX, null);
+        panes = F.wsSplit === 'two' ? [[-ox, -70], [70, ox]] : [[-ox, ox]];
+        panes.forEach(glassPane);
       }
       wipersOver(panes, z0, z1);
-      // lamp panels below the side windows (moved into the destination band if an offset door is in the way)
-      const pw = Math.min(700, ox - (centred ? dw2 + 140 : 0) - 40);
-      const clash = DC.detrain.on && !centred && [-1, 1].some(k => Math.abs(k * (ox - pw / 2) - detX) < dw2 + pw / 2);
-      [-1, 1].forEach(k => {
-        if (!clash) {
-          const xa = k * ox, xb = k * (ox - pw), lz = fh + Math.max(250, Math.min(F.lightsZ, 700));
-          v.poly(rr(Math.min(xa, xb), lz - 200, Math.max(xa, xb), lz + 260, 70), true, 'BODY_THIN', { lw: 0.2 });
-          v.circle(k * (ox - 170), lz + 30, 110, 'BODY', { fill: '#fffbe6' });
-          v.circle(k * (ox - 360), lz + 30, 50, 'NOTE', { fill: '#f6b3ad' });
-          v.circle(k * (ox - 480), lz + 30, 50, 'NOTE', { fill: '#f6b3ad' });
+      // head / tail lights
+      const lz = fh + Math.max(250, Math.min(F.lightsZ, Math.max(250, F.wsBottom - 500)));
+      const panel = (x0, x1, k) => {
+        v.poly(rr(Math.min(x0, x1), lz - 200, Math.max(x0, x1), lz + 260, 70), true, 'BODY_THIN', { lw: 0.2 });
+        v.circle(k * (ox - 170), lz + 30, 110, 'BODY', { fill: '#fffbe6' });
+        v.circle(k * (ox - 360), lz + 30, 50, 'NOTE', { fill: '#f6b3ad' });
+        v.circle(k * (ox - 480), lz + 30, 50, 'NOTE', { fill: '#f6b3ad' });
+      };
+      if (!offset) {
+        const pw = Math.min(700, ox - (centred ? dw2 + 140 : 0) - 40);
+        [-1, 1].forEach(k => panel(k * ox, k * (ox - pw), k));
+      } else {
+        // door at the side: slim upright lamp columns at both outer edges, symmetric and clear of the door
+        const free = hw - 60 - (Math.abs(detX) + dw2) - 50;
+        if (free >= 130) {
+          const sw = Math.min(free, 230), r = Math.min(sw / 2 - 25, 95);
+          [-1, 1].forEach(k => {
+            const x = k * (hw - 60 - sw / 2);
+            v.poly(rr(x - sw / 2, lz - 160, x + sw / 2, lz + 2 * r + 260, sw / 2), true, 'BODY_THIN', { lw: 0.2 });
+            v.circle(x, lz + r + 170, r, 'BODY', { fill: '#fffbe6' });
+            v.circle(x, lz - 20, Math.min(45, r * 0.6), 'NOTE', { fill: '#f6b3ad' });
+          });
         } else {
-          v.circle(k * (bx - 170), (bz0 + bz1) / 2, 85, 'BODY', { fill: '#fffbe6' });
-          v.circle(k * (bx - 340), (bz0 + bz1) / 2, 45, 'NOTE', { fill: '#f6b3ad' });
+          [-1, 1].forEach(k => { v.circle(k * (bx - 170), (bz0 + bz1) / 2, 85, 'BODY', { fill: '#fffbe6' }); v.circle(k * (bx - 340), (bz0 + bz1) / 2, 45, 'NOTE', { fill: '#f6b3ad' }); });
         }
-      });
+      }
       // anticlimber and coupler
       v.rect(-(hw - 200), sole - 70, hw - 200, sole + 90, 'BODY_THIN', { fill: '#eceef0' });
       v.rect(-260, ch - 150, 260, ch + 150, 'BODY', { fill: '#e4e7ea' });
@@ -2203,7 +2226,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       // character lines from the roof down to the lamp clusters
       [-1, 1].forEach(k => v.poly([[k * (hw - 700), top - 80], [k * (hw - 330), rh - 520], [k * (hw - 170), fh + 1150]], false, 'BODY_THIN', { lw: 0.15 }));
       // one large windscreen
-      const z0 = fh + 1050, z1 = rh - 520, bw = hw - 470, tw = hw - 780;
+      const z0 = fh + F.wsBottom, z1 = F.wsTop > 0 ? fh + F.wsTop : rh - 520, bw = hw - 470, tw = hw - 780;
       v.poly([[-bw, z0 + 60], [-bw + 60, z0], [bw - 60, z0], [bw, z0 + 60], [tw, z1 - 60], [tw - 80, z1], [-tw + 80, z1], [-tw, z1 - 60]], true, 'WINDOW', { fill: glass, lw: 0.3 });
       wipersOver([[-bw, bw]], z0, z1);
       // upper light cluster
@@ -2233,7 +2256,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if (DC.detrain.on) v.dimV(detX - dw2, fh - 60, dTop, -hw - 4 * s, { h: 1.5 });   // door height, outside the body (width in the note below)
     v.text(-xr, -380 - 9.5 * s, 'SIDE A', 1.6, { anchor: 'start', color: '#555555', bold: true });
     v.text(xr, -380 - 9.5 * s, 'SIDE B', 1.6, { anchor: 'end', color: '#555555', bold: true });
-    const info = [`Wipers: ${n ? `${n} × ${F.wiperType === 'pantograph' ? 'pantograph' : 'single-arm'}` : 'none'}`, `Detrainment door: ${DC.detrain.on ? `${DC.detrain.width} × ${DC.detrain.height}${Math.abs(detX) > 1 ? ', offset ' + Math.round(Math.abs(detX)) : ', centred'}` : 'none'}`,
+    const info = [`Windscreen: ${F.wsSplit === 'two' ? 'two panes' : 'one pane'}, from ${F.wsBottom} mm above floor · wipers: ${n ? `${n} × ${F.wiperType === 'pantograph' ? 'pantograph' : 'single-arm'}` : 'none'}`, `Detrainment door: ${DC.detrain.on ? `${DC.detrain.width} × ${DC.detrain.height}${Math.abs(detX) > 1 ? ', offset ' + Math.round(Math.abs(detX)) : ', centred'}` : 'none'}`,
       `Desk: ${CB.goa4 ? 'GoA4, covered console' : (CB.desk === 'central' ? 'central' : 'side ' + CB.deskSide) + (CB.observer ? (CB.coDesk ? ', co-driver seat + desk' : ', co-driver seat') : '')}`, `Power: ${PWf.label}${PWf.third ? ', third rail ' + PWf.contact + ' contact' : ''}${PWf.panto ? ', pantograph' : ''}`];
     info.forEach((tx, i) => v.text(-xr, -380 - (13.5 + i * 3.2) * s, tx, 1.6, { color: '#333333' }));
   }
@@ -3666,8 +3689,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       ${F('Windows in passenger door leaves', 'windows.doorWin', 'check', { wide: true, re: true })}
       ${WC.doorWin ? F('Door window width (0 = auto)', 'windows.doorWinWidth', 'num', { unit: 'mm' }) + F('Door window height', 'windows.doorWinHeight', 'num', { unit: 'mm' }) + F('Door window sill above floor', 'windows.doorWinSill', 'num', { unit: 'mm' }) : ''}
     </div>`);
-    if (anyCab) h += card('Front view (sheet 1)', `<div class="fields">
+    if (anyCab) h += card('Windscreen & wipers', `<div class="fields">
+      ${F('Windscreen', 'front.wsSplit', 'select', { options: [['single', 'One pane'], ['two', 'Two panes (centre mullion)']] })}${F('Gap to side detrainment door', 'front.wsDoorGap', 'num', { unit: 'mm' })}
+      ${F('Windscreen bottom above floor', 'front.wsBottom', 'num', { unit: 'mm' })}${F('Windscreen top above floor (0 = auto)', 'front.wsTop', 'num', { unit: 'mm' })}
       ${F('Wipers', 'front.wipers', 'select', { numeric: true, options: [['0', 'None'], ['1', '1'], ['2', '2'], ['3', '3']] })}${F('Wiper type', 'front.wiperType', 'select', { options: [['single', 'Single arm'], ['pantograph', 'Pantograph arm']] })}
+      ${F('Wiper blade length (0 = auto)', 'front.wiperLength', 'num', { unit: 'mm' })}<div></div>
+    </div><p class="hint">With a centred detrainment door the windscreen is split into two side windows around it. With the door at the side, the windscreen ends before the door (gap above) and the door has its own window at the same height; the lamps become slim columns at both outer edges. Wipers are shared evenly over the panes (one wiper goes in front of the driver).</p>`);
+    if (anyCab) h += card('Front view (sheet 1)', `<div class="fields">
       ${F('Head / tail lights above floor', 'front.lightsZ', 'num', { unit: 'mm' })}${F('Lights inset from body side', 'front.lightsInset', 'num', { unit: 'mm' })}
       ${F('Coupler height ATR', 'front.couplerHeight', 'num', { unit: 'mm' })}${F('Destination display', 'front.destination', 'check')}
       ${F('Show vehicle gauge outline', 'front.showGauge', 'check', { wide: true, re: true })}
@@ -4085,7 +4113,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     ['Windows', 'Drop-down windows', 'windows.drop', ['none', 'ends', 'all']], ['Windows', 'Drop-down depth', 'windows.dropDepth', 'num', 'mm'],
     ['Windows', 'Windows in door leaves', 'windows.doorWin', 'bool'], ['Windows', 'Door window width (0 = auto)', 'windows.doorWinWidth', 'num', 'mm'],
     ['Windows', 'Door window height', 'windows.doorWinHeight', 'num', 'mm'], ['Windows', 'Door window sill above floor', 'windows.doorWinSill', 'num', 'mm'],
-    ['Front view', 'Wipers', 'front.wipers', ['0', '1', '2', '3']], ['Front view', 'Wiper type', 'front.wiperType', ['single', 'pantograph']],
+    ['Windscreen & wipers', 'Windscreen', 'front.wsSplit', ['single', 'two']], ['Windscreen & wipers', 'Gap to side detrainment door', 'front.wsDoorGap', 'num', 'mm'],
+    ['Windscreen & wipers', 'Windscreen bottom above floor', 'front.wsBottom', 'num', 'mm'], ['Windscreen & wipers', 'Windscreen top above floor (0 = auto)', 'front.wsTop', 'num', 'mm'],
+    ['Windscreen & wipers', 'Wipers', 'front.wipers', ['0', '1', '2', '3']], ['Windscreen & wipers', 'Wiper type', 'front.wiperType', ['single', 'pantograph']],
+    ['Windscreen & wipers', 'Wiper blade length (0 = auto)', 'front.wiperLength', 'num', 'mm'],
     ['Front view', 'Head / tail lights above floor', 'front.lightsZ', 'num', 'mm'], ['Front view', 'Lights inset from body side', 'front.lightsInset', 'num', 'mm'],
     ['Front view', 'Coupler height ATR', 'front.couplerHeight', 'num', 'mm'], ['Front view', 'Destination display', 'front.destination', 'bool'],
     ['Front view', 'Show vehicle gauge outline', 'front.showGauge', 'bool'], ['Front view', 'Gauge width', 'front.gaugeWidth', 'num', 'mm'], ['Front view', 'Gauge height ATR', 'front.gaugeHeight', 'num', 'mm'],
