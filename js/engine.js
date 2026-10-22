@@ -201,7 +201,8 @@
     const on = v => v === true || v === 'true';
     return { desk: c.desk === 'central' ? 'central' : 'side', deskSide: c.deskSide === 'A' ? 'A' : 'B', observer: c.observer == null ? true : on(c.observer),
       goa4: on(c.goa4), consoleDepth: num(c.consoleDepth, 700), deskDepth: num(c.deskDepth, 800), deskWidth: num(c.deskWidth, 1400),
-      auxLength: num(c.auxLength, 700), auxDepth: num(c.auxDepth, 1000), auxSide: c.auxSide === 'A' ? 'A' : 'B' };
+      auxLength: num(c.auxLength, 700), auxDepth: num(c.auxDepth, 1000), auxSide: c.auxSide === 'A' ? 'A' : 'B',
+      coDesk: on(c.coDesk), coDeskWidth: num(c.coDeskWidth, 650) };
   };
   TLT.windowCfg = function (cfg) {
     const w = cfg.windows || {};
@@ -687,7 +688,11 @@
     if (!P.panto && pantos.length) warn.push(`Power collection is third rail only, but the equipment list has ${pantos.length} pantograph(s).`);
     if (P.panto && pantos.length) {
       for (let u = 0; u < R.form.units; u++) if (!pantos.some(q => q.unit === u)) warn.push(`Unit ${u + 1} has no pantograph.`);
-      if (P.maxPantos > 0 && pantos.length > P.maxPantos) warn.push(`${pantos.length} pantographs in the train; the maximum is ${P.maxPantos}.`);
+      if (P.maxPantos > 0 && pantos.length > P.maxPantos) {
+        const by = new Map(); pantos.forEach(q => by.set(q.car.type.name, (by.get(q.car.type.name) || 0) + 1));
+        const per = [...by.entries()].map(([n, k]) => { const cars = R.form.cars.filter(c => c.type.name === n).length; return `${n}: ${k / cars} per car × ${cars}`; }).join(', ');
+        warn.push(`${pantos.length} pantographs in the train (${per}); the maximum is ${P.maxPantos}. Check the pantograph (PAN…) rows in the equipment list.`);
+      }
     }
     const eqAll = R.used.flatMap(n => R.layouts.get(n).equipment.items);
     if (P.system === '25kV') {

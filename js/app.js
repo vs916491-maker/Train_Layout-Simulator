@@ -132,10 +132,11 @@
       ${anyCab ? `${F('Driving desk', 'cab.desk', 'select', { re: true, options: [['side', 'Side driving desk'], ['central', 'Central driving desk']] })}
       ${CB.desk === 'side' ? F('Desk on side', 'cab.deskSide', 'select', { options: [['B', 'Side B'], ['A', 'Side A']] }) : '<div></div>'}
       ${F('Desk depth', 'cab.deskDepth', 'num', { unit: 'mm' })}${F('Desk width', 'cab.deskWidth', 'num', { unit: 'mm' })}
-      ${F('Observer / second seat', 'cab.observer', 'check', { wide: true })}
+      ${F('Co-driver seat', 'cab.observer', 'check', { re: true })}${CB.observer ? F('Co-driver desk', 'cab.coDesk', 'check', { re: true }) : '<div></div>'}
+      ${CB.observer && CB.coDesk ? F('Co-driver desk width (across car)', 'cab.coDeskWidth', 'num', { unit: 'mm' }) + '<div></div>' : ''}
       ${F('GoA4 (driverless): remove cab back wall', 'cab.goa4', 'check', { wide: true, re: true })}
       ${CB.goa4 ? F('Covered front console depth', 'cab.consoleDepth', 'num', { unit: 'mm', wide: true, hint: 'The cab floor behind the console becomes standing area. Partition, cab-to-saloon door and driver seat are removed.' }) : ''}` : ''}
-    </div><p class="hint">Driver seat follows the desk: centred behind a central desk (detrainment door moves to side A), or on the desk side with the observer seat opposite. A cab at END 2 is drawn turned round, so the desk keeps its hand in the direction of travel.</p>`);
+    </div><p class="hint">Driver seat follows the desk: centred behind a central desk (detrainment door moves to side A), or on the desk side with the co-driver seat (and optional co-driver desk) opposite. A cab at END 2 is drawn turned round, so the desk keeps its hand in the direction of travel.</p>`);
     const WC = TLT.windowCfg(cfg);
     const winOpts = [['single', 'Single window'], ['double', 'Two windows'], ['none', 'No window']];
     h += card('Windows (side wall)', `<div class="fields">
@@ -199,6 +200,13 @@
       ${F('Passenger mass', 'loads.paxMass', 'num', { unit: 'kg' })}${F('Max. axle load', 'loads.maxAxleLoad', 'num', { unit: 't' })}
       ${F('Round standing pax', 'loads.rounding', 'select', { options: [['floor', 'Down'], ['round', 'Nearest'], ['ceil', 'Up']] })}
     </div>
+    ${(() => { const aw = cfg.cases.find(q => q.kind === 'density'); return `<h4 style="margin:14px 0 6px;font-size:13px">Per car variant</h4>
+    <div class="scroll-x"><table class="data"><thead><tr><th>Variant</th><th>Description</th><th>Tare mass AW0 (t)</th><th>Standees target${aw ? ` at ${esc(aw.name)}` : ''} (check)</th></tr></thead><tbody>
+    ${cfg.carTypes.map((t, i) => `<tr><td><b>${esc(t.name)}</b></td><td>${esc(t.desc || '')}</td>
+      <td><input class="num" id="mt-${i}-tare" type="number" step="any" data-path="carTypes.${i}.tare" data-kind="num" value="${esc(t.tare)}"></td>
+      <td><input class="num" id="mt-${i}-st" type="number" step="any" data-path="carTypes.${i}.specStanding" data-kind="num" value="${esc(t.specStanding)}"></td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="hint">Tare mass is used for the capacity sheet (car mass and axle load per case); the weight calculation in step 5 compares its own result with it. The standees target is checked against the first density case${aw ? ` (${esc(aw.name)})` : ''}.</p>`; })()}
     <div class="scroll-x" style="margin-top:10px"><table class="data"><thead><tr><th>Case</th><th>Type</th><th>pax/m² or factor</th><th>Of case</th><th>Note</th><th></th></tr></thead><tbody>
     ${cfg.cases.map((c, i) => `<tr>
       <td><input id="case-${i}-name" data-path="cases.${i}.name" data-kind="text" value="${esc(c.name)}"></td>
@@ -239,8 +247,7 @@
         ${ML ? F('Seating class', 'seatClass', 'select', { re: true, options: [['std', 'Standard class'], ['first', '1st class'], ['mixed', '1st class from END 1, then standard']] })
           + (t.seatClass === 'mixed' ? F('1st class length from END 1 saloon start', 'firstLength', 'num', { unit: 'mm' }) : '<div></div>') : ''}
         ${ML ? '' : F('Seats between two doors (per side)', 'seatsPerBay', 'select', { re: true, options: [['', 'Auto (fill with clearance)'], ['5', '5-seater'], ['6', '6-seater'], ['7', '7-seater'], ['8', '8-seater'], ['9', '9-seater']], wide: true, hint: seatFitHint(t) })}
-        ${F('Tare mass AW0 (used for capacity)', 'tare', 'num', { unit: 't', wide: true })}
-        ${F('Spec. seats (check)', 'specSeats', 'num')}${F('Spec. standees AW2 (check)', 'specStanding', 'num')}
+        ${F('Seated passengers target (check)', 'specSeats', 'num', { wide: true, hint: 'Compared with the calculated seats on the capacity sheet. Tare mass and standees target are in Load cases & mass.' })}
         <div class="f wide"><span class="sub">Interior items</span>${interiorItemsHtml(t, i)}</div>
       </div></div>`;
   }
@@ -602,7 +609,9 @@
     let pCars = names(cfg.power.pantoCars).filter(n => cfg.carTypes.some(t => t.name === n));
     if (!pCars.length) { const t = cfg.carTypes.find(q => !TLT.hasCab(q)) || cfg.carTypes[0]; pCars = [t.name]; }
     let nE = 0, nW = 0;
-    const has = (car, name) => eq.some(r => String(r.car).trim() === car && String(r.name).trim().toUpperCase() === name.toUpperCase());
+    // an item counts as present when the car already has a row of that type (PAN1 / PAN2 are pantographs, LA is an arrester …)
+    const SAME = { PAN: /^(PAN|PANTO)/i, ARR: /^(ARR|LA\b|SA\b)|arrest/i, VCB: /VCB|MCB|circuit/i, ES: /^ES\b|earth/i, 'MAIN TRANSFORMER': /transf|^MTR?\b|^TFR?\b/i, HSCB: /HSCB/i, 'SHOE FUSE': /shoe/i };
+    const has = (car, name) => eq.some(r => String(r.car).trim() === car && (name === 'PAN' && TLT.normEquipRow(r).kind === 'panto' || (SAME[name] || new RegExp('^' + name + '$', 'i')).test(String(r.name).trim())));
     const addW = (car, loc, name, L, Wd, H, x, y, mass) => {
       const oi = wt.findIndex(r => String(r.car).trim() === car && /^other/i.test(r.name || ''));
       const row = { car, loc, name, length: L, width: Wd, height: H, x, y, z: '', mass };
@@ -785,6 +794,14 @@
     const base = TLT.PRESETS['dhaka-l5n']();
     ['project', 'common', 'interior', 'loads', 'hvac', 'cab', 'windows', 'front', 'power'].forEach(k => { o[k] = Object.assign({}, base[k], o[k] || {}); });
     if (!o.productType) o.productType = 'metro';
+    // earlier versions of "Add equipment" added a second set of pantographs (PAN) to cars that already had PAN1 / PAN2
+    if (Array.isArray(o.equipment)) {
+      const dupCars = new Set(o.equipment.filter(r => String(r.name).trim() === 'PAN' && o.equipment.some(q => q !== r && q.car === r.car && /^PAN.+/i.test(String(q.name).trim()))).map(r => r.car));
+      if (dupCars.size) {
+        o.equipment = o.equipment.filter(r => !(dupCars.has(r.car) && String(r.name).trim() === 'PAN'));
+        if (Array.isArray(o.weightItems)) o.weightItems = o.weightItems.filter(r => !(dupCars.has(r.car) && String(r.name).trim() === 'PAN'));
+      }
+    }
     if (!o.doors) {
       const c = o.common || {};
       o.doors = clone(base.doors);

@@ -403,7 +403,8 @@ table.data select { min-width: 104px; }
     const on = v => v === true || v === 'true';
     return { desk: c.desk === 'central' ? 'central' : 'side', deskSide: c.deskSide === 'A' ? 'A' : 'B', observer: c.observer == null ? true : on(c.observer),
       goa4: on(c.goa4), consoleDepth: num(c.consoleDepth, 700), deskDepth: num(c.deskDepth, 800), deskWidth: num(c.deskWidth, 1400),
-      auxLength: num(c.auxLength, 700), auxDepth: num(c.auxDepth, 1000), auxSide: c.auxSide === 'A' ? 'A' : 'B' };
+      auxLength: num(c.auxLength, 700), auxDepth: num(c.auxDepth, 1000), auxSide: c.auxSide === 'A' ? 'A' : 'B',
+      coDesk: on(c.coDesk), coDeskWidth: num(c.coDeskWidth, 650) };
   };
   TLT.windowCfg = function (cfg) {
     const w = cfg.windows || {};
@@ -889,7 +890,11 @@ table.data select { min-width: 104px; }
     if (!P.panto && pantos.length) warn.push(`Power collection is third rail only, but the equipment list has ${pantos.length} pantograph(s).`);
     if (P.panto && pantos.length) {
       for (let u = 0; u < R.form.units; u++) if (!pantos.some(q => q.unit === u)) warn.push(`Unit ${u + 1} has no pantograph.`);
-      if (P.maxPantos > 0 && pantos.length > P.maxPantos) warn.push(`${pantos.length} pantographs in the train; the maximum is ${P.maxPantos}.`);
+      if (P.maxPantos > 0 && pantos.length > P.maxPantos) {
+        const by = new Map(); pantos.forEach(q => by.set(q.car.type.name, (by.get(q.car.type.name) || 0) + 1));
+        const per = [...by.entries()].map(([n, k]) => { const cars = R.form.cars.filter(c => c.type.name === n).length; return `${n}: ${k / cars} per car × ${cars}`; }).join(', ');
+        warn.push(`${pantos.length} pantographs in the train (${per}); the maximum is ${P.maxPantos}. Check the pantograph (PAN…) rows in the equipment list.`);
+      }
     }
     const eqAll = R.used.flatMap(n => R.layouts.get(n).equipment.items);
     if (P.system === '25kV') {
@@ -1194,7 +1199,7 @@ table.data select { min-width: 104px; }
         cabSide: { on: true, width: 600, height: 1850, pos: 1200 },
         cabSaloon: { on: true, width: 700, height: 1900, y: 0, type: 'Hinged' },
       },
-      cab: { desk: 'side', deskSide: 'B', observer: true, goa4: false, consoleDepth: 700, deskDepth: 800, deskWidth: 1400, auxLength: 700, auxDepth: 1000, auxSide: 'B' },
+      cab: { desk: 'side', deskSide: 'B', observer: true, goa4: false, consoleDepth: 700, deskDepth: 800, deskWidth: 1400, auxLength: 700, auxDepth: 1000, auxSide: 'B', coDesk: false, coDeskWidth: 650 },
       windows: { inner: 'single', end: 'single', singleWidth: 0, doubleWidth: 1000, height: 900, sill: 820, drop: 'ends', dropDepth: 400, doorWin: true, doorWinWidth: 0, doorWinHeight: 750, doorWinSill: 950 },
       front: { wipers: 2, wiperType: 'single', lightsZ: 350, lightsInset: 420, destination: true, couplerHeight: 720, showGauge: true, gaugeWidth: 3000, gaugeHeight: 4100 },
       hvac: { unitsPerCar: 2, cabHvac: false },
@@ -1261,7 +1266,7 @@ table.data select { min-width: 104px; }
         cabSide: { on: true, width: 600, height: 1900, pos: 1250 },
         cabSaloon: { on: true, width: 700, height: 1900, y: 0, type: 'Hinged' },
       },
-      cab: { desk: 'side', deskSide: 'B', observer: true, goa4: false, consoleDepth: 700, deskDepth: 800, deskWidth: 1400, auxLength: 700, auxDepth: 1000, auxSide: 'B' },
+      cab: { desk: 'side', deskSide: 'B', observer: true, goa4: false, consoleDepth: 700, deskDepth: 800, deskWidth: 1400, auxLength: 700, auxDepth: 1000, auxSide: 'B', coDesk: false, coDeskWidth: 650 },
       windows: { inner: 'single', end: 'single', singleWidth: 0, doubleWidth: 1000, height: 900, sill: 820, drop: 'ends', dropDepth: 400, doorWin: true, doorWinWidth: 0, doorWinHeight: 750, doorWinSill: 950 },
       front: { wipers: 2, wiperType: 'single', lightsZ: 350, lightsInset: 420, destination: true, couplerHeight: 720, showGauge: true, gaugeWidth: 3200, gaugeHeight: 4050 },
       hvac: { unitsPerCar: 2, cabHvac: false },
@@ -1310,7 +1315,7 @@ table.data select { min-width: 104px; }
     bogies.map(([x, m], i) => W(car, 'Bogie', bogies.length > 1 ? `Bogie ${i + 1}` : 'Bogie', 2600, 2200, 800, x, 0, '', m)),
     [W(car, 'Car body', 'Other items', '', '', '', 0, 0, '', Math.round(bodyKg * 0.08))]);
   const baseWindows = { inner: 'single', end: 'single', singleWidth: 0, doubleWidth: 1000, height: 1000, sill: 750, drop: 'none', dropDepth: 400, doorWin: true, doorWinWidth: 0, doorWinHeight: 1000, doorWinSill: 850 };
-  const baseCab = { desk: 'central', deskSide: 'B', observer: false, goa4: false, consoleDepth: 700, deskDepth: 800, deskWidth: 1300, auxLength: 700, auxDepth: 1000, auxSide: 'B' };
+  const baseCab = { desk: 'central', deskSide: 'B', observer: false, goa4: false, consoleDepth: 700, deskDepth: 800, deskWidth: 1300, auxLength: 700, auxDepth: 1000, auxSide: 'B', coDesk: false, coDeskWidth: 650 };
 
   const LRV_EQ = [
     ['A', 'AC1', 'Roof', 2600, 1700, 400, 600, 0, 750],
@@ -1837,6 +1842,15 @@ table.data select { min-width: 104px; }
         if (!dz || dz[1] <= y0 || dz[0] >= y1) return [[y0, y1]];
         const out = []; if (dz[0] > y0 + 150) out.push([y0, dz[0]]); if (dz[1] < y1 - 150) out.push([dz[1], y1]); return out;
       };
+      // co-driver desk: console in front of the co-driver seat, clear of the detrainment door and the main desk
+      const coDesk = (ks, d1, block) => {
+        const outer = hi - 120, inner = hi - 120 - CB.coDeskWidth;
+        const y0 = ks > 0 ? inner : -outer, y1 = ks > 0 ? outer : -inner;
+        freeSpans(y0, y1).forEach(([a, b]) => {
+          if (block) { if (b > block[0] && a < block[1]) { if (ks > 0) a = Math.max(a, block[1]); else b = Math.min(b, block[0]); } }
+          if (b - a > 150) v.rect(bodyF + 300, a, d1, b, 'CAB', { fill: '#e4e4e4' });
+        });
+      };
       if (lay.openCab) {
         // GoA4: covered console across the front, no driver seat; the rest of the cab is passenger area
         const c1 = bodyF + CB.consoleDepth;
@@ -1848,7 +1862,12 @@ table.data select { min-width: 104px; }
         freeSpans(-CB.deskWidth / 2, CB.deskWidth / 2).forEach(([y0, y1]) => v.rect(bodyF + 300, y0, d1, y1, 'CAB', { fill: '#ececec' }));
         v.circle(d1 + 380, 0, 240, 'CAB', { fill: '#ffffff' });
         if (detail) v.text(d1 + 380, 0, 'DRIVER', 1.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a' });
-        if (CB.observer) v.circle(d1 + 380, (DC.detrain.on && detY < 0 ? 1 : -1) * (hi - 380), 190, 'CAB', { fill: '#ffffff' });
+        if (CB.observer) {
+          const ko = DC.detrain.on && detY < 0 ? 1 : -1;
+          v.circle(d1 + 380, ko * (hi - 380), 190, 'CAB', { fill: '#ffffff' });
+          if (detail) v.text(d1 + 380, ko * (hi - 380), 'CO-DRV', 1.0, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a' });
+          if (CB.coDesk) coDesk(ko, d1, [-CB.deskWidth / 2 - 80, CB.deskWidth / 2 + 80]);
+        }
       } else {
         const k = CB.deskSide === 'A' ? 1 : -1;
         const d1 = bodyF + Math.min(lay.cabLen * 0.55, 300 + CB.deskDepth);
@@ -1857,7 +1876,11 @@ table.data select { min-width: 104px; }
         const sy = k * (Math.abs(yIn) + (hi - 120 - Math.abs(yIn)) / 2);
         v.circle(d1 + 360, sy, 240, 'CAB', { fill: '#ffffff' });
         if (detail) v.text(d1 + 360, sy, 'DRIVER', 1.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a' });
-        if (CB.observer) v.circle(d1 + 360, -k * (hi - 380), 190, 'CAB', { fill: '#ffffff' });
+        if (CB.observer) {
+          v.circle(d1 + 360, -k * (hi - 380), 190, 'CAB', { fill: '#ffffff' });
+          if (detail) v.text(d1 + 360, -k * (hi - 380), 'CO-DRV', 1.0, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a' });
+          if (CB.coDesk) coDesk(-k, d1, null);
+        }
       }
       if (DC.detrain.on) v.rect(bodyF - 10, detY - DC.detrain.width / 2, bodyF + 110, detY + DC.detrain.width / 2, 'DOOR', { fill: '#efd9f4' });
       if (DC.cabSide.on) {
@@ -1872,7 +1895,10 @@ table.data select { min-width: 104px; }
       } else {
         v.line(bodyF + 650, hi, xp - 60, hi, 'BODY_THIN'); v.line(bodyF + 650, -hi, xp - 60, -hi, 'BODY_THIN');
       }
-      if (detail && !lay.openCab) v.text(bodyF + lay.cabLen * 0.78, (lay.cabCfg.desk === 'central' ? -1 : (lay.cabCfg.deskSide === 'A' ? -1 : 1)) * (hi - 260), 'CAB', 2.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a', bold: true });
+      if (detail && !lay.openCab) {
+        if (CB.desk === 'central') v.text(bodyF + lay.cabLen * 0.78, (DC.detrain.on && detY < 0 ? -1 : 1) * (hi - 260), 'CAB', 2.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a', bold: true });
+        else v.text(bodyF + lay.cabLen * 0.6, 0, 'CAB', 2.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a', bold: true });
+      }
     }
 
     // Mainline: vestibule partitions and class boundary
@@ -2106,7 +2132,7 @@ table.data select { min-width: 104px; }
     v.text(-xr, -380 - 9.5 * s, 'SIDE A', 1.6, { anchor: 'start', color: '#555555', bold: true });
     v.text(xr, -380 - 9.5 * s, 'SIDE B', 1.6, { anchor: 'end', color: '#555555', bold: true });
     const info = [`Wipers: ${n ? `${n} × ${F.wiperType === 'pantograph' ? 'pantograph' : 'single-arm'}` : 'none'}`, `Detrainment door: ${DC.detrain.on ? `${DC.detrain.width} × ${DC.detrain.height}${Math.abs(detX) > 1 ? ', offset ' + Math.round(Math.abs(detX)) : ', centred'}` : 'none'}`,
-      `Desk: ${CB.goa4 ? 'GoA4, covered console' : CB.desk === 'central' ? 'central' : 'side ' + CB.deskSide}`, `Power: ${PWf.label}${PWf.third ? ', third rail ' + PWf.contact + ' contact' : ''}${PWf.panto ? ', pantograph' : ''}`];
+      `Desk: ${CB.goa4 ? 'GoA4, covered console' : (CB.desk === 'central' ? 'central' : 'side ' + CB.deskSide) + (CB.observer ? (CB.coDesk ? ', co-driver seat + desk' : ', co-driver seat') : '')}`, `Power: ${PWf.label}${PWf.third ? ', third rail ' + PWf.contact + ' contact' : ''}${PWf.panto ? ', pantograph' : ''}`];
     info.forEach((tx, i) => v.text(-xr, -380 - (13.5 + i * 3.2) * s, tx, 1.6, { color: '#333333' }));
   }
 
@@ -3456,10 +3482,11 @@ table.data select { min-width: 104px; }
       ${anyCab ? `${F('Driving desk', 'cab.desk', 'select', { re: true, options: [['side', 'Side driving desk'], ['central', 'Central driving desk']] })}
       ${CB.desk === 'side' ? F('Desk on side', 'cab.deskSide', 'select', { options: [['B', 'Side B'], ['A', 'Side A']] }) : '<div></div>'}
       ${F('Desk depth', 'cab.deskDepth', 'num', { unit: 'mm' })}${F('Desk width', 'cab.deskWidth', 'num', { unit: 'mm' })}
-      ${F('Observer / second seat', 'cab.observer', 'check', { wide: true })}
+      ${F('Co-driver seat', 'cab.observer', 'check', { re: true })}${CB.observer ? F('Co-driver desk', 'cab.coDesk', 'check', { re: true }) : '<div></div>'}
+      ${CB.observer && CB.coDesk ? F('Co-driver desk width (across car)', 'cab.coDeskWidth', 'num', { unit: 'mm' }) + '<div></div>' : ''}
       ${F('GoA4 (driverless): remove cab back wall', 'cab.goa4', 'check', { wide: true, re: true })}
       ${CB.goa4 ? F('Covered front console depth', 'cab.consoleDepth', 'num', { unit: 'mm', wide: true, hint: 'The cab floor behind the console becomes standing area. Partition, cab-to-saloon door and driver seat are removed.' }) : ''}` : ''}
-    </div><p class="hint">Driver seat follows the desk: centred behind a central desk (detrainment door moves to side A), or on the desk side with the observer seat opposite. A cab at END 2 is drawn turned round, so the desk keeps its hand in the direction of travel.</p>`);
+    </div><p class="hint">Driver seat follows the desk: centred behind a central desk (detrainment door moves to side A), or on the desk side with the co-driver seat (and optional co-driver desk) opposite. A cab at END 2 is drawn turned round, so the desk keeps its hand in the direction of travel.</p>`);
     const WC = TLT.windowCfg(cfg);
     const winOpts = [['single', 'Single window'], ['double', 'Two windows'], ['none', 'No window']];
     h += card('Windows (side wall)', `<div class="fields">
@@ -3523,6 +3550,13 @@ table.data select { min-width: 104px; }
       ${F('Passenger mass', 'loads.paxMass', 'num', { unit: 'kg' })}${F('Max. axle load', 'loads.maxAxleLoad', 'num', { unit: 't' })}
       ${F('Round standing pax', 'loads.rounding', 'select', { options: [['floor', 'Down'], ['round', 'Nearest'], ['ceil', 'Up']] })}
     </div>
+    ${(() => { const aw = cfg.cases.find(q => q.kind === 'density'); return `<h4 style="margin:14px 0 6px;font-size:13px">Per car variant</h4>
+    <div class="scroll-x"><table class="data"><thead><tr><th>Variant</th><th>Description</th><th>Tare mass AW0 (t)</th><th>Standees target${aw ? ` at ${esc(aw.name)}` : ''} (check)</th></tr></thead><tbody>
+    ${cfg.carTypes.map((t, i) => `<tr><td><b>${esc(t.name)}</b></td><td>${esc(t.desc || '')}</td>
+      <td><input class="num" id="mt-${i}-tare" type="number" step="any" data-path="carTypes.${i}.tare" data-kind="num" value="${esc(t.tare)}"></td>
+      <td><input class="num" id="mt-${i}-st" type="number" step="any" data-path="carTypes.${i}.specStanding" data-kind="num" value="${esc(t.specStanding)}"></td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="hint">Tare mass is used for the capacity sheet (car mass and axle load per case); the weight calculation in step 5 compares its own result with it. The standees target is checked against the first density case${aw ? ` (${esc(aw.name)})` : ''}.</p>`; })()}
     <div class="scroll-x" style="margin-top:10px"><table class="data"><thead><tr><th>Case</th><th>Type</th><th>pax/m² or factor</th><th>Of case</th><th>Note</th><th></th></tr></thead><tbody>
     ${cfg.cases.map((c, i) => `<tr>
       <td><input id="case-${i}-name" data-path="cases.${i}.name" data-kind="text" value="${esc(c.name)}"></td>
@@ -3563,8 +3597,7 @@ table.data select { min-width: 104px; }
         ${ML ? F('Seating class', 'seatClass', 'select', { re: true, options: [['std', 'Standard class'], ['first', '1st class'], ['mixed', '1st class from END 1, then standard']] })
           + (t.seatClass === 'mixed' ? F('1st class length from END 1 saloon start', 'firstLength', 'num', { unit: 'mm' }) : '<div></div>') : ''}
         ${ML ? '' : F('Seats between two doors (per side)', 'seatsPerBay', 'select', { re: true, options: [['', 'Auto (fill with clearance)'], ['5', '5-seater'], ['6', '6-seater'], ['7', '7-seater'], ['8', '8-seater'], ['9', '9-seater']], wide: true, hint: seatFitHint(t) })}
-        ${F('Tare mass AW0 (used for capacity)', 'tare', 'num', { unit: 't', wide: true })}
-        ${F('Spec. seats (check)', 'specSeats', 'num')}${F('Spec. standees AW2 (check)', 'specStanding', 'num')}
+        ${F('Seated passengers target (check)', 'specSeats', 'num', { wide: true, hint: 'Compared with the calculated seats on the capacity sheet. Tare mass and standees target are in Load cases & mass.' })}
         <div class="f wide"><span class="sub">Interior items</span>${interiorItemsHtml(t, i)}</div>
       </div></div>`;
   }
@@ -3926,7 +3959,9 @@ table.data select { min-width: 104px; }
     let pCars = names(cfg.power.pantoCars).filter(n => cfg.carTypes.some(t => t.name === n));
     if (!pCars.length) { const t = cfg.carTypes.find(q => !TLT.hasCab(q)) || cfg.carTypes[0]; pCars = [t.name]; }
     let nE = 0, nW = 0;
-    const has = (car, name) => eq.some(r => String(r.car).trim() === car && String(r.name).trim().toUpperCase() === name.toUpperCase());
+    // an item counts as present when the car already has a row of that type (PAN1 / PAN2 are pantographs, LA is an arrester …)
+    const SAME = { PAN: /^(PAN|PANTO)/i, ARR: /^(ARR|LA\b|SA\b)|arrest/i, VCB: /VCB|MCB|circuit/i, ES: /^ES\b|earth/i, 'MAIN TRANSFORMER': /transf|^MTR?\b|^TFR?\b/i, HSCB: /HSCB/i, 'SHOE FUSE': /shoe/i };
+    const has = (car, name) => eq.some(r => String(r.car).trim() === car && (name === 'PAN' && TLT.normEquipRow(r).kind === 'panto' || (SAME[name] || new RegExp('^' + name + '$', 'i')).test(String(r.name).trim())));
     const addW = (car, loc, name, L, Wd, H, x, y, mass) => {
       const oi = wt.findIndex(r => String(r.car).trim() === car && /^other/i.test(r.name || ''));
       const row = { car, loc, name, length: L, width: Wd, height: H, x, y, z: '', mass };
@@ -4109,6 +4144,14 @@ table.data select { min-width: 104px; }
     const base = TLT.PRESETS['dhaka-l5n']();
     ['project', 'common', 'interior', 'loads', 'hvac', 'cab', 'windows', 'front', 'power'].forEach(k => { o[k] = Object.assign({}, base[k], o[k] || {}); });
     if (!o.productType) o.productType = 'metro';
+    // earlier versions of "Add equipment" added a second set of pantographs (PAN) to cars that already had PAN1 / PAN2
+    if (Array.isArray(o.equipment)) {
+      const dupCars = new Set(o.equipment.filter(r => String(r.name).trim() === 'PAN' && o.equipment.some(q => q !== r && q.car === r.car && /^PAN.+/i.test(String(q.name).trim()))).map(r => r.car));
+      if (dupCars.size) {
+        o.equipment = o.equipment.filter(r => !(dupCars.has(r.car) && String(r.name).trim() === 'PAN'));
+        if (Array.isArray(o.weightItems)) o.weightItems = o.weightItems.filter(r => !(dupCars.has(r.car) && String(r.name).trim() === 'PAN'));
+      }
+    }
     if (!o.doors) {
       const c = o.common || {};
       o.doors = clone(base.doors);

@@ -93,7 +93,7 @@
         cabSide: { on: true, width: 600, height: 1850, pos: 1200 },
         cabSaloon: { on: true, width: 700, height: 1900, y: 0, type: 'Hinged' },
       },
-      cab: { desk: 'side', deskSide: 'B', observer: true, goa4: false, consoleDepth: 700, deskDepth: 800, deskWidth: 1400, auxLength: 700, auxDepth: 1000, auxSide: 'B' },
+      cab: { desk: 'side', deskSide: 'B', observer: true, goa4: false, consoleDepth: 700, deskDepth: 800, deskWidth: 1400, auxLength: 700, auxDepth: 1000, auxSide: 'B', coDesk: false, coDeskWidth: 650 },
       windows: { inner: 'single', end: 'single', singleWidth: 0, doubleWidth: 1000, height: 900, sill: 820, drop: 'ends', dropDepth: 400, doorWin: true, doorWinWidth: 0, doorWinHeight: 750, doorWinSill: 950 },
       front: { wipers: 2, wiperType: 'single', lightsZ: 350, lightsInset: 420, destination: true, couplerHeight: 720, showGauge: true, gaugeWidth: 3000, gaugeHeight: 4100 },
       hvac: { unitsPerCar: 2, cabHvac: false },
@@ -160,7 +160,7 @@
         cabSide: { on: true, width: 600, height: 1900, pos: 1250 },
         cabSaloon: { on: true, width: 700, height: 1900, y: 0, type: 'Hinged' },
       },
-      cab: { desk: 'side', deskSide: 'B', observer: true, goa4: false, consoleDepth: 700, deskDepth: 800, deskWidth: 1400, auxLength: 700, auxDepth: 1000, auxSide: 'B' },
+      cab: { desk: 'side', deskSide: 'B', observer: true, goa4: false, consoleDepth: 700, deskDepth: 800, deskWidth: 1400, auxLength: 700, auxDepth: 1000, auxSide: 'B', coDesk: false, coDeskWidth: 650 },
       windows: { inner: 'single', end: 'single', singleWidth: 0, doubleWidth: 1000, height: 900, sill: 820, drop: 'ends', dropDepth: 400, doorWin: true, doorWinWidth: 0, doorWinHeight: 750, doorWinSill: 950 },
       front: { wipers: 2, wiperType: 'single', lightsZ: 350, lightsInset: 420, destination: true, couplerHeight: 720, showGauge: true, gaugeWidth: 3200, gaugeHeight: 4050 },
       hvac: { unitsPerCar: 2, cabHvac: false },
@@ -209,7 +209,7 @@
     bogies.map(([x, m], i) => W(car, 'Bogie', bogies.length > 1 ? `Bogie ${i + 1}` : 'Bogie', 2600, 2200, 800, x, 0, '', m)),
     [W(car, 'Car body', 'Other items', '', '', '', 0, 0, '', Math.round(bodyKg * 0.08))]);
   const baseWindows = { inner: 'single', end: 'single', singleWidth: 0, doubleWidth: 1000, height: 1000, sill: 750, drop: 'none', dropDepth: 400, doorWin: true, doorWinWidth: 0, doorWinHeight: 1000, doorWinSill: 850 };
-  const baseCab = { desk: 'central', deskSide: 'B', observer: false, goa4: false, consoleDepth: 700, deskDepth: 800, deskWidth: 1300, auxLength: 700, auxDepth: 1000, auxSide: 'B' };
+  const baseCab = { desk: 'central', deskSide: 'B', observer: false, goa4: false, consoleDepth: 700, deskDepth: 800, deskWidth: 1300, auxLength: 700, auxDepth: 1000, auxSide: 'B', coDesk: false, coDeskWidth: 650 };
 
   const LRV_EQ = [
     ['A', 'AC1', 'Roof', 2600, 1700, 400, 600, 0, 750],

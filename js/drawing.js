@@ -351,6 +351,15 @@
         if (!dz || dz[1] <= y0 || dz[0] >= y1) return [[y0, y1]];
         const out = []; if (dz[0] > y0 + 150) out.push([y0, dz[0]]); if (dz[1] < y1 - 150) out.push([dz[1], y1]); return out;
       };
+      // co-driver desk: console in front of the co-driver seat, clear of the detrainment door and the main desk
+      const coDesk = (ks, d1, block) => {
+        const outer = hi - 120, inner = hi - 120 - CB.coDeskWidth;
+        const y0 = ks > 0 ? inner : -outer, y1 = ks > 0 ? outer : -inner;
+        freeSpans(y0, y1).forEach(([a, b]) => {
+          if (block) { if (b > block[0] && a < block[1]) { if (ks > 0) a = Math.max(a, block[1]); else b = Math.min(b, block[0]); } }
+          if (b - a > 150) v.rect(bodyF + 300, a, d1, b, 'CAB', { fill: '#e4e4e4' });
+        });
+      };
       if (lay.openCab) {
         // GoA4: covered console across the front, no driver seat; the rest of the cab is passenger area
         const c1 = bodyF + CB.consoleDepth;
@@ -362,7 +371,12 @@
         freeSpans(-CB.deskWidth / 2, CB.deskWidth / 2).forEach(([y0, y1]) => v.rect(bodyF + 300, y0, d1, y1, 'CAB', { fill: '#ececec' }));
         v.circle(d1 + 380, 0, 240, 'CAB', { fill: '#ffffff' });
         if (detail) v.text(d1 + 380, 0, 'DRIVER', 1.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a' });
-        if (CB.observer) v.circle(d1 + 380, (DC.detrain.on && detY < 0 ? 1 : -1) * (hi - 380), 190, 'CAB', { fill: '#ffffff' });
+        if (CB.observer) {
+          const ko = DC.detrain.on && detY < 0 ? 1 : -1;
+          v.circle(d1 + 380, ko * (hi - 380), 190, 'CAB', { fill: '#ffffff' });
+          if (detail) v.text(d1 + 380, ko * (hi - 380), 'CO-DRV', 1.0, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a' });
+          if (CB.coDesk) coDesk(ko, d1, [-CB.deskWidth / 2 - 80, CB.deskWidth / 2 + 80]);
+        }
       } else {
         const k = CB.deskSide === 'A' ? 1 : -1;
         const d1 = bodyF + Math.min(lay.cabLen * 0.55, 300 + CB.deskDepth);
@@ -371,7 +385,11 @@
         const sy = k * (Math.abs(yIn) + (hi - 120 - Math.abs(yIn)) / 2);
         v.circle(d1 + 360, sy, 240, 'CAB', { fill: '#ffffff' });
         if (detail) v.text(d1 + 360, sy, 'DRIVER', 1.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a' });
-        if (CB.observer) v.circle(d1 + 360, -k * (hi - 380), 190, 'CAB', { fill: '#ffffff' });
+        if (CB.observer) {
+          v.circle(d1 + 360, -k * (hi - 380), 190, 'CAB', { fill: '#ffffff' });
+          if (detail) v.text(d1 + 360, -k * (hi - 380), 'CO-DRV', 1.0, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a' });
+          if (CB.coDesk) coDesk(-k, d1, null);
+        }
       }
       if (DC.detrain.on) v.rect(bodyF - 10, detY - DC.detrain.width / 2, bodyF + 110, detY + DC.detrain.width / 2, 'DOOR', { fill: '#efd9f4' });
       if (DC.cabSide.on) {
@@ -386,7 +404,10 @@
       } else {
         v.line(bodyF + 650, hi, xp - 60, hi, 'BODY_THIN'); v.line(bodyF + 650, -hi, xp - 60, -hi, 'BODY_THIN');
       }
-      if (detail && !lay.openCab) v.text(bodyF + lay.cabLen * 0.78, (lay.cabCfg.desk === 'central' ? -1 : (lay.cabCfg.deskSide === 'A' ? -1 : 1)) * (hi - 260), 'CAB', 2.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a', bold: true });
+      if (detail && !lay.openCab) {
+        if (CB.desk === 'central') v.text(bodyF + lay.cabLen * 0.78, (DC.detrain.on && detY < 0 ? -1 : 1) * (hi - 260), 'CAB', 2.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a', bold: true });
+        else v.text(bodyF + lay.cabLen * 0.6, 0, 'CAB', 2.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a', bold: true });
+      }
     }
 
     // Mainline: vestibule partitions and class boundary
@@ -620,7 +641,7 @@
     v.text(-xr, -380 - 9.5 * s, 'SIDE A', 1.6, { anchor: 'start', color: '#555555', bold: true });
     v.text(xr, -380 - 9.5 * s, 'SIDE B', 1.6, { anchor: 'end', color: '#555555', bold: true });
     const info = [`Wipers: ${n ? `${n} × ${F.wiperType === 'pantograph' ? 'pantograph' : 'single-arm'}` : 'none'}`, `Detrainment door: ${DC.detrain.on ? `${DC.detrain.width} × ${DC.detrain.height}${Math.abs(detX) > 1 ? ', offset ' + Math.round(Math.abs(detX)) : ', centred'}` : 'none'}`,
-      `Desk: ${CB.goa4 ? 'GoA4, covered console' : CB.desk === 'central' ? 'central' : 'side ' + CB.deskSide}`, `Power: ${PWf.label}${PWf.third ? ', third rail ' + PWf.contact + ' contact' : ''}${PWf.panto ? ', pantograph' : ''}`];
+      `Desk: ${CB.goa4 ? 'GoA4, covered console' : (CB.desk === 'central' ? 'central' : 'side ' + CB.deskSide) + (CB.observer ? (CB.coDesk ? ', co-driver seat + desk' : ', co-driver seat') : '')}`, `Power: ${PWf.label}${PWf.third ? ', third rail ' + PWf.contact + ' contact' : ''}${PWf.panto ? ', pantograph' : ''}`];
     info.forEach((tx, i) => v.text(-xr, -380 - (13.5 + i * 3.2) * s, tx, 1.6, { color: '#333333' }));
   }
 
