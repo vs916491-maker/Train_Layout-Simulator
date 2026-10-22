@@ -102,10 +102,22 @@
    * Row: { car, name, loc: 'roof'|'under', length, width, height, x, y, mass, kind }
    * x = centre offset from car centre, + towards END 1; y = offset from centre line, + towards side A.
    */
-  TLT.guessKind = (name, loc) => (loc === 'roof' && /^pan/i.test(name) ? 'panto' : loc === 'roof' && /^(ac|hvac|a\/c)/i.test(name) ? 'ac' : 'box');
+  TLT.guessKind = (name, loc) => (loc === 'roof' && /^pan/i.test(name) ? 'panto' : loc === 'roof' && /^(ac|hvac|a\/c)/i.test(name) ? 'ac' : loc === 'under' && /^ccd/i.test(name) ? 'ccd' : 'box');
+  /* Symbol column: Auto, Eq. Box, Panto, CCD, HVAC (older files: box / ac / panto) */
+  TLT.SYMBOLS = [['', 'Auto'], ['box', 'Eq. Box'], ['panto', 'Panto'], ['ccd', 'CCD'], ['ac', 'HVAC']];
+  TLT.normKind = function (v) {
+    const s = String(v == null ? '' : v).trim().toLowerCase();
+    if (!s || s === 'auto') return '';
+    if (/^(hvac|ac\b|a\/c|air)/.test(s)) return 'ac';
+    if (/^pan/.test(s)) return 'panto';
+    if (/^(ccd|shoe|current coll)/.test(s)) return 'ccd';
+    if (/box|^eq/.test(s)) return 'box';
+    return '';
+  };
+  TLT.symbolLabel = k => (TLT.SYMBOLS.find(q => q[0] === (k || '')) || TLT.SYMBOLS[0])[1];
   TLT.normEquipRow = function (r) {
     const loc = /^r/i.test(String(r.loc || '')) ? 'roof' : 'under';
-    const kind = String(r.kind || '').trim().toLowerCase();
+    const kind = TLT.normKind(r.kind);
     return {
       cat: /^(m|w)/i.test(String(r.cat || '').trim()) ? 'mass' : 'equip',
       car: String(r.car == null ? '' : r.car).trim(),
@@ -113,7 +125,7 @@
       loc,
       length: num(r.length, NaN), width: num(r.width, NaN), height: num(r.height, NaN),
       x: num(r.x, NaN), y: num(r.y, 0), mass: num(r.mass, NaN),
-      kind: ['box', 'ac', 'panto'].includes(kind) ? kind : TLT.guessKind(String(r.name || ''), loc),
+      kind: kind || TLT.guessKind(String(r.name || ''), loc),
     };
   };
   TLT.equipmentFor = function (type, cfg) {
@@ -202,7 +214,10 @@
   TLT.shoeLayout = function (lay, cfg) {
     const P = TLT.powerCfg(cfg);
     const B = lay.bogieInfo;
-    if (!P.third || !B.length) return [];
+    if (!P.third) return [];
+    const rows = lay.equipment.items.filter(e => e.kind === 'ccd');
+    if (rows.length) return [...new Set(rows.map(e => Math.round(lay.mid - e.x)))].sort((a, b) => a - b);   // CCD rows of the equipment list
+    if (!B.length) return [];
     const anySet = (cfg.carTypes || []).some(t => num(t.ccd, 0) > 0);
     let n;
     if (anySet) n = Math.max(0, Math.round(num(lay.type.ccd, 0)));
@@ -715,7 +730,11 @@
       const l = R.layouts.get(n), cars = R.form.cars.filter(c => c.type.name === n).length;
       const actual = l.equipment.items.filter(e => e.loc === 'roof' && e.kind === 'panto').length;
       const target = TLT.pantoTarget(l.type);
-      const shoesPerCar = 2 * TLT.shoeLayout(l, R.cfg).length;
+      const ccdRows = l.equipment.items.filter(e => e.kind === 'ccd').length;
+      const shoesPerCar = ccdRows || 2 * TLT.shoeLayout(l, R.cfg).length;
+      const ccdT = num(l.type.ccd, NaN);
+      if (P.third && ccdRows && Number.isFinite(ccdT) && ccdT > 0 && ccdRows !== ccdT) warn.push(`${n}: ${ccdT} CCD shoes per car set in Power collection, the equipment list has ${ccdRows} CCD row(s).`);
+      if (!P.third && ccdRows) warn.push(`${n}: CCD rows in the equipment list, but power collection is pantograph only.`);
       if (P.panto && target != null && target !== actual) warn.push(`${n}: ${target} pantograph(s) per car required (Power collection), the equipment list has ${actual}.`);
       if (P.third && num(l.type.ccd, 0) % 2 === 1) warn.push(`${n}: ${l.type.ccd} CCD shoes per car is odd; ${shoesPerCar} are placed (same number on both sides).`);
       return { name: n, cars, target, actual, shoesPerCar };
@@ -740,6 +759,8 @@
     if (P.third) {
       R.form.cars.forEach(car => TLT.shoeLayout(R.layouts.get(car.type.name), R.cfg).forEach(x => shoes.push({ car, tx: tx(car, x), unit: car.unit })));
       shoes.sort((a, b) => a.tx - b.tx);
+      const nShoes = R.used.reduce((a, n) => { const l = R.layouts.get(n); const c = R.form.cars.filter(q => q.type.name === n).length; const rows = l.equipment.items.filter(e => e.kind === 'ccd').length; return a + c * (rows || 2 * TLT.shoeLayout(l, R.cfg).length); }, 0);
+      shoes.total = nShoes;
       if (!shoes.length) warn.push('Third rail: no CCD shoes — set the shoes per car in Power collection.');
     }
     const span = shoes.length ? shoes[shoes.length - 1].tx - shoes[0].tx : 0;
@@ -756,7 +777,7 @@
     }
     let pantoSpacing = 0;
     for (let i = 1; i < pantos.length; i++) pantoSpacing = Math.max(pantoSpacing, pantos[i].tx - pantos[i - 1].tx);
-    return { cfg: P, pantos, shoes, span, maxSpacing, unitSpans, pantoSpacing, perVariant, targetTrain, shoesTrain: 2 * shoes.length,
+    return { cfg: P, pantos, shoes, span, maxSpacing, unitSpans, pantoSpacing, perVariant, targetTrain, shoesTrain: shoes.total || 2 * shoes.length,
       pantoSpan: pantos.length > 1 ? pantos[pantos.length - 1].tx - pantos[0].tx : 0 };
   };
 

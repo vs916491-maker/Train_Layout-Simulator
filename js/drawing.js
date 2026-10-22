@@ -250,6 +250,7 @@
     lay.equipment.items.forEach(e => {
       const xc = lay.mid - e.x;
       const x0 = xc - e.length / 2, x1 = xc + e.length / 2;
+      if (e.kind === 'ccd') return;
       if (e.loc === 'under') {
         v.rect(x0, sole - e.height, x1, sole, 'EQUIP', { fill: true });
         labelIn(v, e.name, x0, x1, sole - e.height / 2, detail ? 1.8 : 1.3, 'EQUIP');
@@ -1093,8 +1094,8 @@
     const hasSpec = used.some(l => l.type.specSeats !== '' && l.type.specSeats != null && Number.isFinite(num(l.type.specSeats, NaN)));
     let yS = yAr;
     if (hasSpec) {
-      const aw = cases.find(q => q.kind === 'density');
-      p.text(205, y, `4. CHECK AGAINST SPECIFICATION${aw ? ` (${aw.name})` : ''}`, 2.6, { bold: true });
+      const aw = cases.find(q => String(q.name) === String((cfg.loads || {}).standCase || '') && q.kind !== 'seated');
+      p.text(205, y, `4. CHECK AGAINST SPECIFICATION${aw ? ` (standees at ${aw.name})` : ' (seats)'}`, 2.6, { bold: true });
       const colsS = [{ h: 'Car type', w: 20 }, { h: 'Seats calc.', w: 22, align: 'end' }, { h: 'Seats spec', w: 22, align: 'end' }, { h: 'Standing calc.', w: 26, align: 'end' }, { h: 'Standing spec', w: 26, align: 'end' }, { h: 'Diff. standing', w: 22, align: 'end' }];
       const rowsS = used.map(l => {
         const q = aw ? l.capacity[aw.name.toLowerCase()] : null;
@@ -1178,7 +1179,8 @@
       if (et !== 'artic' && !(shared && et !== 'cab')) vv.rect(et === 'cab' || et === 'aux' ? 160 : 0, -60, bodyF + 250, 60, 'BODY_THIN');
     });
     const PWc = TLT.powerCfg(cfg);
-    TLT.shoeLayout(lay, cfg).forEach(xs => [-1, 1].forEach(k => { const yo = Math.min(PWc.railOffset, hw + 150); v.rect(xs - 260, k * (yo - 120), xs + 260, k * (yo + 120), 'BOGIE', { fill: '#5a5a5a' }); v.line(xs, k * 1050, xs, k * (yo - 120), 'BOGIE'); }));
+    const ccdRows = lay.equipment.items.filter(e => e.kind === 'ccd');
+    if (!ccdRows.length) TLT.shoeLayout(lay, cfg).forEach(xs => [-1, 1].forEach(k => { const yo = Math.min(PWc.railOffset, hw + 150); v.rect(xs - 260, k * (yo - 120), xs + 260, k * (yo + 120), 'BOGIE', { fill: '#5a5a5a' }); v.line(xs, k * 1050, xs, k * (yo - 120), 'BOGIE'); }));
     // centre lines
     v.line(-200, 0, Lc + 200, 0, 'CENTER');
     v.line(mid, -hw - 400, mid, hw + 400, 'CENTER');
@@ -1198,6 +1200,7 @@
     lay.equipment.items.filter(e => e.loc === 'under').forEach(e => {
       const xc = mid - e.x, x0 = xc - e.length / 2, x1 = xc + e.length / 2;
       const y0 = e.y - e.width / 2, y1 = e.y + e.width / 2;
+      if (e.kind === 'ccd') { v.rect(x0, y0, x1, y1, 'BOGIE', { fill: '#5a5a5a' }); labelIn(v, e.name, x0, x1, e.y + (e.y >= 0 ? 1 : -1) * (e.width / 2 + 200), 1.6, 'BOGIE'); return; }
       v.rect(x0, y0, x1, y1, 'EQUIP', { fill: true });
       labelIn(v, e.name, x0, x1, e.y, 1.8, 'EQUIP');
     });

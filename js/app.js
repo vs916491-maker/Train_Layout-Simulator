@@ -15,7 +15,7 @@
     { key: 'height', head: 'Height (mm)', hint: 'Box height below the mounting face (roof: above roof)' },
     { key: 'x', head: 'X from car centre (mm)', hint: 'Centre of the box; + towards END 1' },
     { key: 'y', head: 'Y from centre line (mm)', hint: 'Centre of the box; + towards side A' },
-    { key: 'kind', head: 'Symbol', hint: 'Optional: box, ac or panto' },
+    { key: 'kind', head: 'Symbol', hint: 'Optional: Auto, Eq. Box, Panto, CCD or HVAC (Auto: PAN… on the roof = Panto, AC… / HVAC… on the roof = HVAC, CCD… under the floor = CCD, else Eq. Box)' },
   ];
   const WT_COLS = [
     { key: 'car', head: 'Car Type', hint: 'Car variant name, e.g. Tc, M1, M2' },
@@ -200,13 +200,14 @@
       ${F('Passenger mass', 'loads.paxMass', 'num', { unit: 'kg' })}${F('Max. axle load', 'loads.maxAxleLoad', 'num', { unit: 't' })}
       ${F('Round standing pax', 'loads.rounding', 'select', { options: [['floor', 'Down'], ['round', 'Nearest'], ['ceil', 'Up']] })}
     </div>
-    ${(() => { const aw = cfg.cases.find(q => q.kind === 'density'); return `<h4 style="margin:14px 0 6px;font-size:13px">Per car variant</h4>
-    <div class="scroll-x"><table class="data"><thead><tr><th>Variant</th><th>Description</th><th>Tare mass AW0 (t)</th><th>Standees target${aw ? ` at ${esc(aw.name)}` : ''} (check)</th></tr></thead><tbody>
+    ${(() => { const aw = cfg.cases.find(q => String(q.name) === String(cfg.loads.standCase || '') && q.kind !== 'seated'); return `<h4 style="margin:14px 0 6px;font-size:13px">Per car variant</h4>
+    <div class="fields" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr));margin-bottom:8px">${F('Check standees target at load case', 'loads.standCase', 'select', { re: true, options: [['', '— no standees check —']].concat(cfg.cases.filter(q => q.kind !== 'seated').map(q => [q.name, q.name])) })}</div>
+    <div class="scroll-x"><table class="data"><thead><tr><th>Variant</th><th>Description</th><th>Tare mass AW0 (t)</th><th>Standees target${aw ? ` at ${esc(aw.name)}` : ' (choose the load case above)'}</th></tr></thead><tbody>
     ${cfg.carTypes.map((t, i) => `<tr><td><b>${esc(t.name)}</b></td><td>${esc(t.desc || '')}</td>
       <td><input class="num" id="mt-${i}-tare" type="number" step="any" data-path="carTypes.${i}.tare" data-kind="num" value="${esc(t.tare)}"></td>
       <td><input class="num" id="mt-${i}-st" type="number" step="any" data-path="carTypes.${i}.specStanding" data-kind="num" value="${esc(t.specStanding)}"></td></tr>`).join('')}
     </tbody></table></div>
-    <p class="hint">Tare mass is used for the capacity sheet (car mass and axle load per case); the weight calculation in step 5 compares its own result with it. The standees target is checked against the first density case${aw ? ` (${esc(aw.name)})` : ''}.</p>`; })()}
+    <p class="hint">Tare mass is used for the capacity sheet (car mass and axle load per case); the weight calculation in step 5 compares its own result with it. ${aw ? `The standees target is checked against ${esc(aw.name)} on the capacity sheet.` : 'Choose the load case for the standees check; without one only the seats are checked.'}</p>`; })()}
     <div class="scroll-x" style="margin-top:10px"><table class="data"><thead><tr><th>Case</th><th>Type</th><th>pax/m² or factor</th><th>Of case</th><th>Note</th><th></th></tr></thead><tbody>
     ${cfg.cases.map((c, i) => `<tr>
       <td><input id="case-${i}-name" data-path="cases.${i}.name" data-kind="text" value="${esc(c.name)}"></td>
@@ -419,7 +420,7 @@
         const id = `eq-${i}-${c.key}`;
         if (c.key === 'car') return `<td>${carSelect(id, `equipment.${i}.car`, r.car)}</td>`;
         if (c.key === 'loc') return `<td><select id="${id}" data-path="equipment.${i}.loc" data-kind="text"><option value="under"${r.loc !== 'roof' ? ' selected' : ''}>Underframe</option><option value="roof"${r.loc === 'roof' ? ' selected' : ''}>Roof</option></select></td>`;
-        if (c.key === 'kind') return `<td><select id="${id}" data-path="equipment.${i}.kind" data-kind="text">${[['', 'auto'], ['box', 'box'], ['ac', 'ac'], ['panto', 'panto']].map(([v, l]) => `<option value="${v}"${String(r.kind || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>`;
+        if (c.key === 'kind') return `<td><select id="${id}" data-path="equipment.${i}.kind" data-kind="text">${TLT.SYMBOLS.map(([v, l]) => `<option value="${v}"${TLT.normKind(r.kind) === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>`;
         const numeric = c.key !== 'name';
         return `<td><input id="${id}" ${numeric ? 'class="num" type="number" step="any"' : ''} data-path="equipment.${i}.${c.key}" data-kind="${numeric ? 'num' : 'text'}" value="${esc(r[c.key])}"></td>`;
       }).join('') + `<td><button class="btn small" data-delrow="${i}" aria-label="Delete row ${i + 1}">×</button></td></tr>`;
@@ -480,8 +481,7 @@
       delete o.cat;
       if (spec.key === 'equipment') {
         o.loc = /^r/i.test(String(o.loc || '')) ? 'roof' : 'under';
-        o.kind = String(o.kind || '').trim().toLowerCase();
-        if (!['box', 'ac', 'panto'].includes(o.kind)) o.kind = '';
+        o.kind = TLT.normKind(o.kind);
         delete o.mass;
       } else {
         o.loc = TLT.normWeightLoc(o.loc);
@@ -533,7 +533,7 @@
   function downloadTemplate(listName) {
     const spec = LISTS[listName];
     const head = spec.cols.map(c => c.head);
-    const body = (cfg[spec.key] || []).map(r => spec.cols.map(c => (listName === 'equipment' && c.key === 'loc' ? (r.loc === 'roof' ? 'Roof' : 'Underframe') : r[c.key] == null ? '' : r[c.key])));
+    const body = (cfg[spec.key] || []).map(r => spec.cols.map(c => (listName === 'equipment' && c.key === 'loc' ? (r.loc === 'roof' ? 'Roof' : 'Underframe') : listName === 'equipment' && c.key === 'kind' ? TLT.symbolLabel(TLT.normKind(r.kind)) : r[c.key] == null ? '' : r[c.key])));
     const notes = listName === 'equipment'
       ? [['Sign convention', 'X + towards END 1 (cab end of a driving car); Y + towards side A (top of the plan view)'], ['Mounting face', `${cfg.common.mountDepth} mm below floor; Height is measured down from it`]]
       : [['Sign convention', 'X + towards END 1; Y + towards side A; Z above top of rail'], ['Locations', TLT.WEIGHT_LOCS.join(', ')],

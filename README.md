@@ -101,7 +101,7 @@ One sheet (named `Equipment`, or the first sheet) with a header row. Column orde
 | X from car centre (mm) | Equipment centre, **+ towards END 1** |
 | Y from centre line (mm) | Equipment centre, **+ towards side A** |
 | Mass (kg) | Used for tare mass, centre of gravity and axle loads |
-| Symbol | Optional `box`, `ac` or `panto` (otherwise guessed from names starting `AC` / `PAN`) |
+| Symbol | Optional `Auto`, `Eq. Box`, `Panto`, `CCD` or `HVAC` (Auto: roof rows starting PAN = Panto, AC / HVAC = HVAC; underframe rows starting CCD = CCD; else Eq. Box). CCD rows give the shoe positions of that car (otherwise the shoes per car in Power collection are placed on the bogies). |
 
 The template you download contains the current list, so you can edit it and upload it again. CSV files with the same columns are also accepted.
 
@@ -132,7 +132,7 @@ Method:
 
 * Seats are fitted per bay: available length = bay length − clearance at each door (draft screen) / end wall, divided by seat width.
 * Standing area = saloon floor (interior width × length between end walls or cab partition) minus seats, the foot zone in front of longitudinal seats, cubicles, and the wheelchair space if it is not counted as standing.
-* Load cases are either *seated only*, a *density* (pax/m²) or a *factor* of another case (e.g. TPN = 1.8 × AW2).
+* The standees target per car variant is checked at the load case you choose in Load cases & mass (or not at all). Load cases are either *seated only*, a *density* (pax/m²) or a *factor* of another case (e.g. TPN = 1.8 × AW2).
 * Mass = tare + passengers × passenger mass; axle load = mass ÷ axles per car (equal sharing).
 
 Default seat, foot-zone and wheelchair dimensions follow common EN / PRM practice. Confirm them against the standard that applies to each project.

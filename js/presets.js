@@ -102,7 +102,7 @@
         transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,
         wcLength: 1300, wcWidth: 700, wcTurning: 1500, wcAsStanding: true, minAisle: 900, cabinetDepth: 600,
       },
-      loads: { paxMass: 60, maxAxleLoad: 15.77, axlesPerCar: 4, rounding: 'floor', wheelSpacing: 1500, imbalanceLimit: 15 },
+      loads: { paxMass: 60, maxAxleLoad: 15.77, axlesPerCar: 4, standCase: 'AW2', rounding: 'floor', wheelSpacing: 1500, imbalanceLimit: 15 },
       cases: [
         { name: 'AW1', kind: 'seated', note: 'Seated passengers only' },
         { name: 'AW2', kind: 'density', density: 3.333, note: 'Normal capacity, 0.3 m²/pax' },

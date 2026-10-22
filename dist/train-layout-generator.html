@@ -337,10 +337,22 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
    * Row: { car, name, loc: 'roof'|'under', length, width, height, x, y, mass, kind }
    * x = centre offset from car centre, + towards END 1; y = offset from centre line, + towards side A.
    */
-  TLT.guessKind = (name, loc) => (loc === 'roof' && /^pan/i.test(name) ? 'panto' : loc === 'roof' && /^(ac|hvac|a\/c)/i.test(name) ? 'ac' : 'box');
+  TLT.guessKind = (name, loc) => (loc === 'roof' && /^pan/i.test(name) ? 'panto' : loc === 'roof' && /^(ac|hvac|a\/c)/i.test(name) ? 'ac' : loc === 'under' && /^ccd/i.test(name) ? 'ccd' : 'box');
+  /* Symbol column: Auto, Eq. Box, Panto, CCD, HVAC (older files: box / ac / panto) */
+  TLT.SYMBOLS = [['', 'Auto'], ['box', 'Eq. Box'], ['panto', 'Panto'], ['ccd', 'CCD'], ['ac', 'HVAC']];
+  TLT.normKind = function (v) {
+    const s = String(v == null ? '' : v).trim().toLowerCase();
+    if (!s || s === 'auto') return '';
+    if (/^(hvac|ac\b|a\/c|air)/.test(s)) return 'ac';
+    if (/^pan/.test(s)) return 'panto';
+    if (/^(ccd|shoe|current coll)/.test(s)) return 'ccd';
+    if (/box|^eq/.test(s)) return 'box';
+    return '';
+  };
+  TLT.symbolLabel = k => (TLT.SYMBOLS.find(q => q[0] === (k || '')) || TLT.SYMBOLS[0])[1];
   TLT.normEquipRow = function (r) {
     const loc = /^r/i.test(String(r.loc || '')) ? 'roof' : 'under';
-    const kind = String(r.kind || '').trim().toLowerCase();
+    const kind = TLT.normKind(r.kind);
     return {
       cat: /^(m|w)/i.test(String(r.cat || '').trim()) ? 'mass' : 'equip',
       car: String(r.car == null ? '' : r.car).trim(),
@@ -348,7 +360,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       loc,
       length: num(r.length, NaN), width: num(r.width, NaN), height: num(r.height, NaN),
       x: num(r.x, NaN), y: num(r.y, 0), mass: num(r.mass, NaN),
-      kind: ['box', 'ac', 'panto'].includes(kind) ? kind : TLT.guessKind(String(r.name || ''), loc),
+      kind: kind || TLT.guessKind(String(r.name || ''), loc),
     };
   };
   TLT.equipmentFor = function (type, cfg) {
@@ -437,7 +449,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   TLT.shoeLayout = function (lay, cfg) {
     const P = TLT.powerCfg(cfg);
     const B = lay.bogieInfo;
-    if (!P.third || !B.length) return [];
+    if (!P.third) return [];
+    const rows = lay.equipment.items.filter(e => e.kind === 'ccd');
+    if (rows.length) return [...new Set(rows.map(e => Math.round(lay.mid - e.x)))].sort((a, b) => a - b);   // CCD rows of the equipment list
+    if (!B.length) return [];
     const anySet = (cfg.carTypes || []).some(t => num(t.ccd, 0) > 0);
     let n;
     if (anySet) n = Math.max(0, Math.round(num(lay.type.ccd, 0)));
@@ -950,7 +965,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       const l = R.layouts.get(n), cars = R.form.cars.filter(c => c.type.name === n).length;
       const actual = l.equipment.items.filter(e => e.loc === 'roof' && e.kind === 'panto').length;
       const target = TLT.pantoTarget(l.type);
-      const shoesPerCar = 2 * TLT.shoeLayout(l, R.cfg).length;
+      const ccdRows = l.equipment.items.filter(e => e.kind === 'ccd').length;
+      const shoesPerCar = ccdRows || 2 * TLT.shoeLayout(l, R.cfg).length;
+      const ccdT = num(l.type.ccd, NaN);
+      if (P.third && ccdRows && Number.isFinite(ccdT) && ccdT > 0 && ccdRows !== ccdT) warn.push(`${n}: ${ccdT} CCD shoes per car set in Power collection, the equipment list has ${ccdRows} CCD row(s).`);
+      if (!P.third && ccdRows) warn.push(`${n}: CCD rows in the equipment list, but power collection is pantograph only.`);
       if (P.panto && target != null && target !== actual) warn.push(`${n}: ${target} pantograph(s) per car required (Power collection), the equipment list has ${actual}.`);
       if (P.third && num(l.type.ccd, 0) % 2 === 1) warn.push(`${n}: ${l.type.ccd} CCD shoes per car is odd; ${shoesPerCar} are placed (same number on both sides).`);
       return { name: n, cars, target, actual, shoesPerCar };
@@ -975,6 +994,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if (P.third) {
       R.form.cars.forEach(car => TLT.shoeLayout(R.layouts.get(car.type.name), R.cfg).forEach(x => shoes.push({ car, tx: tx(car, x), unit: car.unit })));
       shoes.sort((a, b) => a.tx - b.tx);
+      const nShoes = R.used.reduce((a, n) => { const l = R.layouts.get(n); const c = R.form.cars.filter(q => q.type.name === n).length; const rows = l.equipment.items.filter(e => e.kind === 'ccd').length; return a + c * (rows || 2 * TLT.shoeLayout(l, R.cfg).length); }, 0);
+      shoes.total = nShoes;
       if (!shoes.length) warn.push('Third rail: no CCD shoes — set the shoes per car in Power collection.');
     }
     const span = shoes.length ? shoes[shoes.length - 1].tx - shoes[0].tx : 0;
@@ -991,7 +1012,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
     let pantoSpacing = 0;
     for (let i = 1; i < pantos.length; i++) pantoSpacing = Math.max(pantoSpacing, pantos[i].tx - pantos[i - 1].tx);
-    return { cfg: P, pantos, shoes, span, maxSpacing, unitSpans, pantoSpacing, perVariant, targetTrain, shoesTrain: 2 * shoes.length,
+    return { cfg: P, pantos, shoes, span, maxSpacing, unitSpans, pantoSpacing, perVariant, targetTrain, shoesTrain: shoes.total || 2 * shoes.length,
       pantoSpan: pantos.length > 1 ? pantos[pantos.length - 1].tx - pantos[0].tx : 0 };
   };
 
@@ -1271,7 +1292,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,
         wcLength: 1300, wcWidth: 700, wcTurning: 1500, wcAsStanding: true, minAisle: 900, cabinetDepth: 600,
       },
-      loads: { paxMass: 60, maxAxleLoad: 15.77, axlesPerCar: 4, rounding: 'floor', wheelSpacing: 1500, imbalanceLimit: 15 },
+      loads: { paxMass: 60, maxAxleLoad: 15.77, axlesPerCar: 4, standCase: 'AW2', rounding: 'floor', wheelSpacing: 1500, imbalanceLimit: 15 },
       cases: [
         { name: 'AW1', kind: 'seated', note: 'Seated passengers only' },
         { name: 'AW2', kind: 'density', density: 3.333, note: 'Normal capacity, 0.3 m²/pax' },
@@ -1804,6 +1825,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     lay.equipment.items.forEach(e => {
       const xc = lay.mid - e.x;
       const x0 = xc - e.length / 2, x1 = xc + e.length / 2;
+      if (e.kind === 'ccd') return;
       if (e.loc === 'under') {
         v.rect(x0, sole - e.height, x1, sole, 'EQUIP', { fill: true });
         labelIn(v, e.name, x0, x1, sole - e.height / 2, detail ? 1.8 : 1.3, 'EQUIP');
@@ -2647,8 +2669,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     const hasSpec = used.some(l => l.type.specSeats !== '' && l.type.specSeats != null && Number.isFinite(num(l.type.specSeats, NaN)));
     let yS = yAr;
     if (hasSpec) {
-      const aw = cases.find(q => q.kind === 'density');
-      p.text(205, y, `4. CHECK AGAINST SPECIFICATION${aw ? ` (${aw.name})` : ''}`, 2.6, { bold: true });
+      const aw = cases.find(q => String(q.name) === String((cfg.loads || {}).standCase || '') && q.kind !== 'seated');
+      p.text(205, y, `4. CHECK AGAINST SPECIFICATION${aw ? ` (standees at ${aw.name})` : ' (seats)'}`, 2.6, { bold: true });
       const colsS = [{ h: 'Car type', w: 20 }, { h: 'Seats calc.', w: 22, align: 'end' }, { h: 'Seats spec', w: 22, align: 'end' }, { h: 'Standing calc.', w: 26, align: 'end' }, { h: 'Standing spec', w: 26, align: 'end' }, { h: 'Diff. standing', w: 22, align: 'end' }];
       const rowsS = used.map(l => {
         const q = aw ? l.capacity[aw.name.toLowerCase()] : null;
@@ -2732,7 +2754,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if (et !== 'artic' && !(shared && et !== 'cab')) vv.rect(et === 'cab' || et === 'aux' ? 160 : 0, -60, bodyF + 250, 60, 'BODY_THIN');
     });
     const PWc = TLT.powerCfg(cfg);
-    TLT.shoeLayout(lay, cfg).forEach(xs => [-1, 1].forEach(k => { const yo = Math.min(PWc.railOffset, hw + 150); v.rect(xs - 260, k * (yo - 120), xs + 260, k * (yo + 120), 'BOGIE', { fill: '#5a5a5a' }); v.line(xs, k * 1050, xs, k * (yo - 120), 'BOGIE'); }));
+    const ccdRows = lay.equipment.items.filter(e => e.kind === 'ccd');
+    if (!ccdRows.length) TLT.shoeLayout(lay, cfg).forEach(xs => [-1, 1].forEach(k => { const yo = Math.min(PWc.railOffset, hw + 150); v.rect(xs - 260, k * (yo - 120), xs + 260, k * (yo + 120), 'BOGIE', { fill: '#5a5a5a' }); v.line(xs, k * 1050, xs, k * (yo - 120), 'BOGIE'); }));
     // centre lines
     v.line(-200, 0, Lc + 200, 0, 'CENTER');
     v.line(mid, -hw - 400, mid, hw + 400, 'CENTER');
@@ -2752,6 +2775,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     lay.equipment.items.filter(e => e.loc === 'under').forEach(e => {
       const xc = mid - e.x, x0 = xc - e.length / 2, x1 = xc + e.length / 2;
       const y0 = e.y - e.width / 2, y1 = e.y + e.width / 2;
+      if (e.kind === 'ccd') { v.rect(x0, y0, x1, y1, 'BOGIE', { fill: '#5a5a5a' }); labelIn(v, e.name, x0, x1, e.y + (e.y >= 0 ? 1 : -1) * (e.width / 2 + 200), 1.6, 'BOGIE'); return; }
       v.rect(x0, y0, x1, y1, 'EQUIP', { fill: true });
       labelIn(v, e.name, x0, x1, e.y, 1.8, 'EQUIP');
     });
@@ -3420,7 +3444,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     { key: 'height', head: 'Height (mm)', hint: 'Box height below the mounting face (roof: above roof)' },
     { key: 'x', head: 'X from car centre (mm)', hint: 'Centre of the box; + towards END 1' },
     { key: 'y', head: 'Y from centre line (mm)', hint: 'Centre of the box; + towards side A' },
-    { key: 'kind', head: 'Symbol', hint: 'Optional: box, ac or panto' },
+    { key: 'kind', head: 'Symbol', hint: 'Optional: Auto, Eq. Box, Panto, CCD or HVAC (Auto: PAN… on the roof = Panto, AC… / HVAC… on the roof = HVAC, CCD… under the floor = CCD, else Eq. Box)' },
   ];
   const WT_COLS = [
     { key: 'car', head: 'Car Type', hint: 'Car variant name, e.g. Tc, M1, M2' },
@@ -3605,13 +3629,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       ${F('Passenger mass', 'loads.paxMass', 'num', { unit: 'kg' })}${F('Max. axle load', 'loads.maxAxleLoad', 'num', { unit: 't' })}
       ${F('Round standing pax', 'loads.rounding', 'select', { options: [['floor', 'Down'], ['round', 'Nearest'], ['ceil', 'Up']] })}
     </div>
-    ${(() => { const aw = cfg.cases.find(q => q.kind === 'density'); return `<h4 style="margin:14px 0 6px;font-size:13px">Per car variant</h4>
-    <div class="scroll-x"><table class="data"><thead><tr><th>Variant</th><th>Description</th><th>Tare mass AW0 (t)</th><th>Standees target${aw ? ` at ${esc(aw.name)}` : ''} (check)</th></tr></thead><tbody>
+    ${(() => { const aw = cfg.cases.find(q => String(q.name) === String(cfg.loads.standCase || '') && q.kind !== 'seated'); return `<h4 style="margin:14px 0 6px;font-size:13px">Per car variant</h4>
+    <div class="fields" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr));margin-bottom:8px">${F('Check standees target at load case', 'loads.standCase', 'select', { re: true, options: [['', '— no standees check —']].concat(cfg.cases.filter(q => q.kind !== 'seated').map(q => [q.name, q.name])) })}</div>
+    <div class="scroll-x"><table class="data"><thead><tr><th>Variant</th><th>Description</th><th>Tare mass AW0 (t)</th><th>Standees target${aw ? ` at ${esc(aw.name)}` : ' (choose the load case above)'}</th></tr></thead><tbody>
     ${cfg.carTypes.map((t, i) => `<tr><td><b>${esc(t.name)}</b></td><td>${esc(t.desc || '')}</td>
       <td><input class="num" id="mt-${i}-tare" type="number" step="any" data-path="carTypes.${i}.tare" data-kind="num" value="${esc(t.tare)}"></td>
       <td><input class="num" id="mt-${i}-st" type="number" step="any" data-path="carTypes.${i}.specStanding" data-kind="num" value="${esc(t.specStanding)}"></td></tr>`).join('')}
     </tbody></table></div>
-    <p class="hint">Tare mass is used for the capacity sheet (car mass and axle load per case); the weight calculation in step 5 compares its own result with it. The standees target is checked against the first density case${aw ? ` (${esc(aw.name)})` : ''}.</p>`; })()}
+    <p class="hint">Tare mass is used for the capacity sheet (car mass and axle load per case); the weight calculation in step 5 compares its own result with it. ${aw ? `The standees target is checked against ${esc(aw.name)} on the capacity sheet.` : 'Choose the load case for the standees check; without one only the seats are checked.'}</p>`; })()}
     <div class="scroll-x" style="margin-top:10px"><table class="data"><thead><tr><th>Case</th><th>Type</th><th>pax/m² or factor</th><th>Of case</th><th>Note</th><th></th></tr></thead><tbody>
     ${cfg.cases.map((c, i) => `<tr>
       <td><input id="case-${i}-name" data-path="cases.${i}.name" data-kind="text" value="${esc(c.name)}"></td>
@@ -3824,7 +3849,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         const id = `eq-${i}-${c.key}`;
         if (c.key === 'car') return `<td>${carSelect(id, `equipment.${i}.car`, r.car)}</td>`;
         if (c.key === 'loc') return `<td><select id="${id}" data-path="equipment.${i}.loc" data-kind="text"><option value="under"${r.loc !== 'roof' ? ' selected' : ''}>Underframe</option><option value="roof"${r.loc === 'roof' ? ' selected' : ''}>Roof</option></select></td>`;
-        if (c.key === 'kind') return `<td><select id="${id}" data-path="equipment.${i}.kind" data-kind="text">${[['', 'auto'], ['box', 'box'], ['ac', 'ac'], ['panto', 'panto']].map(([v, l]) => `<option value="${v}"${String(r.kind || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>`;
+        if (c.key === 'kind') return `<td><select id="${id}" data-path="equipment.${i}.kind" data-kind="text">${TLT.SYMBOLS.map(([v, l]) => `<option value="${v}"${TLT.normKind(r.kind) === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>`;
         const numeric = c.key !== 'name';
         return `<td><input id="${id}" ${numeric ? 'class="num" type="number" step="any"' : ''} data-path="equipment.${i}.${c.key}" data-kind="${numeric ? 'num' : 'text'}" value="${esc(r[c.key])}"></td>`;
       }).join('') + `<td><button class="btn small" data-delrow="${i}" aria-label="Delete row ${i + 1}">×</button></td></tr>`;
@@ -3885,8 +3910,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       delete o.cat;
       if (spec.key === 'equipment') {
         o.loc = /^r/i.test(String(o.loc || '')) ? 'roof' : 'under';
-        o.kind = String(o.kind || '').trim().toLowerCase();
-        if (!['box', 'ac', 'panto'].includes(o.kind)) o.kind = '';
+        o.kind = TLT.normKind(o.kind);
         delete o.mass;
       } else {
         o.loc = TLT.normWeightLoc(o.loc);
@@ -3938,7 +3962,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function downloadTemplate(listName) {
     const spec = LISTS[listName];
     const head = spec.cols.map(c => c.head);
-    const body = (cfg[spec.key] || []).map(r => spec.cols.map(c => (listName === 'equipment' && c.key === 'loc' ? (r.loc === 'roof' ? 'Roof' : 'Underframe') : r[c.key] == null ? '' : r[c.key])));
+    const body = (cfg[spec.key] || []).map(r => spec.cols.map(c => (listName === 'equipment' && c.key === 'loc' ? (r.loc === 'roof' ? 'Roof' : 'Underframe') : listName === 'equipment' && c.key === 'kind' ? TLT.symbolLabel(TLT.normKind(r.kind)) : r[c.key] == null ? '' : r[c.key])));
     const notes = listName === 'equipment'
       ? [['Sign convention', 'X + towards END 1 (cab end of a driving car); Y + towards side A (top of the plan view)'], ['Mounting face', `${cfg.common.mountDepth} mm below floor; Height is measured down from it`]]
       : [['Sign convention', 'X + towards END 1; Y + towards side A; Z above top of rail'], ['Locations', TLT.WEIGHT_LOCS.join(', ')],
