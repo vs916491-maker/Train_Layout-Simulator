@@ -691,7 +691,6 @@
           axleMax = Math.max(axleMax, m / lay(c).axles);
         }
       });
-      if (axleMax > maxAxle + 1e-9) warnings.push(`${cs.name}: maximum axle load ${axleMax.toFixed(2)} t exceeds the ${maxAxle} t limit.`);
       return { name: cs.name, kind: cs.kind, seated, standing, total, mass, axleMax, ok: axleMax <= maxAxle + 1e-9 };
     });
     const wcCount = form.cars.reduce((s, c) => s + layouts.get(c.type.name).wheelchairs.length, 0);
@@ -710,7 +709,22 @@
     const res = { cfg, form, layouts, used, totals, warnings, wcCount, maxAxle };
     res.power = TLT.powerCheck(res);
     res.weights = TLT.weights(res);
+    res.fixed = TLT.fixedTare(res);
     return res;
+  };
+
+  /* Weight calculation with the fixed (target) tare: tare at the car centre, passengers at their centroids,
+   * lever rule per bogie (shared Jacobs bogies and suspended modules as in the design weight calculation). */
+  TLT.fixedTare = function (R) {
+    const cfg = R.cfg;
+    const cases = (cfg.cases || []).filter(c => c.inFixed !== false);
+    const rows = R.used.map(n => ({ car: n, loc: 'Car body', name: 'Tare mass (fixed)', x: 0, y: 0, z: '', mass: num(R.layouts.get(n).type.tare, 0) * 1000 }));
+    const W = TLT.weights(R, { rows, cases });
+    W.warnings = W.warnings.filter(w => !/bogie mass is entered|weight list has no rows/.test(w));
+    R.used.forEach(n => { if (!(num(R.layouts.get(n).type.tare, 0) > 0)) W.warnings.push(`${n}: no fixed tare mass entered.`); });
+    W.train.forEach(t => { if (!t.ok) W.warnings.push(`${t.name}: maximum axle load ${(t.axle / 1000).toFixed(2)} t exceeds the ${W.maxAxle} t limit.`); });
+    W.cases = cases;
+    return W;
   };
 
   /* Power collection check: pantographs per unit and per train, third-rail shoe span */
@@ -810,15 +824,17 @@
     }
   };
 
-  TLT.weights = function (R) {
+  TLT.weights = function (R, opt) {
+    opt = opt || {};
     const cfg = R.cfg;
+    const CASES = opt.cases || cfg.cases || [];
     const L = cfg.loads || {};
     const paxKg = num(L.paxMass, 60);
     const maxAxle = num(L.maxAxleLoad, 16) * 1000;
     const b = num(L.wheelSpacing, 1500);
     const limit = num(L.imbalanceLimit, 15);
     const fh = num((cfg.common || {}).floorHeight, 1130);
-    const rows = (Array.isArray(cfg.weightItems) ? cfg.weightItems : []).map(r => {
+    const rows = (opt.rows || (Array.isArray(cfg.weightItems) ? cfg.weightItems : [])).map(r => {
       const loc = TLT.normWeightLoc(r.loc);
       const h = num(r.height, NaN);
       const z = num(r.z, NaN);
@@ -858,7 +874,7 @@
       const standX = stA ? lay.standRects.reduce((a, q) => a + (q.x1 - q.x0) * (q.y1 - q.y0) * (lay.mid - (q.x0 + q.x1) / 2), 0) / stA : 0;
       // body support points: two outer bogies (lever rule), one bogie (all), or the two articulation joints (suspended module)
       const iA = 0, iB = B.length - 1;
-      const cases = (cfg.cases || []).map(cs => {
+      const cases = CASES.map(cs => {
         const cap = lay.capacity[String(cs.name).toLowerCase()];
         const seated = Number.isFinite(cap.seated) ? cap.seated : 0, standing = Number.isFinite(cap.standing) ? cap.standing : 0;
         const pm = (seated + standing) * paxKg;
@@ -899,7 +915,7 @@
       if (sp.shared && last && last.shared && Math.abs(last.tx - sp.tx) < 1 && last.parts.every(q => q.car !== sp.car)) { last.parts.push(sp); return; }
       bogies.push({ tx: sp.tx, shared: sp.shared, parts: [sp] });
     });
-    const nc = (cfg.cases || []).length;
+    const nc = CASES.length;
     bogies.forEach((bg, i) => {
       bg.no = i + 1;
       bg.F = new Array(nc).fill(0); bg.lat = new Array(nc).fill(0); bg.via = [];
@@ -932,13 +948,13 @@
     });
     bogies.forEach(bg => {
       if (bg.via.length) bg.label += ` + car ${bg.via.join('/')}`;
-      bg.cases = (cfg.cases || []).map((cs, ci) => {
+      bg.cases = CASES.map((cs, ci) => {
         const F = bg.F[ci], lat = bg.lat[ci];
         const imb = F > 0 ? (200 * Math.abs(lat)) / (b * F) : 0;
         return { name: cs.name, F, axle: F / 2, imb, ok: F / 2 <= maxAxle + 1e-6, imbOk: imb <= limit + 1e-9 };
       });
     });
-    const train = (cfg.cases || []).map((cs, ci) => {
+    const train = CASES.map((cs, ci) => {
       const mass = R.form.cars.reduce((a, car) => { const w = perType.get(car.type.name); return a + (w ? w.cases[ci].mass : 0); }, 0);
       const pax = R.form.cars.reduce((a, car) => { const w = perType.get(car.type.name); return a + (w ? w.cases[ci].pax : 0); }, 0);
       const axle = bogies.reduce((m, bg) => Math.max(m, bg.cases[ci].axle), 0);

@@ -178,7 +178,8 @@ table.data select { min-width: 104px; }
     <button class="step" role="tab" id="step-2" data-pane="2"><span class="n">2</span>Equipment Inputs</button>
     <button class="step" role="tab" id="step-3" data-pane="3"><span class="n">3</span>Train Layouts &amp; Capacity</button>
     <button class="step" role="tab" id="step-4" data-pane="4"><span class="n">4</span>Underframe Layout</button>
-    <button class="step" role="tab" id="step-5" data-pane="5"><span class="n">5</span>Weight Calculations</button>
+    <button class="step" role="tab" id="step-5" data-pane="5"><span class="n">5</span>Weight Cal. (Fixed Tare)</button>
+    <button class="step" role="tab" id="step-6" data-pane="6"><span class="n">6</span>Weight Cal. (Actual Design)</button>
   </nav>
 </header>
 
@@ -186,7 +187,7 @@ table.data select { min-width: 104px; }
   <section class="pane gutter" id="pane-1" role="tabpanel" aria-labelledby="step-1"></section>
   <section class="pane gutter" id="pane-2" role="tabpanel" aria-labelledby="step-2" hidden></section>
   <section class="pane gutter" id="pane-3" role="tabpanel" aria-labelledby="step-3" hidden>
-    <div class="pane-head"><h2>Train Layouts &amp; Capacity</h2><p>Train layout, one interior layout per car variant, and the passenger capacity calculation (with the tare mass from step 1).</p></div>
+    <div class="pane-head"><h2>Train Layouts &amp; Capacity</h2><p>Train layout, one interior layout per car variant, and the passenger capacity calculation. Masses and axle loads are in steps 5 and 6.</p></div>
     <div id="stale-main"></div>
     <div id="body-main"></div>
   </section>
@@ -196,7 +197,14 @@ table.data select { min-width: 104px; }
     <div id="body-uf"></div>
   </section>
   <section class="pane gutter" id="pane-5" role="tabpanel" aria-labelledby="step-5" hidden>
-    <div class="pane-head"><h2>Weight Calculations</h2><p>Enter or upload the weight list per car (location, X/Y/Z, size, mass). The tool finds the centre of gravity, car body and bogie masses, and the load per bogie, axle and wheel for every load case, including shared (Jacobs) bogies.</p></div>
+    <div class="pane-head"><h2>Weight Calculation — Fixed Tare</h2><p>Uses the fixed (target) tare mass of each car variant and the passengers of the selected load cases to give the total mass per car and the load per bogie and axle.</p></div>
+    <div id="fixed-edit"></div>
+    <div class="section-title"><h3>Fixed tare sheet</h3></div>
+    <div id="stale-ft"></div>
+    <div id="body-ft"></div>
+  </section>
+  <section class="pane gutter" id="pane-6" role="tabpanel" aria-labelledby="step-6" hidden>
+    <div class="pane-head"><h2>Weight Calculation — Actual Design</h2><p>Enter or upload the weight list per car (location, X/Y/Z, size, mass). The tool finds the centre of gravity, car body and bogie masses, and the load per bogie, axle and wheel for every load case, including shared (Jacobs) bogies.</p></div>
     <div id="weight-edit"></div>
     <div class="section-title"><h3>Weight sheets</h3></div>
     <div id="stale-wt"></div>

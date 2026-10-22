@@ -168,7 +168,8 @@ table.data select { min-width: 104px; }
     <button class="step" role="tab" id="step-2" data-pane="2"><span class="n">2</span>Equipment Inputs</button>
     <button class="step" role="tab" id="step-3" data-pane="3"><span class="n">3</span>Train Layouts &amp; Capacity</button>
     <button class="step" role="tab" id="step-4" data-pane="4"><span class="n">4</span>Underframe Layout</button>
-    <button class="step" role="tab" id="step-5" data-pane="5"><span class="n">5</span>Weight Calculations</button>
+    <button class="step" role="tab" id="step-5" data-pane="5"><span class="n">5</span>Weight Cal. (Fixed Tare)</button>
+    <button class="step" role="tab" id="step-6" data-pane="6"><span class="n">6</span>Weight Cal. (Actual Design)</button>
   </nav>
 </header>
 
@@ -176,7 +177,7 @@ table.data select { min-width: 104px; }
   <section class="pane gutter" id="pane-1" role="tabpanel" aria-labelledby="step-1"></section>
   <section class="pane gutter" id="pane-2" role="tabpanel" aria-labelledby="step-2" hidden></section>
   <section class="pane gutter" id="pane-3" role="tabpanel" aria-labelledby="step-3" hidden>
-    <div class="pane-head"><h2>Train Layouts &amp; Capacity</h2><p>Train layout, one interior layout per car variant, and the passenger capacity calculation (with the tare mass from step 1).</p></div>
+    <div class="pane-head"><h2>Train Layouts &amp; Capacity</h2><p>Train layout, one interior layout per car variant, and the passenger capacity calculation. Masses and axle loads are in steps 5 and 6.</p></div>
     <div id="stale-main"></div>
     <div id="body-main"></div>
   </section>
@@ -186,7 +187,14 @@ table.data select { min-width: 104px; }
     <div id="body-uf"></div>
   </section>
   <section class="pane gutter" id="pane-5" role="tabpanel" aria-labelledby="step-5" hidden>
-    <div class="pane-head"><h2>Weight Calculations</h2><p>Enter or upload the weight list per car (location, X/Y/Z, size, mass). The tool finds the centre of gravity, car body and bogie masses, and the load per bogie, axle and wheel for every load case, including shared (Jacobs) bogies.</p></div>
+    <div class="pane-head"><h2>Weight Calculation — Fixed Tare</h2><p>Uses the fixed (target) tare mass of each car variant and the passengers of the selected load cases to give the total mass per car and the load per bogie and axle.</p></div>
+    <div id="fixed-edit"></div>
+    <div class="section-title"><h3>Fixed tare sheet</h3></div>
+    <div id="stale-ft"></div>
+    <div id="body-ft"></div>
+  </section>
+  <section class="pane gutter" id="pane-6" role="tabpanel" aria-labelledby="step-6" hidden>
+    <div class="pane-head"><h2>Weight Calculation — Actual Design</h2><p>Enter or upload the weight list per car (location, X/Y/Z, size, mass). The tool finds the centre of gravity, car body and bogie masses, and the load per bogie, axle and wheel for every load case, including shared (Jacobs) bogies.</p></div>
     <div id="weight-edit"></div>
     <div class="section-title"><h3>Weight sheets</h3></div>
     <div id="stale-wt"></div>
@@ -893,7 +901,6 @@ table.data select { min-width: 104px; }
           axleMax = Math.max(axleMax, m / lay(c).axles);
         }
       });
-      if (axleMax > maxAxle + 1e-9) warnings.push(`${cs.name}: maximum axle load ${axleMax.toFixed(2)} t exceeds the ${maxAxle} t limit.`);
       return { name: cs.name, kind: cs.kind, seated, standing, total, mass, axleMax, ok: axleMax <= maxAxle + 1e-9 };
     });
     const wcCount = form.cars.reduce((s, c) => s + layouts.get(c.type.name).wheelchairs.length, 0);
@@ -912,7 +919,22 @@ table.data select { min-width: 104px; }
     const res = { cfg, form, layouts, used, totals, warnings, wcCount, maxAxle };
     res.power = TLT.powerCheck(res);
     res.weights = TLT.weights(res);
+    res.fixed = TLT.fixedTare(res);
     return res;
+  };
+
+  /* Weight calculation with the fixed (target) tare: tare at the car centre, passengers at their centroids,
+   * lever rule per bogie (shared Jacobs bogies and suspended modules as in the design weight calculation). */
+  TLT.fixedTare = function (R) {
+    const cfg = R.cfg;
+    const cases = (cfg.cases || []).filter(c => c.inFixed !== false);
+    const rows = R.used.map(n => ({ car: n, loc: 'Car body', name: 'Tare mass (fixed)', x: 0, y: 0, z: '', mass: num(R.layouts.get(n).type.tare, 0) * 1000 }));
+    const W = TLT.weights(R, { rows, cases });
+    W.warnings = W.warnings.filter(w => !/bogie mass is entered|weight list has no rows/.test(w));
+    R.used.forEach(n => { if (!(num(R.layouts.get(n).type.tare, 0) > 0)) W.warnings.push(`${n}: no fixed tare mass entered.`); });
+    W.train.forEach(t => { if (!t.ok) W.warnings.push(`${t.name}: maximum axle load ${(t.axle / 1000).toFixed(2)} t exceeds the ${W.maxAxle} t limit.`); });
+    W.cases = cases;
+    return W;
   };
 
   /* Power collection check: pantographs per unit and per train, third-rail shoe span */
@@ -1012,15 +1034,17 @@ table.data select { min-width: 104px; }
     }
   };
 
-  TLT.weights = function (R) {
+  TLT.weights = function (R, opt) {
+    opt = opt || {};
     const cfg = R.cfg;
+    const CASES = opt.cases || cfg.cases || [];
     const L = cfg.loads || {};
     const paxKg = num(L.paxMass, 60);
     const maxAxle = num(L.maxAxleLoad, 16) * 1000;
     const b = num(L.wheelSpacing, 1500);
     const limit = num(L.imbalanceLimit, 15);
     const fh = num((cfg.common || {}).floorHeight, 1130);
-    const rows = (Array.isArray(cfg.weightItems) ? cfg.weightItems : []).map(r => {
+    const rows = (opt.rows || (Array.isArray(cfg.weightItems) ? cfg.weightItems : [])).map(r => {
       const loc = TLT.normWeightLoc(r.loc);
       const h = num(r.height, NaN);
       const z = num(r.z, NaN);
@@ -1060,7 +1084,7 @@ table.data select { min-width: 104px; }
       const standX = stA ? lay.standRects.reduce((a, q) => a + (q.x1 - q.x0) * (q.y1 - q.y0) * (lay.mid - (q.x0 + q.x1) / 2), 0) / stA : 0;
       // body support points: two outer bogies (lever rule), one bogie (all), or the two articulation joints (suspended module)
       const iA = 0, iB = B.length - 1;
-      const cases = (cfg.cases || []).map(cs => {
+      const cases = CASES.map(cs => {
         const cap = lay.capacity[String(cs.name).toLowerCase()];
         const seated = Number.isFinite(cap.seated) ? cap.seated : 0, standing = Number.isFinite(cap.standing) ? cap.standing : 0;
         const pm = (seated + standing) * paxKg;
@@ -1101,7 +1125,7 @@ table.data select { min-width: 104px; }
       if (sp.shared && last && last.shared && Math.abs(last.tx - sp.tx) < 1 && last.parts.every(q => q.car !== sp.car)) { last.parts.push(sp); return; }
       bogies.push({ tx: sp.tx, shared: sp.shared, parts: [sp] });
     });
-    const nc = (cfg.cases || []).length;
+    const nc = CASES.length;
     bogies.forEach((bg, i) => {
       bg.no = i + 1;
       bg.F = new Array(nc).fill(0); bg.lat = new Array(nc).fill(0); bg.via = [];
@@ -1134,13 +1158,13 @@ table.data select { min-width: 104px; }
     });
     bogies.forEach(bg => {
       if (bg.via.length) bg.label += ` + car ${bg.via.join('/')}`;
-      bg.cases = (cfg.cases || []).map((cs, ci) => {
+      bg.cases = CASES.map((cs, ci) => {
         const F = bg.F[ci], lat = bg.lat[ci];
         const imb = F > 0 ? (200 * Math.abs(lat)) / (b * F) : 0;
         return { name: cs.name, F, axle: F / 2, imb, ok: F / 2 <= maxAxle + 1e-6, imbOk: imb <= limit + 1e-9 };
       });
     });
-    const train = (cfg.cases || []).map((cs, ci) => {
+    const train = CASES.map((cs, ci) => {
       const mass = R.form.cars.reduce((a, car) => { const w = perType.get(car.type.name); return a + (w ? w.cases[ci].mass : 0); }, 0);
       const pax = R.form.cars.reduce((a, car) => { const w = perType.get(car.type.name); return a + (w ? w.cases[ci].pax : 0); }, 0);
       const axle = bogies.reduce((m, bg) => Math.max(m, bg.cases[ci].axle), 0);
@@ -2558,10 +2582,10 @@ table.data select { min-width: 104px; }
     if (lay.mainline) rows.splice(5, 0, ['Vestibules (included in standing)', `${A.vestibule.toFixed(2)} m²`]);
     const bR = rows.length;
     const yB1 = table(p, 20, yT, cols, rows, { rowH: 4.6, h: 2, boldRows: [bR - 2, bR - 1], shade: [bR - 2, bR - 1] });
-    const cols2 = [{ h: 'Load case', w: 30 }, { h: 'Basis', w: 30 }, { h: 'Seated', w: 15, align: 'end' }, { h: 'Standing', w: 17, align: 'end' }, { h: 'Total', w: 15, align: 'end' }, { h: 'Axle load', w: 18, align: 'end' }];
+    const cols2 = [{ h: 'Load case', w: 30 }, { h: 'Basis', w: 36 }, { h: 'Seated', w: 16, align: 'end' }, { h: 'Standing', w: 18, align: 'end' }, { h: 'Total', w: 16, align: 'end' }];
     const rows2 = cases.map(cs => {
       const q = lay.capacity[String(cs.name).toLowerCase()];
-      return [cs.name, caseBasis(cs), i0(q.seated), i0(q.standing), i0(q.total), Number.isFinite(q.axle) ? `${q.axle.toFixed(2)} t` : '—'];
+      return [cs.name, caseBasis(cs), i0(q.seated), i0(q.standing), i0(q.total)];
     });
     table(p, 114, yT, cols2, rows2, { rowH: 4.6, h: 2 });
     legend(p, 20, yB1 - 6, [
@@ -2616,8 +2640,7 @@ table.data select { min-width: 104px; }
       ['Clearance at door / end of seat bays', `${num(I.doorClearance, 330)} / ${num(I.endClearance, 0)} mm`],
       ['Wheelchair space', `${num(I.wcLength, 1300)} × ${num(I.wcWidth, 700)} mm, ${I.wcAsStanding ? 'counted as standing area' : 'excluded from standing area'}`],
       ['Interior width (body - 2 × wall)', `${num(cfg.common.bodyWidth, 2950) - 2 * num(cfg.common.wallThk, 60)} mm`],
-      ['Passenger mass', `${num(Ld.paxMass, 60)} kg`],
-      ['Max. axle load (limit)', `${num(Ld.maxAxleLoad, 16)} t; axles from the running gear (shared bogie = 1 axle per car), suspended module mass split to neighbours`],
+      ['Masses and axle loads', 'Step 5 (fixed tare) and step 6 (actual design)'],
       ['Rounding of standing passengers', Ld.rounding === 'round' ? 'Nearest' : Ld.rounding === 'ceil' ? 'Up' : 'Down (floor)'],
     ];
     const yA = table(p, 20, y - 3, [{ h: 'Parameter', w: 62 }, { h: 'Value', w: 108 }], ass, { rowH: 4.4, h: 1.9 });
@@ -2662,25 +2685,22 @@ table.data select { min-width: 104px; }
     y = yP - 7;
 
     // 6. Train totals
-    p.text(20, y, `${secNo + 1}. TRAIN CAPACITY, MASS AND AXLE LOAD`, 2.6, { bold: true });
+    p.text(20, y, `${secNo + 1}. TRAIN CAPACITY`, 2.6, { bold: true });
     const colsT = [{ h: 'Item', w: 40 }].concat(cases.map(cs => ({ h: cs.name, w: wCase, align: 'end' })));
     const rowsT = [
       ['Seated passengers'].concat(R.totals.map(t => i0(t.seated))),
       ['Standing passengers'].concat(R.totals.map(t => i0(t.standing))),
       ['TOTAL PASSENGERS'].concat(R.totals.map(t => i0(t.total))),
-      ['Train mass (t)'].concat(R.totals.map(t => f1(t.mass))),
-      ['Max. axle load (t)'].concat(R.totals.map(t => f2(t.axleMax))),
-      [`Check ≤ ${num(Ld.maxAxleLoad, 16)} t`].concat(R.totals.map(t => (t.ok ? 'OK' : 'EXCEEDED'))),
     ];
-    const yT = table(p, 20, y - 3, colsT, rowsT, { rowH: 4.6, h: 1.9, boldRows: [2, 5], shade: [2], colorFn: (ri, ci, val) => (val === 'EXCEEDED' ? '#b3261e' : val === 'OK' && ri === 5 ? '#0f7a63' : undefined) });
+    const yT = table(p, 20, y - 3, colsT, rowsT, { rowH: 4.6, h: 1.9, boldRows: [2], shade: [2] });
     y = yT - 7;
 
     // per-car breakdown for the first density case (train composition)
-    p.text(20, y, `${secNo + 2}. CAR-BY-CAR (all load cases, total passengers / car mass t)`, 2.6, { bold: true });
-    const colsC = [{ h: 'Car', w: 12, align: 'middle' }, { h: 'Type', w: 14, align: 'middle' }, { h: 'Tare (t)', w: 14, align: 'end' }].concat(cases.map(cs => ({ h: cs.name, w: Math.min(30, (PW - 230 - 40) / Math.max(1, cases.length)), align: 'end' })));
+    p.text(20, y, `${secNo + 2}. CAR-BY-CAR (total passengers per load case)`, 2.6, { bold: true });
+    const colsC = [{ h: 'Car', w: 12, align: 'middle' }, { h: 'Type', w: 14, align: 'middle' }].concat(cases.map(cs => ({ h: cs.name, w: Math.min(26, (PW - 230 - 26) / Math.max(1, cases.length)), align: 'end' })));
     const rowsC = R.form.cars.map(car => {
       const l = R.layouts.get(car.type.name);
-      return [car.no, car.label, f1(num(car.type.tare, NaN))].concat(cases.map(cs => { const q = l.capacity[String(cs.name).toLowerCase()]; return `${i0(q.total)} / ${f1(q.mass)}`; }));
+      return [car.no, car.label].concat(cases.map(cs => { const q = l.capacity[String(cs.name).toLowerCase()]; return i0(q.total); }));
     });
     table(p, 20, y - 3, colsC, rowsC, { rowH: 4.2, h: 1.8 });
 
@@ -2891,6 +2911,78 @@ table.data select { min-width: 104px; }
     finish(sheets, cfg, '-WT');
     return sheets;
   };
+  /* ================= Weight calculation with fixed (target) tare ================= */
+  TLT.buildFixedSheets = function (R) {
+    const cfg = R.cfg;
+    const paper = TLT.PAPER[cfg.project.paper] || TLT.PAPER.A3;
+    const sheets = [fixedSheet(R, paper)];
+    finish(sheets, cfg, '-WF');
+    return sheets;
+  };
+  function fixedSheet(R, size) {
+    const cfg = R.cfg, F = R.fixed, L = cfg.loads || {};
+    const [PW, PH] = size;
+    const p = new View(1, 0, 0);
+    const cases = F.cases;
+    p.text(20, PH - 19, 'WEIGHT CALCULATION — FIXED TARE (TARGET MASSES)', 4.2, { bold: true });
+    p.text(20, PH - 24.5, `Formation ${cfg.formation.replace(/\s+/g, ' ')}  ·  ${R.form.cars.length} cars  ·  train tare ${t2(F.tareTrain)} t  ·  ${cases.length} load case(s)`, 2.2, { color: '#444444' });
+    let y = PH - 32;
+    // 1. basis
+    p.text(20, y, '1. BASIS', 2.6, { bold: true });
+    const basis = [
+      ['Tare mass', 'Fixed (target) tare per car variant, entered in step 5'],
+      ['Passenger mass', `${num(L.paxMass, 60)} kg`],
+      ['Passengers', 'Seated and standing per load case from the capacity calculation (step 3)'],
+      ['Load distribution', 'Tare at the car centre; seated and standing passengers at their area centroids; lever rule to the bogies'],
+      ['Shared / suspended', 'Jacobs bogies carry both cars; suspended modules hang on their neighbours'],
+      ['Axle load', `Bogie load ÷ 2; limit ${num(L.maxAxleLoad, 16)} t`],
+    ];
+    const yA = table(p, 20, y - 3, [{ h: 'Item', w: 36 }, { h: 'Value', w: 140 }], basis, { rowH: 4.3, h: 1.85 });
+    // 2. train check (right)
+    const xR = 205;
+    p.text(xR, y, '2. TRAIN CHECK', 2.6, { bold: true });
+    const wc = Math.min(30, (PW - 20 - xR - 46) / Math.max(1, cases.length));
+    const colsT = [{ h: 'Item', w: 46 }].concat(cases.map(cs => ({ h: cs.name, w: wc, align: 'end' })));
+    const rowsT = [
+      ['Passengers'].concat(F.train.map(q => fmtInt(q.pax))),
+      ['Train mass (t)'].concat(F.train.map(q => t2(q.mass))),
+      ['Max. axle load (t)'].concat(F.train.map(q => t2(q.axle))),
+      [`Axle load ≤ ${F.maxAxle} t`].concat(F.train.map(q => (q.ok ? 'OK' : 'EXCEEDED'))),
+    ];
+    const yT = table(p, xR, y - 3, colsT, rowsT, { rowH: 4.6, h: 1.85, boldRows: [3], colorFn: (ri, ci, val) => okC(val) });
+    y = Math.min(yA, yT) - 7;
+    // 3. per car variant
+    p.text(20, y, '3. PER CAR VARIANT — passengers / car mass (t) and max. axle load of the car\'s own bogies (t)', 2.6, { bold: true });
+    const wv = Math.min(34, (PW - 40 - 78) / Math.max(1, cases.length));
+    const colsV = [{ h: 'Variant', w: 18 }, { h: 'Cars', w: 12, align: 'middle' }, { h: 'Tare (t)', w: 18, align: 'end' }, { h: 'Bogies', w: 30, align: 'middle' }].concat(cases.map(cs => ({ h: cs.name, w: wv, align: 'end' })));
+    const rowsV = [];
+    R.used.forEach(n => {
+      const w = F.perType.get(n), lay = w.lay;
+      const own = !lay.shared[0] && !lay.shared[1] && !lay.hinge[0] && !lay.hinge[1];
+      const bg = w.suspended ? 'suspended' : lay.bogieInfo.map(b => (b.shared ? 'shared' : b.end === 0 ? 'centre' : 'own')).join(' / ');
+      rowsV.push([n, R.form.cars.filter(c => c.type.name === n).length, t2(w.tareKg), bg].concat(w.cases.map(q => {
+        const ax = q.sup.reduce((m, sp) => Math.max(m, sp.axle), 0);
+        return `${fmtInt(q.pax)} / ${t2(q.mass)}${own ? ` / ${t2(ax)}` : ''}`;
+      })));
+    });
+    const yV = table(p, 20, y - 3, colsV, rowsV, { rowH: 4.4, h: 1.8 });
+    p.text(20, yV - 3.2, 'Cells: passengers / car mass / max. axle load. Axle load per car is shown only for cars on their own bogies; shared and articulated cars: see the bogie table.', 1.6, { color: '#555555' });
+    y = yV - 9;
+    // 4. per bogie
+    p.text(20, y, '4. AXLE LOAD PER BOGIE ALONG THE TRAIN (t)', 2.6, { bold: true });
+    const wb = Math.min(30, (PW - 40 - 84) / Math.max(1, cases.length));
+    const colsB = [{ h: 'Bogie', w: 14, align: 'middle' }, { h: 'Location', w: 48 }, { h: 'Pos. (mm)', w: 22, align: 'end' }].concat(cases.map(cs => ({ h: cs.name, w: wb, align: 'end' })));
+    const rowsB = F.bogies.map(bg => [bg.no, bg.label, fmtInt(bg.tx)].concat(bg.cases.map(q => t2(q.axle))));
+    const rowH = Math.max(3, Math.min(4.6, (y - 3 - 58) / (rowsB.length + 1)));
+    const yB = table(p, 20, y - 3, colsB, rowsB, { rowH, h: Math.min(1.85, rowH * 0.45), colorFn: (ri, ci) => (ci < 3 || ri < 0 ? undefined : F.bogies[ri].cases[ci - 3].ok ? undefined : '#b3261e') });
+    const xW = 20 + colsB.reduce((a, c) => a + c.w, 0) + 8;
+    if (F.warnings.length && xW < PW - 80) {
+      p.text(xW, y, 'CHECKS', 2.4, { bold: true, color: '#b3261e' });
+      F.warnings.slice(0, 10).forEach((wn, i) => { const yy = y - 5 - i * 4; if (yy > 55) p.text(xW, yy, trunc('· ' + wn, 1.8, PW - 15 - xW), 1.8, { color: '#b3261e' }); });
+    } else if (F.warnings.length) F.warnings.slice(0, 3).forEach((wn, i) => p.text(20, yB - 5 - i * 3.8, '· ' + wn, 1.8, { color: '#b3261e' }));
+    return { title: 'Weight calculation — fixed tare', short: 'Fixed tare', size, scale: 0, dxfScale: 100, views: [], paper: p };
+  }
+
   const t2 = kg => (Number.isFinite(kg) ? (kg / 1000).toFixed(2) : '—');
   const sgn = v => (Number.isFinite(v) ? `${v > 0 ? '+' : ''}${Math.round(v)}` : '—');
   const okC = (val) => (val === 'EXCEEDED' ? '#b3261e' : val === 'OK' ? '#0f7a63' : undefined);
@@ -3433,7 +3525,7 @@ table.data select { min-width: 104px; }
   let cfg = null;
   const gen = { main: null, uf: null, wt: null };
   LISTS.equipment.cols = EQ_COLS; LISTS.weights.cols = WT_COLS;
-  const ui = { pane: 1, sheet: { main: 0, uf: 0, wt: 0 }, zoom: { main: 1, uf: 1, wt: 1 }, wcar: null };
+  const ui = { pane: 1, sheet: { main: 0, uf: 0, wt: 0, ft: 0 }, zoom: { main: 1, uf: 1, wt: 1, ft: 1 }, wcar: null };
   let timer = null;
 
   /* ---------- helpers ---------- */
@@ -3516,7 +3608,7 @@ table.data select { min-width: 104px; }
     h += card('HVAC', `<div class="fields">
       ${F('Saloon HVAC units per car', 'hvac.unitsPerCar', 'num')}<div></div>
       ${F('Cab HVAC applicable (driving cars)', 'hvac.cabHvac', 'check', { wide: true })}
-    </div><p class="hint">Position and size of each unit come from the equipment list (step 2), its mass from the weight list (step 5): saloon units are roof rows named AC…, the cab unit a row named CAB AC or CAB HVAC. The tool checks the counts.</p>`);
+    </div><p class="hint">Position and size of each unit come from the equipment list (step 2), its mass from the design weight list (step 6): saloon units are roof rows named AC…, the cab unit a row named CAB AC or CAB HVAC. The tool checks the counts.</p>`);
     const anyCab = cfg.carTypes.some(t => TLT.hasCab(t));
     const anyAux = cfg.carTypes.some(t => { const E = TLT.carEnds(t); return E.e1 === 'aux' || E.e2 === 'aux'; });
     const CB = TLT.cabCfg(cfg);
@@ -3563,7 +3655,7 @@ table.data select { min-width: 104px; }
     </div>
     <h4 style="margin:12px 0 6px;font-size:13px">Per car variant</h4><div id="powerTable">${powerTableHtml()}</div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px"><button class="btn small" id="powerTpl">Add ${esc(PC.label)} equipment</button></div>
-    <p class="hint">Adds the typical collection equipment to the equipment list (step 2) and the weight list (step 5) with typical masses: ${PC.system === '25kV' ? 'pantograph, VCB, earthing switch and arrester on the roof, main transformer under the floor' : `${PC.panto ? 'pantograph and arrester on the roof, HSCB under the floor' : 'HSCB under the floor'}${PC.third ? '; shoe fuses and CCD shoe gear on each bogie of the shoe cars' : ''}`}. Rows that already exist are kept. The checks count pantographs per unit and the shoe span along the train.</p>`, ' style="grid-column:1/-1"');
+    <p class="hint">Adds the typical collection equipment to the equipment list (step 2) and the design weight list (step 6) with typical masses: ${PC.system === '25kV' ? 'pantograph, VCB, earthing switch and arrester on the roof, main transformer under the floor' : `${PC.panto ? 'pantograph and arrester on the roof, HSCB under the floor' : 'HSCB under the floor'}${PC.third ? '; shoe fuses and CCD shoe gear on each bogie of the shoe cars' : ''}`}. Rows that already exist are kept. The checks count pantographs per unit and the shoe span along the train.</p>`, ' style="grid-column:1/-1"');
     const MLon = PT === 'mainline', MLc = TLT.mainlineCfg(cfg);
     const abOpts = [['2+2', '2+2'], ['2+1', '2+1'], ['3+2', '3+2'], ['1+1', '1+1'], ['2+0', '2 + 0']];
     h += card('Interior & seating rules', `<div class="fields">
@@ -3589,21 +3681,19 @@ table.data select { min-width: 104px; }
     </div><p class="hint">Defaults follow common EN / PRM practice (wheelchair space 1300 × 700, Ø1500 turning circle). Confirm against the standard for each project.</p>`);
     h += '</div>';
 
-    h += `<div class="section-title"><h3>Car variants</h3><span class="hint" style="margin:0">One card per car variant. Positions run from END 1 (cab end of a driving car). Equipment positions are entered in step 2, masses in step 5.</span></div>`;
+    h += `<div class="section-title"><h3>Car variants</h3><span class="hint" style="margin:0">One card per car variant. Positions run from END 1 (cab end of a driving car). Equipment positions are entered in step 2; tare mass in step 5, the design weight list in step 6.</span></div>`;
     h += `<div class="cards" id="types">${cfg.carTypes.map((t, i) => typeCard(t, i)).join('')}${interiorGuide()}</div>`;
 
-    h += `<div class="section-title"><h3>Load cases & mass</h3></div><div class="cards"><div class="card" style="grid-column:1/-1"><div class="fields" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">
-      ${F('Passenger mass', 'loads.paxMass', 'num', { unit: 'kg' })}${F('Max. axle load', 'loads.maxAxleLoad', 'num', { unit: 't' })}
+    h += `<div class="section-title"><h3>Load cases</h3></div><div class="cards"><div class="card" style="grid-column:1/-1"><div class="fields" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">
       ${F('Round standing pax', 'loads.rounding', 'select', { options: [['floor', 'Down'], ['round', 'Nearest'], ['ceil', 'Up']] })}
     </div>
     ${(() => { const aw = cfg.cases.find(q => String(q.name) === String(cfg.loads.standCase || '') && q.kind !== 'seated'); return `<h4 style="margin:14px 0 6px;font-size:13px">Per car variant</h4>
     <div class="fields" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr));margin-bottom:8px">${F('Check standees target at load case', 'loads.standCase', 'select', { re: true, options: [['', '— no standees check —']].concat(cfg.cases.filter(q => q.kind !== 'seated').map(q => [q.name, q.name])) })}</div>
-    <div class="scroll-x"><table class="data"><thead><tr><th>Variant</th><th>Description</th><th>Tare mass AW0 (t)</th><th>Standees target${aw ? ` at ${esc(aw.name)}` : ' (choose the load case above)'}</th></tr></thead><tbody>
+    <div class="scroll-x"><table class="data"><thead><tr><th>Variant</th><th>Description</th><th>Standees target${aw ? ` at ${esc(aw.name)}` : ' (choose the load case above)'}</th></tr></thead><tbody>
     ${cfg.carTypes.map((t, i) => `<tr><td><b>${esc(t.name)}</b></td><td>${esc(t.desc || '')}</td>
-      <td><input class="num" id="mt-${i}-tare" type="number" step="any" data-path="carTypes.${i}.tare" data-kind="num" value="${esc(t.tare)}"></td>
       <td><input class="num" id="mt-${i}-st" type="number" step="any" data-path="carTypes.${i}.specStanding" data-kind="num" value="${esc(t.specStanding)}"></td></tr>`).join('')}
     </tbody></table></div>
-    <p class="hint">Tare mass is used for the capacity sheet (car mass and axle load per case); the weight calculation in step 5 compares its own result with it. ${aw ? `The standees target is checked against ${esc(aw.name)} on the capacity sheet.` : 'Choose the load case for the standees check; without one only the seats are checked.'}</p>`; })()}
+    <p class="hint">Tare mass, passenger mass and axle-load limit are entered in step 5 (Weight Cal. Fixed Tare). ${aw ? `The standees target is checked against ${esc(aw.name)} on the capacity sheet.` : 'Choose the load case for the standees check; without one only the seats are checked.'}</p>`; })()}
     <div class="scroll-x" style="margin-top:10px"><table class="data"><thead><tr><th>Case</th><th>Type</th><th>pax/m² or factor</th><th>Of case</th><th>Note</th><th></th></tr></thead><tbody>
     ${cfg.cases.map((c, i) => `<tr>
       <td><input id="case-${i}-name" data-path="cases.${i}.name" data-kind="text" value="${esc(c.name)}"></td>
@@ -3801,7 +3891,7 @@ table.data select { min-width: 104px; }
     const st = rows.map(r => rowStatus(r, R));
     const bad = st.filter(s => s[0] === 'bad').length;
     const perCar = cfg.carTypes.map(t => `${t.name}: ${rows.filter(r => String(r.car).trim() === t.name).length}`).join(' · ');
-    let h = `<div class="pane-head"><h2>Equipment Inputs</h2><p>Load the equipment list from Excel. It positions the underframe and roof equipment on the layouts. Masses are entered in step 5.</p></div>`;
+    let h = `<div class="pane-head"><h2>Equipment Inputs</h2><p>Load the equipment list from Excel. It positions the underframe and roof equipment on the layouts. Masses are entered in steps 5 and 6.</p></div>`;
     h += '<div class="cards">';
     h += card('1. Excel format', `<div class="scroll-x"><table class="data"><thead><tr><th>Column</th><th>Meaning</th></tr></thead><tbody>${EQ_COLS.map(c => `<tr><td class="cols">${esc(c.head)}</td><td>${esc(c.hint)}</td></tr>`).join('')}</tbody></table></div>
       <p class="hint">One sheet with all cars. Column order does not matter; headers are recognised by name. The template contains the current list, so you can edit it and upload it again.</p>
@@ -3823,7 +3913,7 @@ table.data select { min-width: 104px; }
     });
     if (!rows.length) h += `<tr><td colspan="${EQ_COLS.length + 2}" class="hint" style="padding:16px">No equipment yet. Download the template, fill it in and upload it.</td></tr>`;
     h += '</tbody></table></div></div>';
-    h += `<div class="genbar"><p>Generates the train layouts and capacity (step 3), the underframe layouts (step 4) and the weight calculation sheets (step 5).</p><button class="btn primary big" id="genAll">Generate Results →</button></div>`;
+    h += `<div class="genbar"><p>Generates the train layouts and capacity (step 3), the underframe layouts (step 4) and the weight calculations with fixed tare (step 5) and from the design weight list (step 6).</p><button class="btn primary big" id="genAll">Generate Results →</button></div>`;
     $('pane-2').innerHTML = h;
   }
   const dropZone = list => `<div class="drop" data-drop="${list}"><p><b>Drop the .xlsx or .csv file here</b></p><p class="hint">or</p><button class="btn primary" data-pick="${list}">Choose file…</button><input type="file" id="file-${list}" data-file="${list}" accept=".xlsx,.xls,.csv" hidden></div>`;
@@ -3953,6 +4043,49 @@ table.data select { min-width: 104px; }
   }
 
   /* ================= Pane 5: Weight calculations ================= */
+  /* ================= Pane 5: weight calculation with fixed tare ================= */
+  function renderFixedEdit() {
+    let R = null; try { R = TLT.compute(cfg); } catch (e) { /* */ }
+    const F = (...a) => field('', ...a);
+    const nCars = n => (R ? R.form.cars.filter(c => c.type.name === n).length : 0);
+    let h = '<div class="cards">';
+    h += card('Settings', `<div class="fields">
+      ${F('Passenger mass', 'loads.paxMass', 'num', { unit: 'kg', idp: 'ff-' })}${F('Max. axle load', 'loads.maxAxleLoad', 'num', { unit: 't', idp: 'ff-' })}
+    </div><p class="hint">Tare at the car centre, seated and standing passengers at their area centroids, lever rule to the bogies. Shared (Jacobs) bogies carry both cars; suspended modules hang on their neighbours. Bogies are set per car variant in step 1.</p>`);
+    h += card('Load cases to calculate', `<div class="checks">${cfg.cases.map((c, i) => `<label class="f check" style="display:flex;gap:8px;align-items:center;margin:4px 0"><input type="checkbox" id="fc-${i}" data-path="cases.${i}.inFixed" data-kind="check" data-rerender="1"${c.inFixed !== false ? ' checked' : ''}><span><b>${esc(c.name)}</b> <span class="hint" style="margin:0">${esc(TLT.caseBasis(c))}</span></span></label>`).join('')}</div>
+      <p class="hint">Load cases are defined in step 1 (Load cases).</p>`);
+    h += '</div>';
+    h += `<div class="cards" style="margin-top:14px"><div class="card" style="grid-column:1/-1"><h3>Fixed tare mass per car variant</h3><div class="scroll-x"><table class="data"><thead><tr><th>Variant</th><th>Description</th><th>Cars in train</th><th>Bogies</th><th>Axles (for this car)</th><th>Tare mass AW0 (t)</th></tr></thead><tbody>
+      ${cfg.carTypes.map((t, i) => { let l = null; try { l = TLT.layoutCar(t, cfg); } catch (e) { /* */ }
+        const bg = !l ? '' : !l.bogieInfo.length ? 'suspended' : l.bogieInfo.map(b => (b.shared ? 'shared' : b.end === 0 ? 'centre' : 'own')).join(' / ');
+        return `<tr><td><b>${esc(t.name)}</b></td><td>${esc(t.desc || '')}</td><td class="num">${nCars(t.name)}</td><td>${bg}</td><td class="num">${l ? l.axles : ''}</td>
+        <td><input class="num" id="ft-${i}-tare" type="number" step="any" data-path="carTypes.${i}.tare" data-kind="num" value="${esc(t.tare)}"></td></tr>`; }).join('')}
+      </tbody></table></div></div>
+      <div class="card" style="grid-column:1/-1"><h3>Mass and axle load per car variant</h3><div class="scroll-x" id="ft-cars"></div></div>
+      <div class="card" style="grid-column:1/-1"><h3>Train — axle load per bogie (t)</h3><div class="scroll-x" id="ft-train"></div><div id="ft-warn"></div></div></div>`;
+    $('fixed-edit').innerHTML = h;
+    refreshFixedResults();
+  }
+  function refreshFixedResults() {
+    let R = null; try { R = TLT.compute(cfg); } catch (e) { return; }
+    const F = R.fixed; if (!$('ft-cars')) return;
+    const t = kg => (kg / 1000).toFixed(2);
+    const cs = F.cases;
+    if (!cs.length) { $('ft-cars').innerHTML = '<p class="hint">Select at least one load case.</p>'; $('ft-train').innerHTML = ''; $('ft-warn').innerHTML = ''; return; }
+    $('ft-cars').innerHTML = `<table class="data"><thead><tr><th>Variant</th><th>Tare (t)</th>${cs.map(c => `<th>${esc(c.name)}<br><span class="hint" style="margin:0;font-weight:400">pax · mass t · max axle t</span></th>`).join('')}</tr></thead><tbody>
+      ${R.used.map(n => { const w = F.perType.get(n), lay = w.lay; const own = !lay.shared[0] && !lay.shared[1] && !lay.hinge[0] && !lay.hinge[1];
+        return `<tr><td><b>${esc(n)}</b></td><td class="num">${t(w.tareKg)}</td>${w.cases.map(q => { const ax = q.sup.reduce((m, sp) => Math.max(m, sp.axle), 0); const bad = own && ax > F.maxAxle * 1000 + 1e-6;
+          return `<td class="num"${bad ? ' style="color:var(--warn);font-weight:600"' : ''}>${q.pax} · ${t(q.mass)} · ${own ? t(ax) : 'see train'}</td>`; }).join('')}</tr>`; }).join('')}
+    </tbody></table>`;
+    $('ft-train').innerHTML = `<table class="data"><thead><tr><th>Bogie</th><th>Location</th>${cs.map(c => `<th>${esc(c.name)}</th>`).join('')}</tr></thead><tbody>${F.bogies.map(bg => `<tr><td>${bg.no}</td><td>${esc(bg.label)}</td>${bg.cases.map(q => `<td class="num"${q.ok ? '' : ' style="color:var(--warn);font-weight:600"'}>${t(q.axle)}</td>`).join('')}</tr>`).join('')}
+      <tr class="total"><td></td><td>Passengers</td>${F.train.map(q => `<td class="num">${fmt(q.pax)}</td>`).join('')}</tr>
+      <tr class="total"><td></td><td>Train mass</td>${F.train.map(q => `<td class="num">${t(q.mass)} t</td>`).join('')}</tr>
+      <tr class="total"><td></td><td>Max. axle load</td>${F.train.map(q => `<td class="num"><b>${t(q.axle)} t</b></td>`).join('')}</tr>
+      <tr class="total"><td></td><td>Check (axle ≤ ${F.maxAxle} t)</td>${F.train.map(q => `<td><span class="pill ${q.ok ? 'ok' : 'bad'}">${q.ok ? 'OK' : 'Exceeded'}</span></td>`).join('')}</tr></tbody></table>`;
+    $('ft-warn').innerHTML = F.warnings.length ? `<div class="warns" style="margin-top:10px"><ul>${F.warnings.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '';
+    if (gen.ft) { const st = $('stale-ft'); if (st) st.innerHTML = gen.ft.stamp !== stamp() ? `<div class="stale"><span>Inputs have changed since the fixed-tare sheet was generated.</span><button class="btn primary small" data-regen="all">Generate again</button></div>` : ''; }
+  }
+
   function weightOrder(car) {
     const list = cfg.weightItems || [];
     const idx = list.map((r, i) => i).filter(i => String(list[i].car).trim() === car);
@@ -3968,9 +4101,8 @@ table.data select { min-width: 104px; }
     const F = (...a) => field('', ...a);
     let h = '<div class="cards">';
     h += card('Settings', `<div class="fields">
-      ${F('Passenger mass', 'loads.paxMass', 'num', { unit: 'kg', idp: 'wf-' })}${F('Max. axle load', 'loads.maxAxleLoad', 'num', { unit: 't', idp: 'wf-' })}
       ${F('Wheel load spacing (rail contact)', 'loads.wheelSpacing', 'num', { unit: 'mm', idp: 'wf-' })}${F('Wheel load imbalance limit', 'loads.imbalanceLimit', 'num', { unit: '%', idp: 'wf-' })}
-    </div><p class="hint">Bogie supports (own or shared Jacobs) are set per car variant in step 1. Tare for the capacity sheet stays the value typed in step 1.</p>`);
+    </div><p class="hint">Passenger mass (${esc(cfg.loads.paxMass)} kg) and axle-load limit (${esc(cfg.loads.maxAxleLoad)} t) are set in step 5. Bogie supports are set per car variant in step 1. The target tare from step 5 is compared with the calculated tare.</p>`);
     h += card('Weight list from Excel', `<p class="hint">A separate Excel file: Car Type, Location (Car body, Roof, Interior, UF, Cab, End, Bogie), Item, L, W, H, X, Y, Z, Mass. The template contains the current list.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn" data-tpl="weights">Download weight template</button><button class="btn" id="copyEq" title="Add rows for equipment boxes from step 2 that are not in the weight list yet">Copy equipment from step 2</button></div>
       ${dropZone('weights')}<p class="hint" style="margin-top:8px">Current list: <b>${esc(cfg.weightSource || '—')}</b> · ${list.length} rows</p>`);
@@ -3989,7 +4121,7 @@ table.data select { min-width: 104px; }
     h += `<tr class="total"><td></td><td>Car body (sprung)</td><td colspan="6"></td><td class="num-out" id="wt-body"></td><td></td></tr>`;
     h += `<tr class="total"><td></td><td>Bogies (unsprung)</td><td colspan="6"></td><td class="num-out" id="wt-bog"></td><td></td></tr>`;
     h += `<tr class="total"><td></td><td>Calculated tare · CoG X / Y / Z</td><td colspan="3"></td><td class="num-out" id="wt-cx"></td><td class="num-out" id="wt-cy"></td><td class="num-out" id="wt-cz"></td><td class="num-out" id="wt-tare"></td><td></td></tr>`;
-    h += `<tr><td></td><td>Target tare (step 1) · difference</td><td colspan="6" class="num-out" id="wt-diff"></td><td class="num-out" id="wt-target"></td><td></td></tr>`;
+    h += `<tr><td></td><td>Target tare (step 5) · difference</td><td colspan="6" class="num-out" id="wt-diff"></td><td class="num-out" id="wt-target"></td><td></td></tr>`;
     h += `</tbody></table></div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px"><button class="btn primary small" id="addMass">Add line item</button><span class="hint" style="margin:0">New items go above "Other items". Blank Z uses the default height for the location.</span></div></div>`;
     h += `<div class="cards" style="margin-top:14px"><div class="card" style="grid-column:1/-1"><h3>Support, axle and wheel loads — ${esc(car)}</h3><div class="scroll-x" id="wt-cases"></div></div>
       <div class="card" style="grid-column:1/-1"><h3>Train — axle load per bogie (t) / wheel load imbalance</h3><div class="scroll-x" id="wt-train"></div><div id="wt-warn"></div></div></div>`;
@@ -4098,7 +4230,7 @@ table.data select { min-width: 104px; }
   function generate(which) {
     try {
       const R = TLT.compute(cfg);
-      const sheets = which === 'main' ? TLT.buildSheets(R) : which === 'uf' ? TLT.buildUnderframeSheets(R) : TLT.buildWeightSheets(R);
+      const sheets = which === 'main' ? TLT.buildSheets(R) : which === 'uf' ? TLT.buildUnderframeSheets(R) : which === 'ft' ? TLT.buildFixedSheets(R) : TLT.buildWeightSheets(R);
       gen[which] = { R, sheets, stamp: stamp() };
       if (ui.sheet[which] >= sheets.length) ui.sheet[which] = 0;
     } catch (e) {
@@ -4108,7 +4240,7 @@ table.data select { min-width: 104px; }
     }
     return true;
   }
-  function generateAll() { return ['main', 'uf', 'wt'].every(generate); }
+  function generateAll() { return ['main', 'uf', 'ft', 'wt'].every(generate); }
   function renderResults(which) {
     const g = gen[which];
     const stale = $('stale-' + which), body = $('body-' + which);
@@ -4125,7 +4257,7 @@ table.data select { min-width: 104px; }
       <button class="btn primary" data-pdf="${which}">Download PDF</button>
       <select class="sel" id="dxfWhich-${which}" aria-label="DXF sheets"><option value="all">DXF: all sheets</option>${g.sheets.map((s, i) => `<option value="${i}">DXF: ${i + 1} · ${esc(s.short)}</option>`).join('')}</select>
       <button class="btn primary" data-dxf="${which}">Download DXF</button></div>`;
-    if (which !== 'wt') h += `<div class="summary">${which === 'main' ? summaryMain(g.R) : summaryUf(g.R)}</div>`;
+    if (which !== 'wt') h += `<div class="summary">${which === 'main' ? summaryMain(g.R) : which === 'ft' ? summaryFixed(g.R) : summaryUf(g.R)}</div>`;
     h += `<div class="desk" id="desk-${which}"><div class="sheet" id="sheet-${which}">${TLT.renderSVG(g.sheets[cur])}</div></div>`;
     body.innerHTML = h;
     applyZoom(which);
@@ -4136,9 +4268,14 @@ table.data select { min-width: 104px; }
     const seats = R.form.cars.reduce((a, c) => a + R.layouts.get(c.type.name).seats, 0);
     let h = kp('Cars', R.form.cars.length) + kp('Variants', R.used.length) + kp('Length', fmt(R.form.length) + ' mm') + kp('Seats', seats) + kp('Wheelchair', R.wcCount);
     R.totals.forEach(t => { if (t.kind !== 'seated') h += kp(t.name, fmt(t.total)); });
-    const worst = R.totals.reduce((m, t) => (t.axleMax > (m ? m.axleMax : -1) ? t : m), null);
-    if (worst) h += kp(`Max axle (${worst.name})`, worst.axleMax.toFixed(2) + ' t', worst.ok ? 'ok' : 'bad');
     if (R.warnings.length) h += `<div class="warns"><b>${R.warnings.length} check${R.warnings.length > 1 ? 's' : ''} to review</b><ul>${R.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>`;
+    return h;
+  }
+  function summaryFixed(R) {
+    const F = R.fixed;
+    let h = kp('Train tare', (F.tareTrain / 1000).toFixed(1) + ' t');
+    F.train.forEach(t => { h += kp(`${t.name} mass / axle`, `${(t.mass / 1000).toFixed(1)} t · ${(t.axle / 1000).toFixed(2)} t`, t.ok ? 'ok' : 'bad'); });
+    if (F.warnings.length) h += `<div class="warns"><b>${F.warnings.length} check${F.warnings.length > 1 ? 's' : ''} to review</b><ul>${F.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>`;
     return h;
   }
   function summaryUf(R) {
@@ -4198,7 +4335,7 @@ table.data select { min-width: 104px; }
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
   const baseName = () => String(cfg.project.drawingNo || 'train-layout').replace(/[^\w.-]+/g, '_') + (cfg.project.revision ? '_Rev' + String(cfg.project.revision).replace(/[^\w]+/g, '') : '');
-  const suffixOf = w => (w === 'uf' ? '_underframe' : w === 'wt' ? '_weight' : '');
+  const suffixOf = w => (w === 'uf' ? '_underframe' : w === 'wt' ? '_weight_design' : w === 'ft' ? '_weight_fixed' : '');
   function downloadPdf(which) {
     const g = gen[which]; if (!g) return;
     offerFile(baseName() + suffixOf(which) + '.pdf', TLT.exportPDF(g.sheets, { title: cfg.project.project }), 'application/pdf');
@@ -4282,11 +4419,12 @@ table.data select { min-width: 104px; }
   /* ---------- navigation ---------- */
   function showPane(n) {
     ui.pane = n;
-    [1, 2, 3, 4, 5].forEach(i => { $('pane-' + i).hidden = i !== n; $('step-' + i).setAttribute('aria-selected', String(i === n)); });
+    [1, 2, 3, 4, 5, 6].forEach(i => { $('pane-' + i).hidden = i !== n; $('step-' + i).setAttribute('aria-selected', String(i === n)); });
     if (n === 2) renderPane2();
     if (n === 3) renderResults('main');
     if (n === 4) renderResults('uf');
-    if (n === 5) { renderWeightEdit(); renderResults('wt'); }
+    if (n === 5) { renderFixedEdit(); renderResults('ft'); }
+    if (n === 6) { renderWeightEdit(); renderResults('wt'); }
     persist();
     window.scrollTo({ top: 0 });
   }
@@ -4294,7 +4432,7 @@ table.data select { min-width: 104px; }
   function markChanged() {
     persist();
     clearTimeout(timer);
-    timer = setTimeout(() => { if (ui.pane === 1) { refreshPane1Info(); const pt = $('powerTable'); if (pt && !pt.contains(document.activeElement)) pt.innerHTML = powerTableHtml(); } if (ui.pane === 2) refreshRowStatus(); if (ui.pane === 5) refreshWeightResults(); }, 250);
+    timer = setTimeout(() => { if (ui.pane === 1) { refreshPane1Info(); const pt = $('powerTable'); if (pt && !pt.contains(document.activeElement)) pt.innerHTML = powerTableHtml(); } if (ui.pane === 2) refreshRowStatus(); if (ui.pane === 5) refreshFixedResults(); if (ui.pane === 6) refreshWeightResults(); }, 250);
   }
 
   /* ---------- events ---------- */
@@ -4314,20 +4452,20 @@ table.data select { min-width: 104px; }
     const endMatch = /^carTypes\.(\d+)\.end[12]$/.exec(path);
     if (endMatch) { const t = cfg.carTypes[+endMatch[1]]; t.cab = TLT.hasCab(t); }
     if (nameMatch && oldName !== v) [cfg.equipment || [], cfg.weightItems || []].forEach(L => L.forEach(r => { if (String(r.car).trim() === oldName) r.car = v; }));
-    if (e.type === 'change' && (el.dataset.rerender || nameMatch)) { if (ui.pane === 1) renderPane1(); }
+    if (e.type === 'change' && (el.dataset.rerender || nameMatch)) { if (ui.pane === 1) renderPane1(); else if (ui.pane === 5) renderFixedEdit(); }
     if (e.type === 'change' && el.dataset.rerender5) renderWeightEdit();
     if (e.type === 'change' && /^carTypes\.\d+\.(pantos|ccd)$/.test(path) && $('powerTable')) $('powerTable').innerHTML = powerTableHtml();
     markChanged();
   }
 
   function bind() {
-    document.addEventListener('input', e => { if (e.target.closest('#pane-1, #pane-2, #weight-edit')) onInput(e); });
-    document.addEventListener('change', e => { if (e.target.closest('#pane-1, #pane-2, #weight-edit')) onInput(e); });
+    document.addEventListener('input', e => { if (e.target.closest('#pane-1, #pane-2, #weight-edit, #fixed-edit')) onInput(e); });
+    document.addEventListener('change', e => { if (e.target.closest('#pane-1, #pane-2, #weight-edit, #fixed-edit')) onInput(e); });
     document.addEventListener('click', e => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.pane) return showPane(+b.dataset.pane);
       if (b.dataset.goto) return showPane(+b.dataset.goto);
-      if (b.id === 'genAll') { if (generateAll()) { showPane(3); toast(`Generated ${gen.main.sheets.length} layout, ${gen.uf.sheets.length} underframe and ${gen.wt.sheets.length} weight sheets.`); } return; }
+      if (b.id === 'genAll') { if (generateAll()) { showPane(3); toast(`Generated ${gen.main.sheets.length} layout, ${gen.uf.sheets.length} underframe, ${gen.ft.sheets.length} fixed-tare and ${gen.wt.sheets.length} design weight sheets.`); } return; }
       if (b.dataset.regen) { if (generateAll()) showPane(ui.pane); return; }
       if (b.dataset.wcar) { ui.wcar = b.dataset.wcar; renderWeightEdit(); return; }
       if (b.id === 'addMass') {
@@ -4355,7 +4493,7 @@ table.data select { min-width: 104px; }
         if (b.dataset.confirm !== '1') { b.dataset.confirm = '1'; b.textContent = 'Replace all inputs?'; setTimeout(() => { if (b.isConnected) { b.dataset.confirm = ''; renderPane1(); } }, 3000); return; }
         const id = TLT.PRODUCT_TEMPLATES[b.dataset.template] || 'example-6car';
         ui.undoCfg = clone(cfg);
-        cfg = normalise(TLT.PRESETS[id]()); ui.sheet = { main: 0, uf: 0, wt: 0 };
+        cfg = normalise(TLT.PRESETS[id]()); ui.sheet = { main: 0, uf: 0, wt: 0, ft: 0 };
         if ($('preset')) $('preset').value = id;
         renderAllInputs(); generateAll(); showPane(1); persist(); toast('Template loaded. Undo is available in Train formation.');
         return;
@@ -4402,10 +4540,10 @@ table.data select { min-width: 104px; }
       const b = $('btnReset');
       if (b.dataset.confirm !== '1') { b.dataset.confirm = '1'; b.textContent = 'Discard all edits?'; setTimeout(() => { b.dataset.confirm = ''; b.textContent = 'Load preset'; }, 3000); return; }
       b.dataset.confirm = ''; b.textContent = 'Load preset';
-      cfg = normalise(TLT.PRESETS[$('preset').value]()); ui.sheet = { main: 0, uf: 0, wt: 0 };
+      cfg = normalise(TLT.PRESETS[$('preset').value]()); ui.sheet = { main: 0, uf: 0, wt: 0, ft: 0 };
       renderAllInputs(); generateAll(); showPane(1); toast('Preset loaded.');
     });
-    window.addEventListener('resize', () => { applyZoom('main'); applyZoom('uf'); applyZoom('wt'); });
+    window.addEventListener('resize', () => { applyZoom('main'); applyZoom('uf'); applyZoom('ft'); applyZoom('wt'); });
   }
 
   /* ---------- start ---------- */
