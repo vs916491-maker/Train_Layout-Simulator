@@ -56,14 +56,13 @@ Placement: next to the door (default), END 1 side, middle or END 2 side of the b
 
 ### Product types and templates
 
-**Train formation → Product type**: Metro, LRV, Tram or Mainline EMU / DMU. The product type switches the relevant inputs (mainline interior only for Mainline). **Load template** replaces all inputs with an example of that type (Undo restores the previous inputs):
+**Train formation → Product type**: Metro, LRV or Mainline EMU / DMU. The product type switches the relevant inputs (mainline interior only for Mainline). **Load template** replaces all inputs (all steps) with an example of that type (Undo restores the previous inputs):
 
 | Template | Formation | Shows |
 |---|---|---|
-| Metro — example 6-car | `DM-T-M \| M*-T*-DM` | own bogies, gangways, pantograph |
-| LRV — 3-section | `A-B-A'` | double-ended, Jacobs bogies at the articulations |
-| Tram — 5-module, 100 % low floor | `C-S-M-S-C'` | bogie modules (centre bogie) and suspended modules |
-| Mainline EMU — 4-car, 25 kV | `DT-M-TP-DT'` | 1st / standard class, toilets, vestibules, main transformer |
+| Metro — 6-car, 25 kV | `DM-T-M \| M'-T'-DM'` (3-car basic unit) | 2 bogies per car, gangways, 2 HVAC per car, 25 kV pantograph + main transformer on the T cars |
+| LRV — 2-car | `A-B'` | double-ended, motor bogies at the cab ends, trailer Jacobs bogie under the joint, 750 V DC pantograph on car A |
+| Mainline EMU — 4-car, 25 kV | `DM-T-M-T` | 1st / standard class, toilets, vestibules, pantograph + main transformer on the T cars |
 
 Template values are indicative; replace them with project data.
 

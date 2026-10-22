@@ -47,22 +47,6 @@
     ['M2', 'APU', 'Underframe', 2600, 1300, 600, -2800, 650, 800],
     ['M2', 'BCU', 'Underframe', 800, 600, 450, 4600, 900, 60],
   ];
-  const EX_EQ = [
-    ['DM', 'AC1', 'Roof', 3300, 2000, 450, 5200, 0, 700],
-    ['DM', 'AC2', 'Roof', 3300, 2000, 450, -5200, 0, 700],
-    ['DM', 'VVVF', 'Underframe', 3400, 1400, 600, 1500, -700, 900],
-    ['DM', 'BCU', 'Underframe', 800, 600, 450, 5000, 900, 60],
-    ['DM', 'BAT', 'Underframe', 1800, 900, 500, -2500, 800, 600],
-    ['T', 'PAN', 'Roof', 1600, 1800, 450, -7500, 0, 200],
-    ['T', 'AC1', 'Roof', 3300, 2000, 450, 5200, 0, 700],
-    ['T', 'AC2', 'Roof', 3300, 2000, 450, -4300, 0, 700],
-    ['T', 'APU', 'Underframe', 2800, 1300, 600, 1000, 650, 800],
-    ['T', 'CMP', 'Underframe', 2200, 1100, 550, -3000, -750, 450],
-    ['M', 'AC1', 'Roof', 3300, 2000, 450, 5200, 0, 700],
-    ['M', 'AC2', 'Roof', 3300, 2000, 450, -5200, 0, 700],
-    ['M', 'VVVF', 'Underframe', 3400, 1400, 600, 1500, -700, 900],
-    ['M', 'BCU', 'Underframe', 800, 600, 450, 5000, 900, 60],
-  ];
 
   TLT.PRESETS = {
     'dhaka-l5n': () => ({
@@ -132,68 +116,6 @@
         },
       ],
     }),
-
-    'example-6car': () => ({
-      meta: { preset: 'example-6car', title: 'Example 6-car unit (approx. from reference drawing)' },
-      productType: 'metro',
-      power: { system: '1500DC', collector: 'panto', contact: 'bottom', shoeCars: 'all', railOffset: 1450, maxGap: 0, maxPantos: 0, hvClearance: 270 },
-      project: {
-        company: 'CAF', project: 'Example metro — 6-car unit', client: '—', drawingNo: 'EX-ARR-001', revision: 'A',
-        drawnBy: '', checkedBy: '', date: today(), paper: 'A3', status: 'EXAMPLE',
-      },
-      formation: 'DM-T-M | M*-T*-DM',
-      equipment: EX_EQ.map(rowObj),
-      weightItems: [].concat(
-        weightRows('DM', 22610, 15000, EX_EQ, 7400, [W('DM', 'Cab', 'Cab equipment & desk', 1500, 2700, 1000, 10000, 0, 1700, 900)]),
-        weightRows('T', 22710, 15000, EX_EQ, 5700),
-        weightRows('M', 22710, 15000, EX_EQ, 7400)),
-      weightSource: 'Example values (preset)',
-      equipmentSource: 'Example values (preset)',
-      common: {
-        bodyWidth: 3100, wallThk: 70, floorHeight: 1100, roofHeight: 3700, maxHeight: 4050,
-        endWallThk: 150, gangwayWidth: 1400,
-        wheelDia: 840, wheelbase: 2300, mountDepth: 250,
-      },
-      doors: {
-        type: 'Bi-parting sliding (pocket)', width: 1400, height: 1900,
-        detrain: { on: true, width: 800, height: 1800 },
-        cabSide: { on: true, width: 600, height: 1900, pos: 1250 },
-        cabSaloon: { on: true, width: 700, height: 1900, y: 0, type: 'Hinged' },
-      },
-      cab: { desk: 'side', deskSide: 'B', observer: true, goa4: false, consoleDepth: 700, deskDepth: 800, deskWidth: 1400, auxLength: 700, auxDepth: 1000, auxSide: 'B', coDesk: false, coDeskWidth: 650 },
-      windows: { inner: 'single', end: 'single', singleWidth: 0, doubleWidth: 1000, height: 900, sill: 820, drop: 'ends', dropDepth: 400, doorWin: true, doorWinWidth: 0, doorWinHeight: 750, doorWinSill: 950 },
-      front: { wipers: 2, wiperType: 'single', lightsZ: 350, lightsInset: 420, destination: true, couplerHeight: 720, showGauge: true, gaugeWidth: 3200, gaugeHeight: 4050 },
-      hvac: { unitsPerCar: 2, cabHvac: false },
-      interior: {
-        seatType: 'longitudinal', seatWidth: 450, seatDepth: 550, footZone: 300, doorClearance: 340, endClearance: 0, minDoorClearance: 100,
-        transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,
-        wcLength: 1300, wcWidth: 700, wcTurning: 1500, wcAsStanding: true, minAisle: 900, cabinetDepth: 600,
-      },
-      loads: { paxMass: 70, maxAxleLoad: 16, axlesPerCar: 4, rounding: 'floor', wheelSpacing: 1500, imbalanceLimit: 15 },
-      cases: [
-        { name: 'Seated', kind: 'seated', note: '' },
-        { name: '4 pax/m²', kind: 'density', density: 4, note: '' },
-        { name: '6 pax/m²', kind: 'density', density: 6, note: '' },
-        { name: '8 pax/m²', kind: 'density', density: 8, note: '' },
-      ],
-      carTypes: [
-        {
-          name: 'DM', desc: 'Driving motor car', cab: true, couplerLength: 22610, bodyLength: 22010, cabLength: 2050,
-          support1: 'own', support2: 'own', bogieCentres: 15000, motorBogies: 2, doorsPerSide: 4, doorPitch: 5230, doorRearOffset: 3260, tare: 40,
-          specSeats: '', specStanding: '', interiorItems: [{ kind: 'wheelchair', bay: 1, side: 'B', place: 'door' }],
-        },
-        {
-          name: 'T', desc: 'Trailer car with pantograph', cab: false, pantos: 1, couplerLength: 22710, bodyLength: 22010,
-          support1: 'own', support2: 'own', bogieCentres: 15000, motorBogies: 0, doorsPerSide: 4, doorPitch: 5230, doorRearOffset: 3510, tare: 33,
-          specSeats: '', specStanding: '', interiorItems: [],
-        },
-        {
-          name: 'M', desc: 'Motor car', cab: false, couplerLength: 22710, bodyLength: 22010,
-          support1: 'own', support2: 'own', bogieCentres: 15000, motorBogies: 2, doorsPerSide: 4, doorPitch: 5230, doorRearOffset: 3510, tare: 39,
-          specSeats: '', specStanding: '', interiorItems: [],
-        },
-      ],
-    }),
   };
 
   /* ---- Templates for other product types (indicative values — replace with project data) ---- */
@@ -211,55 +133,86 @@
   const baseWindows = { inner: 'single', end: 'single', singleWidth: 0, doubleWidth: 1000, height: 1000, sill: 750, drop: 'none', dropDepth: 400, doorWin: true, doorWinWidth: 0, doorWinHeight: 1000, doorWinSill: 850 };
   const baseCab = { desk: 'central', deskSide: 'B', observer: false, goa4: false, consoleDepth: 700, deskDepth: 800, deskWidth: 1300, auxLength: 700, auxDepth: 1000, auxSide: 'B', coDesk: false, coDeskWidth: 650 };
 
+  // Metro 6-car, 25 kV AC: pantograph, VCB and main transformer on the T cars, traction converters on DM / M
+  const METRO_EQ = [
+    ['DM', 'AC1', 'Roof', 3300, 2000, 450, 5400, 0, 700], ['DM', 'AC2', 'Roof', 3300, 2000, 450, -5600, 0, 700],
+    ['DM', 'VVVF', 'Underframe', 3600, 1400, 600, 1500, -700, 1100], ['DM', 'BCU', 'Underframe', 900, 600, 450, 5000, 900, 70],
+    ['DM', 'BAT', 'Underframe', 2000, 900, 500, -2600, 800, 650], ['DM', 'CMP', 'Underframe', 2200, 1100, 550, -4600, -750, 450],
+    ['T', 'PAN', 'Roof', 1700, 1800, 500, 7700, 0, 260], ['T', 'VCB', 'Roof', 1000, 800, 400, 5800, 0, 180], ['T', 'ES', 'Roof', 600, 500, 300, 5800, 800, 40],
+    ['T', 'ARR', 'Roof', 400, 400, 450, 6700, -750, 25], ['T', 'AC1', 'Roof', 3300, 2000, 450, 1500, 0, 700], ['T', 'AC2', 'Roof', 3300, 2000, 450, -5600, 0, 700],
+    ['T', 'MAIN TRANSFORMER', 'Underframe', 4200, 2200, 750, 0, 0, 6800], ['T', 'APU', 'Underframe', 2600, 1300, 600, -5000, 650, 800],
+    ['M', 'AC1', 'Roof', 3300, 2000, 450, 5600, 0, 700], ['M', 'AC2', 'Roof', 3300, 2000, 450, -5600, 0, 700],
+    ['M', 'VVVF', 'Underframe', 3600, 1400, 600, 1500, -700, 1100], ['M', 'BCU', 'Underframe', 900, 600, 450, 5000, 900, 70],
+  ];
+  // LRV 2-car: motor bogies at the cab ends, trailer Jacobs bogie under the joint; pantograph on car A
   const LRV_EQ = [
-    ['A', 'AC1', 'Roof', 2600, 1700, 400, 600, 0, 750],
-    ['A', 'VVVF', 'Underframe', 2400, 1200, 500, -1800, -500, 650],
-    ['A', 'BAT', 'Underframe', 1400, 800, 450, 1500, 650, 400],
-    ['B', 'PAN', 'Roof', 1500, 1600, 400, 0, 0, 180],
-    ['B', 'HSCB', 'Roof', 900, 700, 350, -1900, 0, 120],
-    ['B', 'AC1', 'Roof', 1500, 1500, 380, 1900, 0, 450],
-    ['B', 'APU', 'Underframe', 2200, 1100, 450, 0, 0, 600],
+    ['A', 'PAN', 'Roof', 1500, 1600, 400, -2800, 0, 180], ['A', 'HSCB', 'Roof', 900, 700, 350, -4600, 0, 120],
+    ['A', 'AC1', 'Roof', 2600, 1700, 400, 2200, 0, 750], ['A', 'VVVF', 'Underframe', 2400, 1200, 500, -1200, -500, 650], ['A', 'BCU', 'Underframe', 800, 600, 400, -3800, 700, 60],
+    ['B', 'AC1', 'Roof', 2600, 1700, 400, 2200, 0, 750], ['B', 'APU', 'Roof', 2200, 1300, 450, -3000, 0, 600],
+    ['B', 'VVVF', 'Underframe', 2400, 1200, 500, -1200, -500, 650], ['B', 'BAT', 'Underframe', 1400, 800, 450, -3800, 650, 400],
   ];
-  const TRAM_EQ = [
-    ['C', 'AC1', 'Roof', 2400, 1600, 380, 1600, 0, 650],
-    ['C', 'VVVF', 'Roof', 2200, 1300, 450, -1700, 0, 700],
-    ['S', 'AC1', 'Roof', 2400, 1600, 380, 0, 0, 650],
-    ['M', 'PAN', 'Roof', 1400, 1500, 350, 900, 0, 160],
-    ['M', 'AC1', 'Roof', 1700, 1500, 380, -1200, 0, 500],
-    ['M', 'HSCB', 'Roof', 700, 600, 300, 900, 900, 90],
-    ['M', 'BAT', 'Roof', 900, 700, 350, -1200, -900, 300],
-  ];
+  // Mainline 4-car EMU DM-T-M-T, 25 kV AC: pantograph, VCB and main transformer on the T cars
   const ML_EQ = [
-    ['DT', 'CAB AC', 'Roof', 1300, 1100, 380, 10300, 0, 300],
-    ['DT', 'AC1', 'Roof', 3200, 2000, 450, 5000, 0, 750],
-    ['DT', 'AC2', 'Roof', 3200, 2000, 450, -5500, 0, 750],
-    ['DT', 'BAT', 'Underframe', 2200, 1000, 550, 2500, 700, 700],
-    ['DT', 'CMP', 'Underframe', 2200, 1100, 550, -2800, -700, 500],
-    ['M', 'AC1', 'Roof', 3200, 2000, 450, 5500, 0, 750],
-    ['M', 'AC2', 'Roof', 3200, 2000, 450, -5500, 0, 750],
-    ['M', 'TRACTION CONV', 'Underframe', 3800, 1600, 650, 2200, -500, 1400],
-    ['M', 'BCU', 'Underframe', 900, 600, 450, -3600, 900, 80],
-    ['TP', 'PAN', 'Roof', 1700, 1800, 500, 7800, 0, 250],
-    ['TP', 'VCB', 'Roof', 1000, 800, 400, 5500, 0, 180],
-    ['TP', 'ES', 'Roof', 600, 500, 300, 5500, 800, 40],
-    ['TP', 'ARR', 'Roof', 400, 400, 450, 6400, -700, 25],
-    ['TP', 'AC1', 'Roof', 3200, 2000, 450, 1000, 0, 750],
-    ['TP', 'AC2', 'Roof', 3200, 2000, 450, -5500, 0, 750],
-    ['TP', 'MAIN TRANSFORMER', 'Underframe', 4200, 2200, 750, 0, 0, 7200],
-    ['TP', 'AUX CONV', 'Underframe', 2400, 1300, 550, -4600, 600, 900],
+    ['DM', 'CAB AC', 'Roof', 1300, 1100, 380, 10300, 0, 300], ['DM', 'AC1', 'Roof', 3200, 2000, 450, 5000, 0, 750], ['DM', 'AC2', 'Roof', 3200, 2000, 450, -5500, 0, 750],
+    ['DM', 'TRACTION CONV', 'Underframe', 3800, 1600, 650, 1500, -500, 1400], ['DM', 'BAT', 'Underframe', 2200, 1000, 550, -3200, 700, 700], ['DM', 'BCU', 'Underframe', 900, 600, 450, 4600, 900, 80],
+    ['T', 'PAN', 'Roof', 1700, 1800, 500, 7800, 0, 260], ['T', 'VCB', 'Roof', 1000, 800, 400, 5700, 0, 180], ['T', 'ES', 'Roof', 600, 500, 300, 5700, 800, 40],
+    ['T', 'ARR', 'Roof', 400, 400, 450, 6600, -700, 25], ['T', 'AC1', 'Roof', 3200, 2000, 450, 1200, 0, 750], ['T', 'AC2', 'Roof', 3200, 2000, 450, -5500, 0, 750],
+    ['T', 'MAIN TRANSFORMER', 'Underframe', 4200, 2200, 750, 0, 0, 7200], ['T', 'AUX CONV', 'Underframe', 2400, 1300, 550, -5000, 600, 900],
+    ['M', 'AC1', 'Roof', 3200, 2000, 450, 5500, 0, 750], ['M', 'AC2', 'Roof', 3200, 2000, 450, -5500, 0, 750],
+    ['M', 'TRACTION CONV', 'Underframe', 3800, 1600, 650, 2200, -500, 1400], ['M', 'CMP', 'Underframe', 2200, 1100, 550, -3600, -700, 500], ['M', 'BCU', 'Underframe', 900, 600, 450, -5600, 900, 80],
   ];
 
   Object.assign(TLT.PRESETS, {
-    'lrv-3section': () => ({
-      meta: { preset: 'lrv-3section', title: 'LRV — 3-section, Jacobs bogies (template)' },
+    'metro-6car': () => ({
+      meta: { preset: 'metro-6car', title: 'Metro — 6-car, 25 kV AC (template)' },
+      productType: 'metro',
+      project: { company: 'CAF', project: 'Metro — 6-car train, 25 kV AC (template)', client: '—', drawingNo: 'MET-ARR-001', revision: 'A', drawnBy: '', checkedBy: '', date: today(), paper: 'A3', status: 'TEMPLATE — INDICATIVE', trainRows: '1' },
+      formation: "DM-T-M | M'-T'-DM'",
+      power: { system: '25kV', collector: 'panto', contact: 'bottom', shoeCars: 'all', railOffset: 1450, maxGap: 0, maxPantos: 0, hvClearance: 270 },
+      equipment: METRO_EQ.map(rowObj),
+      weightItems: [].concat(
+        weightRows('DM', 22600, 15000, METRO_EQ, 7400, [W('DM', 'Cab', 'Cab equipment & desk', 1500, 2700, 1000, 10000, 0, 1700, 900)]),
+        weightRows('T', 22000, 15000, METRO_EQ, 5800),
+        weightRows('M', 22000, 15000, METRO_EQ, 7400)),
+      weightSource: 'Template values', equipmentSource: 'Template values',
+      common: { bodyWidth: 2900, wallThk: 60, floorHeight: 1100, roofHeight: 3800, maxHeight: 4250, endWallThk: 150, gangwayWidth: 1300, wheelDia: 860, wheelbase: 2300, mountDepth: 250 },
+      doors: { type: 'Bi-parting sliding (pocket)', width: 1400, height: 1900, detrain: { on: true, width: 800, height: 1800 }, cabSide: { on: true, width: 600, height: 1900, pos: 1200 }, cabSaloon: { on: true, width: 700, height: 1900, y: 0, type: 'Hinged' } },
+      cab: { desk: 'side', deskSide: 'B', observer: true, goa4: false, consoleDepth: 700, deskDepth: 800, deskWidth: 1400, auxLength: 700, auxDepth: 1000, auxSide: 'B', coDesk: false, coDeskWidth: 650 },
+      windows: { inner: 'single', end: 'single', singleWidth: 0, doubleWidth: 1000, height: 900, sill: 820, drop: 'ends', dropDepth: 400, doorWin: true, doorWinWidth: 0, doorWinHeight: 750, doorWinSill: 950 },
+      front: { wipers: 2, wiperType: 'single', lightsZ: 350, lightsInset: 420, destination: true, couplerHeight: 720, showGauge: true, gaugeWidth: 3100, gaugeHeight: 4250 },
+      hvac: { unitsPerCar: 2, cabHvac: false },
+      interior: { seatType: 'longitudinal', seatWidth: 450, seatDepth: 550, footZone: 300, doorClearance: 330, endClearance: 0, minDoorClearance: 100, transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,
+        wcLength: 1300, wcWidth: 750, wcTurning: 1500, wcAsStanding: true, minAisle: 900, cabinetDepth: 600 },
+      loads: { paxMass: 65, maxAxleLoad: 17, axlesPerCar: 4, standCase: '', rounding: 'floor', wheelSpacing: 1500, imbalanceLimit: 15 },
+      cases: [
+        { name: 'AW1', kind: 'seated', note: 'Seated passengers only' },
+        { name: 'AW2', kind: 'density', density: 4, note: 'Normal load, 4 pax/m²' },
+        { name: 'AW3', kind: 'density', density: 6, note: 'Crush load, 6 pax/m²' },
+        { name: '8 pax/m²', kind: 'density', density: 8, note: 'Dense crush' },
+      ],
+      carTypes: [
+        { name: 'DM', desc: 'Driving motor car', end1: 'cab', end2: 'gangway', cab: true, couplerLength: 22600, bodyLength: 22000, cabLength: 2000,
+          support1: 'own', support2: 'own', centreBogie: false, bogieCentres: 15000, motorBogies: 2, doorsPerSide: 4, doorPitch: 4900, doorRearOffset: 2900, tare: 0,
+          pantos: 0, specSeats: '', specStanding: '', interiorItems: [{ kind: 'wheelchair', bay: 1, side: 'A', place: 'door' }] },
+        { name: 'T', desc: 'Trailer car with pantograph and main transformer', end1: 'gangway', end2: 'gangway', cab: false, couplerLength: 22000, bodyLength: 21400,
+          support1: 'own', support2: 'own', centreBogie: false, bogieCentres: 15000, motorBogies: 0, doorsPerSide: 4, doorPitch: 5400, doorRearOffset: 2900, tare: 0,
+          pantos: 1, specSeats: '', specStanding: '', interiorItems: [] },
+        { name: 'M', desc: 'Motor car', end1: 'gangway', end2: 'gangway', cab: false, couplerLength: 22000, bodyLength: 21400,
+          support1: 'own', support2: 'own', centreBogie: false, bogieCentres: 15000, motorBogies: 2, doorsPerSide: 4, doorPitch: 5400, doorRearOffset: 2900, tare: 0,
+          pantos: 0, specSeats: '', specStanding: '', interiorItems: [] },
+      ],
+    }),
+
+    'lrv-2car': () => ({
+      meta: { preset: 'lrv-2car', title: 'LRV — 2-car, Jacobs bogie (template)' },
       productType: 'lrv',
-      project: { company: 'CAF', project: 'Light rail vehicle — 3-section, double-ended (template)', client: '—', drawingNo: 'LRV-ARR-001', revision: 'A', drawnBy: '', checkedBy: '', date: today(), paper: 'A3', status: 'TEMPLATE — INDICATIVE', trainRows: '1' },
-      formation: "A-B-A'",
+      project: { company: 'CAF', project: 'Light rail vehicle — 2-car, double-ended (template)', client: '—', drawingNo: 'LRV-ARR-001', revision: 'A', drawnBy: '', checkedBy: '', date: today(), paper: 'A3', status: 'TEMPLATE — INDICATIVE', trainRows: '1' },
+      formation: "A-B'",
       power: { system: '750DC', collector: 'panto', contact: 'bottom', shoeCars: 'all', railOffset: 1450, maxGap: 0, maxPantos: 0, hvClearance: 270 },
       equipment: LRV_EQ.map(rowObj),
       weightItems: [].concat(
-        simpleWeights('A', 11000, [[3150, 4200], [-6150, 3600]], LRV_EQ, [W('A', 'Cab', 'Cab equipment & desk', 1200, 2400, 1000, 4800, 0, 1500, 600)]),
-        simpleWeights('B', 6000, [], LRV_EQ)),
+        simpleWeights('A', 11500, [[4500, 4600], [-7500, 3900]], LRV_EQ, [W('A', 'Cab', 'Cab equipment & desk', 1200, 2400, 1000, 6200, 0, 1500, 600)]),
+        simpleWeights('B', 11500, [[4500, 4600]], LRV_EQ, [W('B', 'Cab', 'Cab equipment & desk', 1200, 2400, 1000, 6200, 0, 1500, 600)])),
       weightSource: 'Template values', equipmentSource: 'Template values',
       common: { bodyWidth: 2650, wallThk: 60, floorHeight: 900, roofHeight: 3400, maxHeight: 3800, endWallThk: 100, gangwayWidth: 1300, wheelDia: 660, wheelbase: 1900, mountDepth: 200 },
       doors: { type: 'Bi-parting sliding plug', width: 1300, height: 1900, detrain: { on: true, width: 700, height: 1700 }, cabSide: { on: false, width: 600, height: 1800, pos: 1000 }, cabSaloon: { on: true, width: 650, height: 1900, y: -600, type: 'Hinged' } },
@@ -269,58 +222,19 @@
       hvac: { unitsPerCar: 1, cabHvac: false },
       interior: { seatType: 'transverse', seatWidth: 450, seatDepth: 500, footZone: 300, doorClearance: 200, endClearance: 0, minDoorClearance: 100, transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,
         wcLength: 1300, wcWidth: 750, wcTurning: 1500, wcAsStanding: true, minAisle: 600, cabinetDepth: 600 },
-      loads: { paxMass: 70, maxAxleLoad: 11, axlesPerCar: 4, rounding: 'floor', wheelSpacing: 1500, imbalanceLimit: 15 },
+      loads: { paxMass: 70, maxAxleLoad: 11, axlesPerCar: 4, standCase: '', rounding: 'floor', wheelSpacing: 1500, imbalanceLimit: 15 },
       cases: [
         { name: 'Seated', kind: 'seated', note: '' },
         { name: '4 pax/m²', kind: 'density', density: 4, note: 'Normal load' },
         { name: '6 pax/m²', kind: 'density', density: 6, note: 'Crush load' },
       ],
       carTypes: [
-        { name: 'A', desc: 'End section with cab, motor bogie', end1: 'cab', end2: 'artic', cab: true, couplerLength: 12300, bodyLength: 11900, cabLength: 1800,
-          support1: 'own', support2: 'shared', centreBogie: false, bogieCentres: 6300, motorBogies: '1e1', doorsPerSide: 2, doorPitch: 4000, doorRearOffset: 2000, tare: 20.3,
-          specSeats: '', specStanding: '', interiorItems: [{ kind: 'wheelchair', bay: 1, side: 'A', place: 'door' }] },
-        { name: 'B', pantos: 1, desc: 'Centre section on two Jacobs bogies, pantograph', end1: 'artic', end2: 'artic', cab: false, couplerLength: 6000, bodyLength: 5600,
-          support1: 'shared', support2: 'shared', centreBogie: false, bogieCentres: 6000, motorBogies: 0, doorsPerSide: 1, doorPitch: 3000, doorRearOffset: 3000, tare: 6.9,
-          specSeats: '', specStanding: '', interiorItems: [] },
-      ],
-    }),
-
-    'tram-5module': () => ({
-      meta: { preset: 'tram-5module', title: 'Tram — 5-module, 100% low floor (template)' },
-      productType: 'tram',
-      project: { company: 'CAF', project: 'Tram — 5-module 100% low floor, double-ended (template)', client: '—', drawingNo: 'TRAM-ARR-001', revision: 'A', drawnBy: '', checkedBy: '', date: today(), paper: 'A3', status: 'TEMPLATE — INDICATIVE', trainRows: '1' },
-      formation: "C-S-M-S-C'",
-      power: { system: '750DC', collector: 'panto', contact: 'bottom', shoeCars: 'all', railOffset: 1450, maxGap: 0, maxPantos: 0, hvClearance: 270 },
-      equipment: TRAM_EQ.map(rowObj),
-      weightItems: [].concat(
-        simpleWeights('C', 6500, [[0, 4300]], TRAM_EQ, [W('C', 'Cab', 'Cab equipment & desk', 1200, 2300, 1000, 3200, 0, 900, 550)]),
-        simpleWeights('S', 4800, [], TRAM_EQ),
-        simpleWeights('M', 3800, [[0, 3900]], TRAM_EQ)),
-      weightSource: 'Template values', equipmentSource: 'Template values',
-      common: { bodyWidth: 2650, wallThk: 50, floorHeight: 350, roofHeight: 3300, maxHeight: 3650, endWallThk: 80, gangwayWidth: 1300, wheelDia: 600, wheelbase: 1800, mountDepth: 100 },
-      doors: { type: 'Bi-parting sliding plug', width: 1300, height: 2050, detrain: { on: false, width: 700, height: 1700 }, cabSide: { on: false, width: 600, height: 1800, pos: 1000 }, cabSaloon: { on: true, width: 600, height: 1900, y: -650, type: 'Hinged' } },
-      cab: Object.assign({}, baseCab),
-      windows: Object.assign({}, baseWindows, { sill: 650, height: 1300, end: 'single' }),
-      front: { wipers: 1, wiperType: 'pantograph', lightsZ: 250, lightsInset: 380, destination: true, couplerHeight: 500, showGauge: true, gaugeWidth: 2750, gaugeHeight: 3650 },
-      hvac: { unitsPerCar: 1, cabHvac: false },
-      interior: { seatType: 'transverse', seatWidth: 450, seatDepth: 480, footZone: 300, doorClearance: 200, endClearance: 0, minDoorClearance: 100, transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 550,
-        wcLength: 1300, wcWidth: 750, wcTurning: 1500, wcAsStanding: true, minAisle: 600, cabinetDepth: 600 },
-      loads: { paxMass: 70, maxAxleLoad: 12.5, axlesPerCar: 4, rounding: 'floor', wheelSpacing: 1500, imbalanceLimit: 15 },
-      cases: [
-        { name: 'Seated', kind: 'seated', note: '' },
-        { name: '4 pax/m²', kind: 'density', density: 4, note: 'Normal load' },
-        { name: '6 pax/m²', kind: 'density', density: 6, note: 'Crush load' },
-      ],
-      carTypes: [
-        { name: 'C', desc: 'Cab module on one motor bogie', end1: 'cab', end2: 'artic', cab: true, couplerLength: 8500, bodyLength: 8300, cabLength: 1900,
-          support1: 'none', support2: 'none', centreBogie: true, bogieCentres: 0, motorBogies: 1, doorsPerSide: 1, doorPitch: 3000, doorRearOffset: 1600, tare: 12.2,
-          specSeats: '', specStanding: '', interiorItems: [] },
-        { name: 'S', desc: 'Suspended module with doors', end1: 'artic', end2: 'artic', cab: false, couplerLength: 6800, bodyLength: 6600,
-          support1: 'none', support2: 'none', centreBogie: false, bogieCentres: 0, motorBogies: 0, doorsPerSide: 2, doorPitch: 3400, doorRearOffset: 1700, tare: 5.1,
-          specSeats: '', specStanding: '', interiorItems: [{ kind: 'wheelchair', bay: 1, side: 'A', place: 'middle' }] },
-        { name: 'M', pantos: 1, desc: 'Centre module on one trailer bogie, pantograph', end1: 'artic', end2: 'artic', cab: false, couplerLength: 4500, bodyLength: 4300,
-          support1: 'none', support2: 'none', centreBogie: true, bogieCentres: 0, motorBogies: 0, doorsPerSide: 0, doorPitch: 3000, doorRearOffset: 2250, tare: 8.4,
-          specSeats: '', specStanding: '', interiorItems: [] },
+        { name: 'A', desc: 'Car A: cab, motor bogie at the cab end, pantograph', end1: 'cab', end2: 'artic', cab: true, couplerLength: 15000, bodyLength: 14700, cabLength: 1800,
+          support1: 'own', support2: 'shared', centreBogie: false, bogieCentres: 6000, motorBogies: '1e1', doorsPerSide: 2, doorPitch: 5500, doorRearOffset: 3500, tare: 0,
+          pantos: 1, specSeats: '', specStanding: '', interiorItems: [{ kind: 'wheelchair', bay: 1, side: 'A', place: 'door' }] },
+        { name: 'B', desc: 'Car B: cab, motor bogie at the cab end', end1: 'cab', end2: 'artic', cab: true, couplerLength: 15000, bodyLength: 14700, cabLength: 1800,
+          support1: 'own', support2: 'shared', centreBogie: false, bogieCentres: 6000, motorBogies: '1e1', doorsPerSide: 2, doorPitch: 5500, doorRearOffset: 3500, tare: 0,
+          pantos: 0, specSeats: '', specStanding: '', interiorItems: [{ kind: 'wheelchair', bay: 1, side: 'A', place: 'door' }] },
       ],
     }),
 
@@ -328,13 +242,13 @@
       meta: { preset: 'mainline-emu4', title: 'Mainline EMU — 4-car, 25 kV (template)' },
       productType: 'mainline',
       project: { company: 'CAF', project: 'Regional EMU — 4-car, 25 kV AC (template)', client: '—', drawingNo: 'EMU-ARR-001', revision: 'A', drawnBy: '', checkedBy: '', date: today(), paper: 'A3', status: 'TEMPLATE — INDICATIVE', trainRows: '1' },
-      formation: "DT-M-TP-DT'",
+      formation: 'DM-T-M-T',
       power: { system: '25kV', collector: 'panto', contact: 'top', shoeCars: 'all', railOffset: 1450, maxGap: 0, maxPantos: 0, hvClearance: 270 },
       equipment: ML_EQ.map(rowObj),
       weightItems: [].concat(
-        simpleWeights('DT', 26000, [[8600, 6800], [-8600, 6800]], ML_EQ, [W('DT', 'Cab', 'Cab equipment & desk', 2000, 2700, 1100, 10800, 0, 1900, 1400), W('DT', 'Interior', 'PRM toilet module', 2100, 1800, 2200, 5500, 480, '', 900)]),
-        simpleWeights('M', 26000, [[8600, 8600], [-8600, 8600]], ML_EQ, [W('M', 'Interior', 'Toilet module', 1100, 1200, 2200, 6500, 800, '', 600)]),
-        simpleWeights('TP', 25000, [[8600, 6800], [-8600, 6800]], ML_EQ)),
+        simpleWeights('DM', 26000, [[8600, 8600], [-8600, 8600]], ML_EQ, [W('DM', 'Cab', 'Cab equipment & desk', 2000, 2700, 1100, 10800, 0, 1900, 1400), W('DM', 'Interior', 'PRM toilet module', 2100, 1800, 2200, 5500, 480, '', 900)]),
+        simpleWeights('T', 25000, [[8600, 6800], [-8600, 6800]], ML_EQ, [W('T', 'Interior', 'Toilet module', 1100, 1200, 2200, 6500, 800, '', 600)]),
+        simpleWeights('M', 26000, [[8600, 8600], [-8600, 8600]], ML_EQ)),
       weightSource: 'Template values', equipmentSource: 'Template values',
       common: { bodyWidth: 2900, wallThk: 70, floorHeight: 1150, roofHeight: 3850, maxHeight: 4300, endWallThk: 150, gangwayWidth: 1100, wheelDia: 920, wheelbase: 2500, mountDepth: 200 },
       doors: { type: 'Bi-parting sliding plug', width: 1300, height: 2000, detrain: { on: false, width: 700, height: 1800 }, cabSide: { on: true, width: 650, height: 1900, pos: 1700 }, cabSaloon: { on: true, width: 700, height: 1950, y: 0, type: 'Sliding' } },
@@ -346,36 +260,40 @@
         wcLength: 1300, wcWidth: 750, wcTurning: 1500, wcAsStanding: true, minAisle: 600, cabinetDepth: 600,
         mlStdAbreast: '2+2', mlStdPitch: 850, mlFirstAbreast: '2+1', mlFirstPitch: 1000, mlFirstSeatWidth: 520, mlArrangement: 'facing', mlSeatLength: 520,
         mlVestibules: true, mlVestLength: 2600, mlVestDoor: 900 },
-      loads: { paxMass: 75, maxAxleLoad: 18, axlesPerCar: 4, rounding: 'floor', wheelSpacing: 1500, imbalanceLimit: 15 },
+      loads: { paxMass: 75, maxAxleLoad: 18, axlesPerCar: 4, standCase: '', rounding: 'floor', wheelSpacing: 1500, imbalanceLimit: 15 },
       cases: [
         { name: 'Seated', kind: 'seated', note: 'All seats occupied' },
         { name: '2 pax/m²', kind: 'density', density: 2, note: 'Standing, normal (check EN 15663 / spec)' },
         { name: '4 pax/m²', kind: 'density', density: 4, note: 'Standing, exceptional' },
       ],
       carTypes: [
-        { name: 'DT', desc: 'Driving trailer, 1st + standard class, PRM toilet', end1: 'cab', end2: 'gangway', cab: true, couplerLength: 24900, bodyLength: 24300, cabLength: 2800,
-          support1: 'own', support2: 'own', centreBogie: false, bogieCentres: 17200, motorBogies: 0, doorsPerSide: 2, doorPitch: 18300, doorRearOffset: 2700, tare: 42.8,
-          seatClass: 'mixed', firstLength: 6500, specSeats: '', specStanding: '',
+        { name: 'DM', desc: 'Driving motor car, 1st + standard class, PRM toilet', end1: 'cab', end2: 'gangway', cab: true, couplerLength: 24900, bodyLength: 24300, cabLength: 2800,
+          support1: 'own', support2: 'own', centreBogie: false, bogieCentres: 17200, motorBogies: 2, doorsPerSide: 2, doorPitch: 18300, doorRearOffset: 2700, tare: 0,
+          pantos: 0, seatClass: 'mixed', firstLength: 6500, specSeats: '', specStanding: '',
           interiorItems: [{ kind: 'toiletPrm', bay: 1, side: 'A', place: 'end1', length: 2100, depth: 1800 }, { kind: 'wheelchair', bay: 1, side: 'B', place: 'end2' }] },
-        { name: 'M', desc: 'Motor car, standard class, toilet', end1: 'gangway', end2: 'gangway', cab: false, couplerLength: 24600, bodyLength: 24000,
-          support1: 'own', support2: 'own', centreBogie: false, bogieCentres: 17200, motorBogies: 2, doorsPerSide: 2, doorPitch: 19200, doorRearOffset: 2700, tare: 44.7,
-          seatClass: 'std', firstLength: 0, specSeats: '', specStanding: '',
+        { name: 'T', desc: 'Trailer with pantograph and main transformer, standard class, toilet', end1: 'gangway', end2: 'gangway', cab: false, couplerLength: 24600, bodyLength: 24000,
+          support1: 'own', support2: 'own', centreBogie: false, bogieCentres: 17200, motorBogies: 0, doorsPerSide: 2, doorPitch: 19200, doorRearOffset: 2700, tare: 0,
+          pantos: 1, seatClass: 'std', firstLength: 0, specSeats: '', specStanding: '',
           interiorItems: [{ kind: 'toilet', bay: 1, side: 'A', place: 'end1', length: 1100, depth: 1200 }] },
-        { name: 'TP', pantos: 1, desc: 'Trailer with pantograph and main transformer, standard class', end1: 'gangway', end2: 'gangway', cab: false, couplerLength: 24600, bodyLength: 24000,
-          support1: 'own', support2: 'own', centreBogie: false, bogieCentres: 17200, motorBogies: 0, doorsPerSide: 2, doorPitch: 19200, doorRearOffset: 2700, tare: 46.7,
-          seatClass: 'std', firstLength: 0, specSeats: '', specStanding: '', interiorItems: [] },
+        { name: 'M', desc: 'Motor car, standard class', end1: 'gangway', end2: 'gangway', cab: false, couplerLength: 24600, bodyLength: 24000,
+          support1: 'own', support2: 'own', centreBogie: false, bogieCentres: 17200, motorBogies: 2, doorsPerSide: 2, doorPitch: 19200, doorRearOffset: 2700, tare: 0,
+          pantos: 0, seatClass: 'std', firstLength: 0, specSeats: '', specStanding: '', interiorItems: [] },
       ],
     }),
   });
+  // Template tare = sum of the template weight list (so steps 5 and 6 agree at the start)
+  ['metro-6car', 'lrv-2car', 'mainline-emu4'].forEach(id => {
+    const f = TLT.PRESETS[id];
+    TLT.PRESETS[id] = () => { const c = f(); c.carTypes.forEach(t => { if (!t.tare) t.tare = Math.round(c.weightItems.filter(r => r.car === t.name).reduce((a, r) => a + (+r.mass || 0), 0) / 100) / 10; }); return c; };
+  });
 
-  // Template per product type (used by "Apply template" in Train formation)
-  TLT.PRODUCT_TEMPLATES = { metro: 'example-6car', lrv: 'lrv-3section', tram: 'tram-5module', mainline: 'mainline-emu4' };
+  // Template per product type (used by "Load template" in Train formation)
+  TLT.PRODUCT_TEMPLATES = { metro: 'metro-6car', lrv: 'lrv-2car', mainline: 'mainline-emu4' };
 
   TLT.PRESET_LIST = [
     { id: 'dhaka-l5n', label: 'Dhaka MRT Line-5N CP-08 (8-car)' },
-    { id: 'example-6car', label: 'Metro — example 6-car unit' },
-    { id: 'lrv-3section', label: 'LRV — 3-section, Jacobs bogies' },
-    { id: 'tram-5module', label: 'Tram — 5-module, 100% low floor' },
-    { id: 'mainline-emu4', label: 'Mainline EMU — 4-car, 25 kV' },
+    { id: 'metro-6car', label: 'Metro — 6-car, 25 kV (template)' },
+    { id: 'lrv-2car', label: 'LRV — 2-car, Jacobs bogie (template)' },
+    { id: 'mainline-emu4', label: 'Mainline EMU — 4-car, 25 kV (template)' },
   ];
 })();

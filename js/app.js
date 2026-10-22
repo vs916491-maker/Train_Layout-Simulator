@@ -542,7 +542,7 @@
     ['Project', 'Drawing No.', 'project.drawingNo', 'text'], ['Project', 'Revision', 'project.revision', 'text'], ['Project', 'Drawn by', 'project.drawnBy', 'text'],
     ['Project', 'Checked by', 'project.checkedBy', 'text'], ['Project', 'Date', 'project.date', 'text'], ['Project', 'Status stamp', 'project.status', 'text'],
     ['Project', 'Paper size', 'project.paper', ['A3', 'A2', 'A1']], ['Project', 'Train layout rows', 'project.trainRows', ['1', '2']],
-    ['Train', 'Product type', 'productType', ['metro', 'lrv', 'tram', 'mainline']], ['Train', 'Formation', 'formation', 'text'],
+    ['Train', 'Product type', 'productType', ['metro', 'lrv', 'mainline']], ['Train', 'Formation', 'formation', 'text'],
     ['Car body & bogie', 'Body width', 'common.bodyWidth', 'num', 'mm'], ['Car body & bogie', 'Side wall + lining', 'common.wallThk', 'num', 'mm'],
     ['Car body & bogie', 'Floor height ATR', 'common.floorHeight', 'num', 'mm'], ['Car body & bogie', 'Roof height ATR', 'common.roofHeight', 'num', 'mm'],
     ['Car body & bogie', 'Max. height (AC / panto)', 'common.maxHeight', 'num', 'mm'], ['Car body & bogie', 'Floor to equipment mounting face', 'common.mountDepth', 'num', 'mm'],
@@ -1043,6 +1043,7 @@
     const base = TLT.PRESETS['dhaka-l5n']();
     ['project', 'common', 'interior', 'loads', 'hvac', 'cab', 'windows', 'front', 'power'].forEach(k => { o[k] = Object.assign({}, base[k], o[k] || {}); });
     if (!o.productType) o.productType = 'metro';
+    if (o.productType === 'tram') o.productType = 'lrv';
     // earlier versions of "Add equipment" added a second set of pantographs (PAN) to cars that already had PAN1 / PAN2
     if (Array.isArray(o.equipment)) {
       const dupCars = new Set(o.equipment.filter(r => String(r.name).trim() === 'PAN' && o.equipment.some(q => q !== r && q.car === r.car && /^PAN.+/i.test(String(q.name).trim()))).map(r => r.car));
@@ -1172,7 +1173,7 @@
       if (b.dataset.dxf) return downloadDxf(b.dataset.dxf);
       if (b.dataset.template) {
         if (b.dataset.confirm !== '1') { b.dataset.confirm = '1'; b.textContent = 'Replace all inputs?'; setTimeout(() => { if (b.isConnected) { b.dataset.confirm = ''; renderPane1(); } }, 3000); return; }
-        const id = TLT.PRODUCT_TEMPLATES[b.dataset.template] || 'example-6car';
+        const id = TLT.PRODUCT_TEMPLATES[b.dataset.template] || 'metro-6car';
         ui.undoCfg = clone(cfg);
         cfg = normalise(TLT.PRESETS[id]()); ui.sheet = { main: 0, uf: 0, wt: 0, ft: 0 };
         if ($('preset')) $('preset').value = id;

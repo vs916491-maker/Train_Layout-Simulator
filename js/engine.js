@@ -181,8 +181,8 @@
    * Supports per end: own bogie, shared (Jacobs) bogie at the joint, none (overhang or carried by the articulation).
    * centreBogie: one bogie under the car centre (bogie module of a multi-module tram).
    */
-  TLT.PRODUCT_TYPES = [['metro', 'Metro'], ['lrv', 'Light rail vehicle (LRV)'], ['tram', 'Tram'], ['mainline', 'Mainline EMU / DMU']];
-  TLT.productType = cfg => (['metro', 'lrv', 'tram', 'mainline'].includes(cfg.productType) ? cfg.productType : 'metro');
+  TLT.PRODUCT_TYPES = [['metro', 'Metro'], ['lrv', 'Light rail vehicle (LRV)'], ['mainline', 'Mainline EMU / DMU']];
+  TLT.productType = cfg => (['metro', 'lrv', 'mainline'].includes(cfg.productType) ? cfg.productType : cfg.productType === 'tram' ? 'lrv' : 'metro');
   TLT.END_TYPES = [['cab', 'Driving cab'], ['aux', 'Auxiliary driving desk'], ['gangway', 'Gangway to next car'], ['wall', 'End wall (no gangway)'], ['artic', 'Articulation joint']];
   TLT.carEnds = function (type) {
     const ok = v => (['cab', 'aux', 'gangway', 'wall', 'artic'].includes(v) ? v : null);
