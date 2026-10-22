@@ -50,6 +50,10 @@ Set **Number of car variants** in the formation card; a card appears for each. E
 
 Placement: next to the door (default), END 1 side, middle or END 2 side of the bay. Bays are numbered B0 … Bn from END 1 (B0 is between the cab / end wall and the first door); the bay list in each item shows the bay lengths. Side A is the top of the plan view. Older input files with text bay rules (`1 A wheelchair`) are converted automatically.
 
+### Main inputs from Excel (step 1)
+
+**Import / export main inputs (Excel)** at the top of step 1: **Download main-inputs template** writes one workbook filled with the current inputs — *Parameters* (Section, Parameter, Value, Unit, Allowed values, Key), *Car variants* (one row per variant), *Interior items*, *Load cases* and an *Instructions* sheet with the allowed values. Importing the workbook **replaces all step-1 inputs** (variants, interior items and load cases not in the file are removed); **Undo** in Train formation restores the previous inputs. Equipment (step 2) and design weight lists (step 6) keep their own Excel files.
+
 ### Product types and templates
 
 **Train formation → Product type**: Metro, LRV, Tram or Mainline EMU / DMU. The product type switches the relevant inputs (mainline interior only for Mainline). **Load template** replaces all inputs with an example of that type (Undo restores the previous inputs):

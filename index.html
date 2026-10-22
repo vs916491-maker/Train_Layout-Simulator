@@ -101,6 +101,8 @@ table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; font-var
 table.data th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11px; padding: 6px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 table.data td { padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 table.data td.num { text-align: right; font-family: var(--f-mono); }
+.excel-main .excel-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 760px) { .excel-main .excel-row { grid-template-columns: 1fr; } }
 table.grid { border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; min-width: 100%; }
 table.grid th, table.grid td { border: 1px solid var(--line-strong, #c9d0d8); padding: 5px 8px; white-space: nowrap; }
 table.grid th { background: var(--soft); font-weight: 600; font-size: 11.5px; text-align: center; }

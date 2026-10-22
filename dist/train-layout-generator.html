@@ -101,6 +101,8 @@ table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; font-var
 table.data th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11px; padding: 6px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 table.data td { padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 table.data td.num { text-align: right; font-family: var(--f-mono); }
+.excel-main .excel-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 760px) { .excel-main .excel-row { grid-template-columns: 1fr; } }
 table.grid { border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; min-width: 100%; }
 table.grid th, table.grid td { border: 1px solid var(--line-strong, #c9d0d8); padding: 5px 8px; white-space: nowrap; }
 table.grid th { background: var(--soft); font-weight: 600; font-size: 11.5px; text-align: center; }
@@ -3623,6 +3625,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     const F = (...a) => field('', ...a);
     const trans = cfg.interior.seatType === 'transverse';
     let h = `<div class="pane-head"><h2>Main Dimensions</h2><p>Enter the train formation, car body data and one set of data per car variant, then press Generate Results.</p></div>`;
+    h += `<div class="card excel-main" style="margin-bottom:14px"><h3>Import / export main inputs (Excel)</h3>
+      <div class="excel-row"><div><p class="hint" style="margin-top:0">One workbook with all inputs of this step: <b>Parameters</b> (project, formation, car body & bogie, doors, HVAC, power, cab, windows, front view, interior rules, masses), <b>Car variants</b>, <b>Interior items</b> and <b>Load cases</b>, plus an Instructions sheet with the allowed values. The template is filled with the current inputs.</p>
+      <p class="hint">Importing <b>replaces all inputs of this step</b> with the file (car variants, interior items and load cases not in the file are removed). Save inputs first if you want to keep the current set.</p>
+      <button class="btn" id="mainTpl">Download main-inputs template</button></div>
+      ${dropZone('main', '.xlsx')}</div></div>`;
     h += '<div class="cards">';
     h += card('Project & sheet', `<div class="fields">
       ${F('Company', 'project.company', 'text')}${F('Client', 'project.client', 'text')}
@@ -3973,7 +3980,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     h += `<div class="genbar"><p>Generates the train layouts and capacity (step 3), the underframe layouts (step 4) and the weight calculations with fixed tare (step 5) and from the design weight list (step 6).</p><button class="btn primary big" id="genAll">Generate Results →</button></div>`;
     $('pane-2').innerHTML = h;
   }
-  const dropZone = list => `<div class="drop" data-drop="${list}"><p><b>Drop the .xlsx or .csv file here</b></p><p class="hint">or</p><button class="btn primary" data-pick="${list}">Choose file…</button><input type="file" id="file-${list}" data-file="${list}" accept=".xlsx,.xls,.csv" hidden></div>`;
+  const dropZone = (list, what) => `<div class="drop" data-drop="${list}"><p><b>Drop the ${what || '.xlsx or .csv'} file here</b></p><p class="hint">or</p><button class="btn primary" data-pick="${list}">Choose file…</button><input type="file" id="file-${list}" data-file="${list}" accept=".xlsx,.xls,.csv" hidden></div>`;
   const carSelect = (id, path, val) => `<select id="${id}" data-path="${path}" data-kind="text">${[...new Set(cfg.carTypes.map(t => t.name).concat([String(val)]))].map(n => `<option${n === String(val) ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
   function refreshRowStatus() {
     let R = null; try { R = TLT.compute(cfg); } catch (e) { /* */ }
@@ -4048,6 +4055,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return rows;
   }
   function importFile(file, listName) {
+    if (listName === 'main') return importMain(file);
     const spec = LISTS[listName];
     const isCsv = /\.csv$/i.test(file.name);
     if (!isCsv && !window.XLSX) { toast('The Excel reader could not load (no internet connection). Save the sheet as CSV and upload that instead.', true); return; }
@@ -4073,6 +4081,172 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     };
     if (isCsv) rd.readAsText(file); else rd.readAsArrayBuffer(file);
   }
+  /* ---------- Main inputs (step 1) to / from Excel ---------- */
+  const YN = ['Yes', 'No'];
+  // [section, parameter, key, type, unit]; type: 'num' | 'text' | 'bool' | [allowed values]
+  const MAIN_PARAMS = [
+    ['Project', 'Company', 'project.company', 'text'], ['Project', 'Client', 'project.client', 'text'], ['Project', 'Project', 'project.project', 'text'],
+    ['Project', 'Drawing No.', 'project.drawingNo', 'text'], ['Project', 'Revision', 'project.revision', 'text'], ['Project', 'Drawn by', 'project.drawnBy', 'text'],
+    ['Project', 'Checked by', 'project.checkedBy', 'text'], ['Project', 'Date', 'project.date', 'text'], ['Project', 'Status stamp', 'project.status', 'text'],
+    ['Project', 'Paper size', 'project.paper', ['A3', 'A2', 'A1']], ['Project', 'Train layout rows', 'project.trainRows', ['1', '2']],
+    ['Train', 'Product type', 'productType', ['metro', 'lrv', 'tram', 'mainline']], ['Train', 'Formation', 'formation', 'text'],
+    ['Car body & bogie', 'Body width', 'common.bodyWidth', 'num', 'mm'], ['Car body & bogie', 'Side wall + lining', 'common.wallThk', 'num', 'mm'],
+    ['Car body & bogie', 'Floor height ATR', 'common.floorHeight', 'num', 'mm'], ['Car body & bogie', 'Roof height ATR', 'common.roofHeight', 'num', 'mm'],
+    ['Car body & bogie', 'Max. height (AC / panto)', 'common.maxHeight', 'num', 'mm'], ['Car body & bogie', 'Floor to equipment mounting face', 'common.mountDepth', 'num', 'mm'],
+    ['Car body & bogie', 'End wall thickness', 'common.endWallThk', 'num', 'mm'], ['Car body & bogie', 'Gangway width', 'common.gangwayWidth', 'num', 'mm'],
+    ['Car body & bogie', 'Wheel diameter (new)', 'common.wheelDia', 'num', 'mm'], ['Car body & bogie', 'Bogie wheelbase', 'common.wheelbase', 'num', 'mm'],
+    ['Doors', 'Passenger door type', 'doors.type', ['Bi-parting sliding (pocket)', 'Bi-parting sliding plug', 'Bi-parting external sliding', 'Single-leaf sliding']],
+    ['Doors', 'Passenger door clear width', 'doors.width', 'num', 'mm'], ['Doors', 'Passenger door clear height', 'doors.height', 'num', 'mm'],
+    ['Doors', 'Detrainment door', 'doors.detrain.on', 'bool'], ['Doors', 'Detrainment door width', 'doors.detrain.width', 'num', 'mm'], ['Doors', 'Detrainment door height', 'doors.detrain.height', 'num', 'mm'],
+    ['Doors', 'Cab side doors', 'doors.cabSide.on', 'bool'], ['Doors', 'Cab side door width', 'doors.cabSide.width', 'num', 'mm'], ['Doors', 'Cab side door height', 'doors.cabSide.height', 'num', 'mm'],
+    ['Doors', 'Cab side door centre from cab-end body face', 'doors.cabSide.pos', 'num', 'mm'],
+    ['Doors', 'Cab-to-saloon door', 'doors.cabSaloon.on', 'bool'], ['Doors', 'Cab-to-saloon door type', 'doors.cabSaloon.type', ['Hinged', 'Sliding']],
+    ['Doors', 'Cab-to-saloon door width', 'doors.cabSaloon.width', 'num', 'mm'], ['Doors', 'Cab-to-saloon door height', 'doors.cabSaloon.height', 'num', 'mm'],
+    ['Doors', 'Cab-to-saloon door offset from centre line (+ side A)', 'doors.cabSaloon.y', 'num', 'mm'],
+    ['HVAC', 'Saloon HVAC units per car', 'hvac.unitsPerCar', 'num'], ['HVAC', 'Cab HVAC applicable', 'hvac.cabHvac', 'bool'],
+    ['Power collection', 'Supply system', 'power.system', ['25kV', '1500DC', '750DC']], ['Power collection', 'Current collection', 'power.collector', ['panto', 'third', 'both']],
+    ['Power collection', 'Max. pantographs per train (0 = no check)', 'power.maxPantos', 'num'], ['Power collection', 'Third rail contact', 'power.contact', ['bottom', 'top', 'side']],
+    ['Power collection', 'Conductor rail centre from track centre', 'power.railOffset', 'num', 'mm'], ['Power collection', 'Longest conductor-rail gap (0 = no check)', 'power.maxGap', 'num', 'mm'],
+    ['Power collection', 'HV clearance on roof (25 kV, note)', 'power.hvClearance', 'num', 'mm'],
+    ['Driver\'s cab', 'Driving desk', 'cab.desk', ['side', 'central']], ['Driver\'s cab', 'Desk on side', 'cab.deskSide', ['B', 'A']],
+    ['Driver\'s cab', 'Desk depth', 'cab.deskDepth', 'num', 'mm'], ['Driver\'s cab', 'Desk width', 'cab.deskWidth', 'num', 'mm'],
+    ['Driver\'s cab', 'Co-driver seat', 'cab.observer', 'bool'], ['Driver\'s cab', 'Co-driver desk', 'cab.coDesk', 'bool'], ['Driver\'s cab', 'Co-driver desk width', 'cab.coDeskWidth', 'num', 'mm'],
+    ['Driver\'s cab', 'GoA4 (remove cab back wall)', 'cab.goa4', 'bool'], ['Driver\'s cab', 'Covered front console depth (GoA4)', 'cab.consoleDepth', 'num', 'mm'],
+    ['Driver\'s cab', 'Auxiliary desk length along car', 'cab.auxLength', 'num', 'mm'], ['Driver\'s cab', 'Auxiliary desk depth across car', 'cab.auxDepth', 'num', 'mm'], ['Driver\'s cab', 'Auxiliary desk on side', 'cab.auxSide', ['B', 'A']],
+    ['Windows', 'Bays between doors', 'windows.inner', ['single', 'double', 'none']], ['Windows', 'End bays', 'windows.end', ['single', 'double', 'none']],
+    ['Windows', 'Single window width (0 = fill bay)', 'windows.singleWidth', 'num', 'mm'], ['Windows', 'Width of each of two windows', 'windows.doubleWidth', 'num', 'mm'],
+    ['Windows', 'Window height', 'windows.height', 'num', 'mm'], ['Windows', 'Sill height above floor', 'windows.sill', 'num', 'mm'],
+    ['Windows', 'Drop-down windows', 'windows.drop', ['none', 'ends', 'all']], ['Windows', 'Drop-down depth', 'windows.dropDepth', 'num', 'mm'],
+    ['Windows', 'Windows in door leaves', 'windows.doorWin', 'bool'], ['Windows', 'Door window width (0 = auto)', 'windows.doorWinWidth', 'num', 'mm'],
+    ['Windows', 'Door window height', 'windows.doorWinHeight', 'num', 'mm'], ['Windows', 'Door window sill above floor', 'windows.doorWinSill', 'num', 'mm'],
+    ['Front view', 'Wipers', 'front.wipers', ['0', '1', '2', '3']], ['Front view', 'Wiper type', 'front.wiperType', ['single', 'pantograph']],
+    ['Front view', 'Head / tail lights above floor', 'front.lightsZ', 'num', 'mm'], ['Front view', 'Lights inset from body side', 'front.lightsInset', 'num', 'mm'],
+    ['Front view', 'Coupler height ATR', 'front.couplerHeight', 'num', 'mm'], ['Front view', 'Destination display', 'front.destination', 'bool'],
+    ['Front view', 'Show vehicle gauge outline', 'front.showGauge', 'bool'], ['Front view', 'Gauge width', 'front.gaugeWidth', 'num', 'mm'], ['Front view', 'Gauge height ATR', 'front.gaugeHeight', 'num', 'mm'],
+    ['Interior', 'Seating', 'interior.seatType', ['longitudinal', 'transverse']], ['Interior', 'Seat width / pax', 'interior.seatWidth', 'num', 'mm'],
+    ['Interior', 'Seat depth', 'interior.seatDepth', 'num', 'mm'], ['Interior', 'Foot zone in front of seats', 'interior.footZone', 'num', 'mm'],
+    ['Interior', 'Clearance at doors', 'interior.doorClearance', 'num', 'mm'], ['Interior', 'Clearance at end wall / cab', 'interior.endClearance', 'num', 'mm'],
+    ['Interior', 'Min. door clearance (fixed seats per bay)', 'interior.minDoorClearance', 'num', 'mm'],
+    ['Interior', 'Transverse: seats per side', 'interior.transSeatsPerSide', 'num'], ['Interior', 'Transverse seat depth', 'interior.transSeatDepth', 'num', 'mm'], ['Interior', 'Legroom, facing seats', 'interior.transLegroom', 'num', 'mm'],
+    ['Interior', 'Wheelchair space length', 'interior.wcLength', 'num', 'mm'], ['Interior', 'Wheelchair space width', 'interior.wcWidth', 'num', 'mm'],
+    ['Interior', 'Turning circle diameter', 'interior.wcTurning', 'num', 'mm'], ['Interior', 'Min. aisle (check)', 'interior.minAisle', 'num', 'mm'],
+    ['Interior', 'Count wheelchair space as standing area', 'interior.wcAsStanding', 'bool'],
+    ['Mainline interior', 'Seat arrangement', 'interior.mlArrangement', ['facing', 'airline']], ['Mainline interior', 'Seat length along car', 'interior.mlSeatLength', 'num', 'mm'],
+    ['Mainline interior', 'Standard class abreast', 'interior.mlStdAbreast', ['2+2', '2+1', '3+2', '1+1', '2+0']], ['Mainline interior', 'Standard class seat pitch', 'interior.mlStdPitch', 'num', 'mm'],
+    ['Mainline interior', '1st class abreast', 'interior.mlFirstAbreast', ['2+2', '2+1', '3+2', '1+1', '2+0']], ['Mainline interior', '1st class seat pitch', 'interior.mlFirstPitch', 'num', 'mm'],
+    ['Mainline interior', '1st class seat width', 'interior.mlFirstSeatWidth', 'num', 'mm'], ['Mainline interior', 'Vestibules at the doors', 'interior.mlVestibules', 'bool'],
+    ['Mainline interior', 'Vestibule length', 'interior.mlVestLength', 'num', 'mm'], ['Mainline interior', 'Vestibule internal door width', 'interior.mlVestDoor', 'num', 'mm'],
+    ['Load cases', 'Round standing passengers', 'loads.rounding', ['floor', 'round', 'ceil']], ['Load cases', 'Check standees target at load case (blank = no check)', 'loads.standCase', 'text'],
+    ['Masses (step 5)', 'Passenger mass', 'loads.paxMass', 'num', 'kg'], ['Masses (step 5)', 'Max. axle load', 'loads.maxAxleLoad', 'num', 't'],
+  ];
+  const VAR_COLS = [
+    ['name', 'Variant name', 'text'], ['desc', 'Description', 'text'],
+    ['end1', 'END 1', ['cab', 'aux', 'gangway', 'wall', 'artic']], ['end2', 'END 2', ['cab', 'aux', 'gangway', 'wall', 'artic']],
+    ['support1', 'END 1 support', ['own', 'shared', 'none']], ['support2', 'END 2 support', ['own', 'shared', 'none']], ['centreBogie', 'Centre bogie', 'bool'],
+    ['couplerLength', 'Length over couplers / joints (mm)', 'num'], ['bodyLength', 'Body length (mm)', 'num'],
+    ['cabLength', 'END 1 cab length (mm)', 'num'], ['cabLength2', 'END 2 cab length (mm)', 'num'], ['bogieCentres', 'Bogie centres (mm)', 'num'],
+    ['motorBogies', 'Motor bogies', ['0', '1', '1e1', '2', '3']], ['doorsPerSide', 'Doors per side', 'num'], ['doorPitch', 'Door pitch (mm)', 'num'],
+    ['doorRearOffset', 'END 2 coupler face to nearest door centre (mm)', 'num'], ['seatsPerBay', 'Seats between two doors (blank = auto)', 'num'],
+    ['seatClass', 'Seating class (mainline)', ['std', 'first', 'mixed']], ['firstLength', '1st class length from END 1 (mm)', 'num'],
+    ['specSeats', 'Seated passengers target', 'num'], ['specStanding', 'Standees target', 'num'], ['tare', 'Tare mass AW0 (t)', 'num'],
+    ['pantos', 'Pantographs per car (target)', 'num'], ['ccd', 'CCD shoes per car', 'num'],
+  ];
+  const ITEM_COLS = [['car', 'Variant', 'text'], ['kind', 'Item', ['wheelchair', 'cabinet', 'max', 'none', 'toilet', 'toiletPrm']], ['bay', 'Bay (0 = END 1)', 'num'],
+    ['side', 'Side', ['A', 'B', 'AB']], ['place', 'Placement', ['door', 'end1', 'middle', 'end2']], ['length', 'Length (mm)', 'num'], ['depth', 'Depth (mm)', 'num'],
+    ['height', 'Height (mm)', 'num'], ['label', 'Label', 'text'], ['n', 'Max. seats per side', 'num']];
+  const CASE_COLS = [['name', 'Load case', 'text'], ['kind', 'Type', ['seated', 'density', 'factor']], ['density', 'Density (pax/m²)', 'num'], ['factor', 'Factor', 'num'],
+    ['of', 'Of case', 'text'], ['note', 'Note', 'text'], ['inFixed', 'In fixed-tare calculation', 'bool']];
+  const xlVal = (v, type) => (type === 'bool' ? (v === false ? 'No' : v === true || v === 'true' ? 'Yes' : v == null || v === '' ? '' : 'Yes') : v == null ? '' : v);
+  const parseVal = (raw, type, label, errs) => {
+    const s = String(raw == null ? '' : raw).trim();
+    if (type === 'num') { if (s === '') return ''; const n = parseFloat(s.replace(',', '.')); if (!Number.isFinite(n)) { errs.push(`${label}: "${s}" is not a number`); return ''; } return n; }
+    if (type === 'bool') return /^(y|yes|true|1|x|on)$/i.test(s);
+    if (Array.isArray(type)) { if (s === '') return ''; const m = type.find(o => o.toLowerCase() === s.toLowerCase()); if (!m) { errs.push(`${label}: "${s}" is not one of ${type.join(' / ')}`); return ''; } return m; }
+    return s;
+  };
+  function downloadMainTemplate() {
+    if (!window.XLSX) { toast('The Excel library could not load (no internet connection). Use the single-file version, which works offline.', true); return; }
+    const X = window.XLSX, wb = X.utils.book_new();
+    const params = [['Section', 'Parameter', 'Value', 'Unit', 'Allowed values', 'Key (do not change)']].concat(MAIN_PARAMS.map(([sec, lab, key, type, unit]) =>
+      [sec, lab, xlVal(get(cfg, key), type), unit || '', type === 'bool' ? 'Yes / No' : Array.isArray(type) ? type.join(' / ') : type === 'num' ? 'number' : 'text', key]));
+    const ws = X.utils.aoa_to_sheet(params); ws['!cols'] = [{ wch: 20 }, { wch: 44 }, { wch: 34 }, { wch: 7 }, { wch: 40 }, { wch: 30 }];
+    X.utils.book_append_sheet(wb, ws, 'Parameters');
+    const tbl = (cols, rows) => { const w = X.utils.aoa_to_sheet([cols.map(c => c[1])].concat(rows.map(r => cols.map(([k, , t]) => xlVal(r[k], t))))); w['!cols'] = cols.map(c => ({ wch: Math.max(10, Math.min(36, c[1].length + 2)) })); return w; };
+    X.utils.book_append_sheet(wb, tbl(VAR_COLS, cfg.carTypes.map(t => Object.assign({}, t, TLT.carEnds(t) && { end1: TLT.carEnds(t).e1, end2: TLT.carEnds(t).e2 }))), 'Car variants');
+    X.utils.book_append_sheet(wb, tbl(ITEM_COLS, cfg.carTypes.flatMap(t => (t.interiorItems || []).map(it => Object.assign({ car: t.name }, it)))), 'Interior items');
+    X.utils.book_append_sheet(wb, tbl(CASE_COLS, cfg.cases.map(c => Object.assign({}, c, { inFixed: c.inFixed !== false }))), 'Load cases');
+    const allowed = c => (c[2] === 'bool' ? 'Yes / No' : Array.isArray(c[2]) ? c[2].join(' / ') : c[2] === 'num' ? 'number' : 'text');
+    const ins = [['Sheet', 'Column', 'Allowed values / meaning']]
+      .concat([['All', '', 'Importing replaces all step-1 inputs with this workbook. Keep the header rows; the Key column of Parameters must not be changed. Blank number = default.']])
+      .concat(VAR_COLS.map(c => ['Car variants', c[1], allowed(c)]),
+        [['Car variants', 'END 1 / END 2', 'cab = driving cab, aux = auxiliary driving desk, gangway, wall = end wall without gangway, artic = articulation joint']],
+        [['Car variants', 'Supports', 'own = own bogie, shared = Jacobs bogie at the joint, none = no bogie (overhang / carried by the joint)']],
+        [['Car variants', 'Motor bogies', '1 = one motor bogie at the END 2 side, 1e1 = one at the END 1 side']],
+        ITEM_COLS.map(c => ['Interior items', c[1], allowed(c)]),
+        [['Interior items', 'Item', 'wheelchair, cabinet (electrical cabinet), max (seat limit), none (no seats), toilet, toiletPrm (mainline)']],
+        CASE_COLS.map(c => ['Load cases', c[1], allowed(c)]));
+    const wi = X.utils.aoa_to_sheet(ins); wi['!cols'] = [{ wch: 16 }, { wch: 44 }, { wch: 110 }];
+    X.utils.book_append_sheet(wb, wi, 'Instructions');
+    offerFile(baseName() + '_main_inputs.xlsx', new Uint8Array(X.write(wb, { type: 'array', bookType: 'xlsx' })), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  }
+  function importMain(file) {
+    if (!window.XLSX) { toast('The Excel reader could not load (no internet connection). Use the single-file version, which works offline.', true); return; }
+    const rd = new FileReader();
+    rd.onload = () => {
+      try {
+        const X = window.XLSX, wb = X.read(new Uint8Array(rd.result), { type: 'array' });
+        const sheet = re => { const n = wb.SheetNames.find(x => re.test(x)); return n ? X.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: '', raw: true }) : null; };
+        const P = sheet(/^param/i), V = sheet(/variant/i), I = sheet(/interior/i), C = sheet(/load/i);
+        if (!P || !V) throw new Error('the workbook needs the sheets "Parameters" and "Car variants" (download the template).');
+        const errs = [];
+        const next = clone(cfg);
+        // parameters: by Key column (or by parameter name)
+        const hp = P[0].map(h => String(h).toLowerCase());
+        const iKey = hp.findIndex(h => /^key/.test(h)), iVal = hp.findIndex(h => /^value/.test(h)), iLab = hp.findIndex(h => /^param/.test(h));
+        if (iVal < 0) throw new Error('the Parameters sheet has no "Value" column.');
+        let nP = 0;
+        P.slice(1).forEach(row => {
+          const key = iKey >= 0 ? String(row[iKey] || '').trim() : '';
+          const def = MAIN_PARAMS.find(d => d[2] === key) || (iLab >= 0 && MAIN_PARAMS.find(d => d[1].toLowerCase() === String(row[iLab] || '').trim().toLowerCase()));
+          if (!def) return;
+          set(next, def[2], parseVal(row[iVal], def[3], def[1], errs)); nP++;
+        });
+        // table sheets: header names → columns
+        const readTable = (aoa, cols, what) => {
+          if (!aoa || !aoa.length) return [];
+          const head = aoa[0].map(h => String(h).trim().toLowerCase());
+          const idx = cols.map(c => head.indexOf(c[1].toLowerCase()));
+          return aoa.slice(1).filter(r => r.some(v => String(v).trim() !== '')).map((r, ri) => {
+            const o = {};
+            cols.forEach((c, k) => { if (idx[k] >= 0) o[c[0]] = parseVal(r[idx[k]], c[2], `${what} row ${ri + 2}, ${c[1]}`, errs); });
+            return o;
+          });
+        };
+        const vars = readTable(V, VAR_COLS, 'Car variants').filter(v => v.name);
+        if (!vars.length) throw new Error('the Car variants sheet has no variants.');
+        const items = readTable(I, ITEM_COLS, 'Interior items');
+        const cases = readTable(C, CASE_COLS, 'Load cases').filter(c => c.name);
+        next.carTypes = vars.map(v => {
+          const t = Object.assign({ interiorItems: [] }, v);
+          t.cab = t.end1 === 'cab' || t.end2 === 'cab';
+          ['end1', 'end2'].forEach(k => { if (!t[k]) t[k] = 'gangway'; });
+          ['support1', 'support2'].forEach(k => { if (!t[k]) t[k] = 'own'; });
+          t.interiorItems = items.filter(it => String(it.car) === String(v.name)).map(it => { const q = Object.assign({}, it); delete q.car; Object.keys(q).forEach(k => { if (q[k] === '') delete q[k]; }); return q; });
+          return t;
+        });
+        const lost = items.filter(it => !vars.some(v => String(v.name) === String(it.car)));
+        if (lost.length) errs.push(`${lost.length} interior item(s) refer to unknown variants and were skipped.`);
+        if (cases.length) next.cases = cases.map(c => Object.assign({ kind: c.kind || 'density' }, c));
+        else errs.push('No load cases in the file; the current load cases were kept.');
+        ui.undoCfg = clone(cfg);
+        cfg = normalise(next); ui.sheet = { main: 0, uf: 0, wt: 0, ft: 0 };
+        renderAllInputs(); showPane(1); persist(); markChanged();
+        toast(`Imported ${nP} parameters, ${next.carTypes.length} car variants, ${next.carTypes.reduce((a, t) => a + t.interiorItems.length, 0)} interior items and ${next.cases.length} load cases from ${file.name}.` + (errs.length ? ` ${errs.length} value(s) not recognised: ${errs.slice(0, 3).join('; ')}${errs.length > 3 ? ' …' : ''}` : ' Undo is available in Train formation.'), errs.length > 0);
+      } catch (e) { toast(`Could not read ${file.name}: ${e.message}`, true); }
+    };
+    rd.readAsArrayBuffer(file);
+  }
+
   function downloadTemplate(listName) {
     const spec = LISTS[listName];
     const head = spec.cols.map(c => c.head);
@@ -4554,6 +4728,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       }
       if (b.dataset.undotpl) { if (ui.undoCfg) { cfg = normalise(ui.undoCfg); ui.undoCfg = null; renderAllInputs(); generateAll(); showPane(1); persist(); toast('Previous inputs restored.'); } return; }
       if (b.id === 'powerTpl') return addPowerEquipment();
+      if (b.id === 'mainTpl') return downloadMainTemplate();
       if (b.id === 'addCase') { cfg.cases.push({ name: 'Case ' + (cfg.cases.length + 1), kind: 'density', density: 5, note: '' }); renderPane1(); markChanged(); return; }
       if (b.dataset.delcase != null) { cfg.cases.splice(+b.dataset.delcase, 1); renderPane1(); markChanged(); return; }
       if (b.dataset.additem) {
