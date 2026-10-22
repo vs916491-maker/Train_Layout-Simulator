@@ -557,11 +557,13 @@
       v.rect(xs - 120, top ? zs : zs - 60, xs + 120, top ? zs + 60 : zs, 'BOGIE', { fill: '#5a5a5a' });
       v.line(xs, top ? zs + 60 : zs, k * 1000, D / 2, 'BOGIE');
     });
-    // body outline: straight lower sides, slight tumblehome, arched roof
+    // body outline: straight lower sides, slight tumblehome, rounded roof shoulders
     const pts = [];
-    const roofHalf = hw - 260;
-    for (let k = 0; k <= 10; k++) { const x = -roofHalf + (2 * roofHalf * k) / 10; pts.push([x, rh - 230 * Math.pow(x / roofHalf, 2)]); }
-    const body = [[-(hw - 160), sole], [-(hw - 10), fh + 250], [-hw, fh + 1500], [-(hw - 70), rh - 420], [-(hw - 160), rh - 300]].concat(pts, [[hw - 160, rh - 300], [hw - 70, rh - 420], [hw, fh + 1500], [hw - 10, fh + 250], [hw - 160, sole]]);
+    const shR = 420, roofHalf = hw - 120;
+    for (let k = 0; k <= 6; k++) { const a = (Math.PI / 2) * (k / 6); pts.push([-roofHalf + shR - shR * Math.cos(a), rh - 260 - shR + shR * Math.sin(a) + 80 * Math.sin(a)]); }
+    for (let k = 1; k <= 9; k++) { const x = -roofHalf + shR + (2 * (roofHalf - shR) * k) / 10; pts.push([x, rh - 100 + 40 * (1 - Math.pow(x / (roofHalf - shR), 2))]); }
+    for (let k = 6; k >= 0; k--) { const a = (Math.PI / 2) * (k / 6); pts.push([roofHalf - shR + shR * Math.cos(a), rh - 260 - shR + shR * Math.sin(a) + 80 * Math.sin(a)]); }
+    const body = [[-(hw - 140), sole], [-(hw - 20), fh + 200], [-hw, fh + 1300], [-(hw - 50), rh - 700]].concat(pts, [[hw - 50, rh - 700], [hw, fh + 1300], [hw - 20, fh + 200], [hw - 140, sole]]);
     v.poly(body, true, 'BODY', { fill: '#f7f8fa' });
     // anticlimber, obstacle deflector, coupler
     v.rect(-1150, sole - 60, 1150, sole + 120, 'BODY_THIN', { fill: '#e6e8eb' });
@@ -569,54 +571,70 @@
     const ch = F.couplerHeight;
     v.rect(-260, ch - 150, 260, ch + 150, 'BODY', { fill: '#dfe3e7' });
     v.rect(-110, ch - 230, 110, ch - 150, 'BODY_THIN');
-    // windscreen band, split around the detrainment door
-    const wz0 = fh + 950, wz1 = rh - 470, wx = hw - 300;
+
+    // Front mask: one dark band carries the windscreen, the detrainment-door glass and the destination display,
+    // so an offset door still reads as part of a single glazed front.
+    const wz0 = fh + 950, wz1 = rh - 520, wx = hw - 300;
     const detX = DC.detrain.on ? -TLT.detrainY(lay, cfg) : null;
     const dw2 = DC.detrain.width / 2, dTop = fh + DC.detrain.height;
+    const mz0 = wz0 - 110, mz1 = Math.min(rh - 230, wz1 + 300), mx = wx + 110;
+    const rr = (x0, y0, x1, y1, r) => { const q = []; const arc = (cx, cy, a0) => { for (let k = 0; k <= 4; k++) { const a = a0 + (Math.PI / 2) * (k / 4); q.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]); } };
+      arc(x1 - r, y0 + r, -Math.PI / 2); arc(x1 - r, y1 - r, 0); arc(x0 + r, y1 - r, Math.PI / 2); arc(x0 + r, y0 + r, Math.PI); return q; };
+    v.poly(rr(-mx, mz0, mx, mz1, 160), true, 'BODY_THIN', { fill: '#2f3943' });
     let panes = [[-wx, wx]];
-    if (DC.detrain.on) panes = [[-wx, detX - dw2 - 60], [detX + dw2 + 60, wx]].filter(([a, b]) => b - a > 200);
-    panes.forEach(([a, b]) => v.poly([[a, wz0], [b, wz0], [b - (b > 0 ? 80 : 0), wz1], [a + (a < 0 ? 80 : 0), wz1]], true, 'WINDOW', { fill: '#dfe9fb', lw: 0.3 }));
+    if (DC.detrain.on) panes = [[-wx, detX - dw2 - 50], [detX + dw2 + 50, wx]].filter(([a, b]) => b - a > 250);
+    const glass = '#cfdff3';
+    panes.forEach(([a, b]) => v.poly(rr(a, wz0, b, wz1, 70), true, 'WINDOW', { fill: glass, lw: 0.3 }));
     if (DC.detrain.on) {
-      v.rect(detX - dw2, fh - 60, detX + dw2, dTop, 'DOOR', { fill: '#f3e5f7', lw: 0.35 });
-      v.rect(detX - dw2 + 60, Math.max(wz0, fh + 300), detX + dw2 - 60, Math.min(wz1, dTop - 120), 'WINDOW', { fill: '#dfe9fb' });
-      v.line(detX + dw2 - 120, fh + 900, detX + dw2 - 120, fh + 1150, 'DOOR', { lw: 0.4 });
+      // door leaf: outline over the body, glass aligned with the windscreen band
+      v.poly(rr(detX - dw2, fh - 60, detX + dw2, dTop, 60), true, 'DOOR', { lw: 0.3 });
+      v.poly(rr(detX - dw2 + 50, wz0, detX + dw2 - 50, Math.min(wz1, dTop - 90), 50), true, 'WINDOW', { fill: glass, lw: 0.3 });
+      v.line(detX + dw2 - 110, fh + 850, detX + dw2 - 110, fh + 1100, 'DOOR', { lw: 0.5 });
     }
-    // destination indicator
-    if (F.destination) {
-      const dx = DC.detrain.on && Math.abs(detX) > 300 ? -Math.sign(detX) * 450 : 0;
-      v.rect(dx - 650, wz1 + 60, dx + 650, wz1 + 230, 'BODY_THIN', { fill: '#2b2b2b' });
+    // destination display inside the mask, above the glazing
+    if (F.destination) v.rect(-Math.min(650, wx - 380), wz1 + 70, Math.min(650, wx - 380), wz1 + 220, 'BODY_THIN', { fill: '#11161b' });
+    // head / tail lights: in the lower front when clear of the door, otherwise in the upper corners of the mask
+    const lz = fh + F.lightsZ, lx = hw - F.lightsInset;
+    const clash = DC.detrain.on && [-1, 1].some(k => Math.abs(k * lx - detX) < dw2 + 200);
+    if (!clash) {
+      [-1, 1].forEach(k => {
+        v.poly(rr(k * lx - 200, lz - 110, k * lx + 200, lz + 110, 90), true, 'BODY_THIN', { fill: '#2f3943' });
+        v.circle(k * lx - k * -90, lz, 70, 'BODY', { fill: '#fffbe6' });
+        v.circle(k * lx + k * -90, lz, 55, 'NOTE', { fill: '#f6b3ad' });
+      });
+    } else {
+      [-1, 1].forEach(k => {
+        const x = k * (mx - 230), z = wz1 + 145;
+        v.circle(x, z, 62, 'BODY', { fill: '#fffbe6' });
+        v.circle(x - k * 150, z, 48, 'NOTE', { fill: '#f6b3ad' });
+      });
     }
-    // head and tail lights
-    const lz = fh + F.lightsZ;
-    [-1, 1].forEach(k => {
-      v.circle(k * (hw - F.lightsInset), lz, 95, 'BODY', { fill: '#fffbe6' });
-      v.circle(k * (hw - F.lightsInset - 240), lz, 70, 'NOTE', { fill: '#f6b3ad' });
-    });
-    // wipers
+    // wipers, parked along the bottom of the glass; several wipers share a pane evenly
     const n = F.wipers;
     if (n > 0) {
-      const pz = wz0 + 70;
-      const centres = [];
-      const pc = p => (p[0] + p[1]) / 2;
-      if (n === 1) { const drvSide = CB.desk === 'central' ? 0 : (CB.deskSide === 'B' ? 1 : -1); const p = panes.reduce((best, q) => (Math.abs(pc(q) - drvSide * wx / 2) < Math.abs(pc(best) - drvSide * wx / 2) ? q : best), panes[0]); centres.push(pc(p)); }
-      else if (n === 2 && panes.length === 2) { centres.push(pc(panes[0]), pc(panes[1])); }
-      else {
-        for (let k = 0; k < n; k++) {
-          let x = -wx + (2 * wx * (k + 0.5)) / n;
-          const inDoor = DC.detrain.on && Math.abs(x - detX) < dw2 + 80;
-          if (inDoor) { const p = panes.reduce((best, q) => (Math.abs(pc(q) - x) < Math.abs(pc(best) - x) ? q : best), panes[0]); x = pc(p); }
-          centres.push(x);
-        }
+      const widths = panes.map(([a, b]) => b - a), tot = widths.reduce((x, y) => x + y, 0);
+      let cnt = panes.map(() => 0);
+      if (n === 1) {
+        const drvSide = CB.desk === 'central' ? 0 : (CB.deskSide === 'B' ? 1 : -1);
+        let best = 0; panes.forEach((p, i) => { if (Math.abs((p[0] + p[1]) / 2 - drvSide * wx / 2) < Math.abs((panes[best][0] + panes[best][1]) / 2 - drvSide * wx / 2)) best = i; });
+        cnt[best] = 1;
+      } else {
+        cnt = widths.map(w => Math.floor((n * w) / tot));
+        let left = n - cnt.reduce((x, y) => x + y, 0);
+        widths.map((w, i) => [i, (n * w) / tot - cnt[i]]).sort((p, q) => q[1] - p[1]).forEach(([i]) => { if (left > 0) { cnt[i]++; left--; } });
       }
-      centres.forEach(x => {
-        if (F.wiperType === 'pantograph') {
-          v.line(x - 90, pz, x - 30, pz + 620, 'BODY', { lw: 0.35 }); v.line(x + 60, pz, x + 120, pz + 620, 'BODY', { lw: 0.35 });
-          v.line(x + 45, pz + 330, x + 45, pz + 1000, 'BODY', { lw: 0.6 });
-        } else {
-          v.line(x, pz, x - 110, pz + 700, 'BODY', { lw: 0.35 });
-          v.line(x - 150, pz + 280, x - 150, pz + 1020, 'BODY', { lw: 0.6 });
+      panes.forEach(([a, b], i) => {
+        const k = cnt[i]; if (!k) return;
+        const seg = (b - a) / k;
+        for (let j = 0; j < k; j++) {
+          const s0 = a + j * seg, s1 = s0 + seg;
+          const px = s1 - Math.min(160, seg * 0.12), pz = wz0 + 70;
+          const L = Math.min(seg - 260, 900), tz = pz + L * 0.12;
+          v.circle(px, pz, 30, 'BODY', { fill: '#333333' });
+          if (F.wiperType === 'pantograph') { v.line(px, pz, px - L * 0.55, tz, 'BODY', { lw: 0.3 }); v.line(px, pz + 60, px - L * 0.55, tz + 60, 'BODY', { lw: 0.3 }); }
+          else v.line(px, pz, px - L * 0.55, tz * 0.5 + pz * 0.5, 'BODY', { lw: 0.3 });
+          v.line(px - L * 0.95, tz - 25, px - L * 0.2, pz + (tz - pz) * 0.3 + 25, 'BODY', { lw: 0.6 });
         }
-        v.circle(x, pz, 35, 'BODY', { fill: '#333333' });
       });
     }
     // centre line and dimensions
@@ -627,10 +645,7 @@
     const xr = Math.max(hw, F.gaugeWidth / 2);
     v.dimV(xr, 0, fh, xr + 4.5 * s, { h: 1.6, side: 'right' });
     v.dimV(xr, 0, rh, xr + 9 * s, { h: 1.6, side: 'right' });
-    if (DC.detrain.on) {
-      v.dimChainH([detX - dw2, detX + dw2], dTop, dTop + 2.6 * s, { h: 1.5 });
-      v.dimV(detX - dw2, fh - 60, dTop, detX - dw2 - 2.5 * s, { h: 1.5 });
-    }
+    if (DC.detrain.on) v.dimV(detX - dw2, fh - 60, dTop, -hw - 4 * s, { h: 1.5 });   // door height, outside the body (width in the note below)
     v.text(-xr, -380 - 9.5 * s, 'SIDE A', 1.6, { anchor: 'start', color: '#555555', bold: true });
     v.text(xr, -380 - 9.5 * s, 'SIDE B', 1.6, { anchor: 'end', color: '#555555', bold: true });
     const info = [`Wipers: ${n ? `${n} × ${F.wiperType === 'pantograph' ? 'pantograph' : 'single-arm'}` : 'none'}`, `Detrainment door: ${DC.detrain.on ? `${DC.detrain.width} × ${DC.detrain.height}${Math.abs(detX) > 1 ? ', offset ' + Math.round(Math.abs(detX)) : ', centred'}` : 'none'}`,
