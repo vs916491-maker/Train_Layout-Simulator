@@ -71,7 +71,7 @@ Template values are indicative; replace them with project data.
 
 ### Power collection
 
-Supply 25 kV AC, 1500 V DC or 750 V DC; collection by pantograph, third rail (CCD shoe gear, top / bottom / side contact) or both (DC). Checks: pantograph per unit, maximum pantographs per train, 25 kV main transformer and VCB present, third-rail shoe span of the train and of each unit against the longest conductor-rail gap. **Add … equipment** adds the typical collection equipment to the equipment and weight lists (typical masses, to be replaced). Shoe gear is drawn on the bogies, and the conductor rail in the front view.
+**Per car variant** table: pantographs per car (target, checked against the PAN… rows of the equipment list; blank = no check) and CCD shoes per car (total on both sides, placed on the bogies from END 1), with per-train totals. Supply 25 kV AC, 1500 V DC or 750 V DC; collection by pantograph, third rail (CCD shoe gear, top / bottom / side contact) or both (DC). Checks: pantograph per unit, maximum pantographs per train, 25 kV main transformer and VCB present, third-rail shoe span of the train and of each unit against the longest conductor-rail gap. **Add … equipment** adds the typical collection equipment to the equipment and weight lists (typical masses, to be replaced). Shoe gear is drawn on the bogies, and the conductor rail in the front view.
 
 ### Mainline interior (Mainline EMU / DMU only)
 

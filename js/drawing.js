@@ -139,13 +139,6 @@
     const e2 = lay.cab2 ? [[bodyR - 650, -hw], [bodyR - 200, -hw + 260], [bodyR, -hw + 750], [bodyR, hw - 750], [bodyR - 200, hw - 260], [bodyR - 650, hw]] : [[bodyR, -hw], [bodyR, hw]];
     return e1.concat(e2);
   }
-  /* Car has third-rail shoe gear (power collection = third rail / both, car variant in the shoe list) */
-  TLT.carHasShoes = function (type, cfg) {
-    const P = TLT.powerCfg(cfg);
-    if (!P.third) return false;
-    const list = P.shoeCars && !/^all$/i.test(P.shoeCars) ? P.shoeCars.split(/[\s,;]+/).filter(Boolean) : null;
-    return !list || list.includes(type.name);
-  };
   /* Couplers, joints and gangway bellows at both ends, plan or side (draw(vv, endType, shared)) */
   function eachEnd(v, lay, point, draw) {
     draw(v, lay.ends.e1, lay.shared[0], lay.hinge[0]);
@@ -239,10 +232,9 @@
     });
 
     // Bogies (own, shared or centre) and third-rail shoe gear
-    const shoes = TLT.carHasShoes(type, cfg);
+    TLT.shoeLayout(lay, cfg).forEach(xs => { v.rect(xs - 260, 90, xs + 260, 180, 'BOGIE', { fill: '#5a5a5a' }); v.line(xs, 180, xs, D / 2 - 80, 'BOGIE'); });
     lay.bogieInfo.forEach(bg => {
       const xb = bg.x, motor = bg.motor;
-      if (shoes) { v.rect(xb - 260, 90, xb + 260, 180, 'BOGIE', { fill: '#5a5a5a' }); v.line(xb, 180, xb, D / 2 - 80, 'BOGIE'); }
       v.rect(xb - wb / 2 - 420, D / 2 - 80, xb + wb / 2 + 420, D / 2 + 300, 'BOGIE', { fill: '#fbe9e7' });
       v.rect(xb - 350, D / 2 + 300, xb + 350, sole, 'BOGIE');
       [-1, 1].forEach(k => {
@@ -922,7 +914,7 @@
     const m = v => (v / 1000).toFixed(1);
     let t = `Power: ${P.label}, ${P.collector === 'panto' ? 'pantograph' : P.collector === 'third' ? `third rail (${P.contact} contact)` : `pantograph + third rail (${P.contact} contact)`}.`;
     if (P.panto) t += ` ${Q.pantos.length} pantograph(s)${Q.pantos.length > 1 ? `, outermost ${m(Q.pantoSpan)} m apart` : ''}.`;
-    if (P.third) t += ` ${Q.shoes.length} shoe-gear positions per side, span ${m(Q.span)} m, max. spacing ${m(Q.maxSpacing)} m.`;
+    if (P.third) t += ` ${Q.shoesTrain} CCD shoes (${Q.shoes.length} per side), span ${m(Q.span)} m, max. spacing ${m(Q.maxSpacing)} m.`;
     return t;
   }
   TLT.powerNote = powerNote;
@@ -1185,14 +1177,14 @@
       else if (et === 'cab' || et === 'aux') vv.rect(0, -110, 160, 110, 'BODY');
       if (et !== 'artic' && !(shared && et !== 'cab')) vv.rect(et === 'cab' || et === 'aux' ? 160 : 0, -60, bodyF + 250, 60, 'BODY_THIN');
     });
-    const shoes = TLT.carHasShoes(type, cfg), PWc = TLT.powerCfg(cfg);
+    const PWc = TLT.powerCfg(cfg);
+    TLT.shoeLayout(lay, cfg).forEach(xs => [-1, 1].forEach(k => { const yo = Math.min(PWc.railOffset, hw + 150); v.rect(xs - 260, k * (yo - 120), xs + 260, k * (yo + 120), 'BOGIE', { fill: '#5a5a5a' }); v.line(xs, k * 1050, xs, k * (yo - 120), 'BOGIE'); }));
     // centre lines
     v.line(-200, 0, Lc + 200, 0, 'CENTER');
     v.line(mid, -hw - 400, mid, hw + 400, 'CENTER');
     // bogies
     lay.bogieInfo.forEach(bg => {
       const xb = bg.x, motor = bg.motor;
-      if (shoes) [-1, 1].forEach(k => { const yo = Math.min(PWc.railOffset, hw + 150); v.rect(xb - 260, k * (yo - 120), xb + 260, k * (yo + 120), 'BOGIE', { fill: '#5a5a5a' }); v.line(xb, k * 1050, xb, k * (yo - 120), 'BOGIE'); });
       v.rect(xb - wb / 2 - 420, -1050, xb + wb / 2 + 420, 1050, 'BOGIE', { fill: '#fdf1ef' });
       [-1, 1].forEach(k => {
         const xa = xb + k * wb / 2;

@@ -397,6 +397,30 @@ table.data select { min-width: 104px; }
       maxPantos: Math.round(num(p.maxPantos, 0)), hvClearance: num(p.hvClearance, 270) };
   };
 
+  /* Pantograph target per car variant (check only; blank = no check) */
+  TLT.pantoTarget = t => { const v = num(t.pantos, NaN); return Number.isFinite(v) ? Math.max(0, Math.round(v)) : null; };
+  /* Third-rail shoes of one car: total shoes per car (both sides) from the variant, placed on the bogies from END 1.
+   * Returns the x positions (car local) of one side; the other side mirrors them. */
+  TLT.shoeLayout = function (lay, cfg) {
+    const P = TLT.powerCfg(cfg);
+    const B = lay.bogieInfo;
+    if (!P.third || !B.length) return [];
+    const anySet = (cfg.carTypes || []).some(t => num(t.ccd, 0) > 0);
+    let n;
+    if (anySet) n = Math.max(0, Math.round(num(lay.type.ccd, 0)));
+    else {   // older inputs: list of car variants, one shoe per bogie side
+      const list = P.shoeCars && !/^all$/i.test(P.shoeCars) ? P.shoeCars.split(/[\s,;]+/).filter(Boolean) : null;
+      n = list && !list.includes(lay.type.name) ? 0 : 2 * B.length;
+    }
+    const perSide = Math.ceil(n / 2);
+    if (!perSide) return [];
+    const per = B.map(() => 0);
+    for (let i = 0; i < perSide; i++) per[i % B.length]++;
+    const xs = [];
+    B.forEach((bg, i) => { const k = per[i]; for (let j = 0; j < k; j++) xs.push(bg.x + (j - (k - 1) / 2) * 700); });
+    return xs.sort((a, b) => a - b);
+  };
+
   /* ---------------- Driver's cab, windows, front view ---------------- */
   TLT.cabCfg = function (cfg) {
     const c = cfg.cab || {};
@@ -888,6 +912,18 @@ table.data select { min-width: 104px; }
     pantos.sort((a, b) => a.tx - b.tx);
     if (P.panto && !pantos.length) warn.push(`Power collection: ${P.label} pantograph is selected, but there is no pantograph (PAN…) row in the equipment list.`);
     if (!P.panto && pantos.length) warn.push(`Power collection is third rail only, but the equipment list has ${pantos.length} pantograph(s).`);
+    // pantographs per car variant: target (power card) against the equipment list
+    const perVariant = R.used.map(n => {
+      const l = R.layouts.get(n), cars = R.form.cars.filter(c => c.type.name === n).length;
+      const actual = l.equipment.items.filter(e => e.loc === 'roof' && e.kind === 'panto').length;
+      const target = TLT.pantoTarget(l.type);
+      const shoesPerCar = 2 * TLT.shoeLayout(l, R.cfg).length;
+      if (P.panto && target != null && target !== actual) warn.push(`${n}: ${target} pantograph(s) per car required (Power collection), the equipment list has ${actual}.`);
+      if (P.third && num(l.type.ccd, 0) % 2 === 1) warn.push(`${n}: ${l.type.ccd} CCD shoes per car is odd; ${shoesPerCar} are placed (same number on both sides).`);
+      return { name: n, cars, target, actual, shoesPerCar };
+    });
+    const targetTrain = perVariant.some(q => q.target != null) ? perVariant.reduce((a, q) => a + (q.target || 0) * q.cars, 0) : null;
+    if (P.panto && P.maxPantos > 0 && targetTrain != null && targetTrain > P.maxPantos) warn.push(`Pantograph target ${targetTrain} per train exceeds the maximum of ${P.maxPantos}.`);
     if (P.panto && pantos.length) {
       for (let u = 0; u < R.form.units; u++) if (!pantos.some(q => q.unit === u)) warn.push(`Unit ${u + 1} has no pantograph.`);
       if (P.maxPantos > 0 && pantos.length > P.maxPantos) {
@@ -904,15 +940,9 @@ table.data select { min-width: 104px; }
     // third-rail shoe gear on the bogies of the selected car variants (both sides)
     const shoes = [];
     if (P.third) {
-      const list = P.shoeCars && !/^all$/i.test(P.shoeCars) ? P.shoeCars.split(/[\s,;]+/).filter(Boolean) : null;
-      R.form.cars.forEach(car => {
-        if (list && !list.includes(car.type.name) && !list.includes(car.label)) return;
-        R.layouts.get(car.type.name).bogieInfo.forEach(bg => shoes.push({ car, tx: tx(car, bg.x), unit: car.unit }));
-      });
+      R.form.cars.forEach(car => TLT.shoeLayout(R.layouts.get(car.type.name), R.cfg).forEach(x => shoes.push({ car, tx: tx(car, x), unit: car.unit })));
       shoes.sort((a, b) => a.tx - b.tx);
-      const uniq = shoes.filter((q, i) => !i || q.tx - shoes[i - 1].tx > 1);
-      shoes.length = 0; uniq.forEach(q => shoes.push(q));
-      if (!shoes.length) warn.push('Third rail: no shoe gear — check "Shoe gear on car variants".');
+      if (!shoes.length) warn.push('Third rail: no CCD shoes — set the shoes per car in Power collection.');
     }
     const span = shoes.length ? shoes[shoes.length - 1].tx - shoes[0].tx : 0;
     let maxSpacing = 0;
@@ -928,7 +958,7 @@ table.data select { min-width: 104px; }
     }
     let pantoSpacing = 0;
     for (let i = 1; i < pantos.length; i++) pantoSpacing = Math.max(pantoSpacing, pantos[i].tx - pantos[i - 1].tx);
-    return { cfg: P, pantos, shoes, span, maxSpacing, unitSpans, pantoSpacing,
+    return { cfg: P, pantos, shoes, span, maxSpacing, unitSpans, pantoSpacing, perVariant, targetTrain, shoesTrain: 2 * shoes.length,
       pantoSpan: pantos.length > 1 ? pantos[pantos.length - 1].tx - pantos[0].tx : 0 };
   };
 
@@ -1219,19 +1249,19 @@ table.data select { min-width: 104px; }
       ],
       carTypes: [
         {
-          name: 'Tc', desc: 'Driving trailer car', cab: true, couplerLength: 20400, bodyLength: 19900, cabLength: 2000,
+          name: 'Tc', desc: 'Driving trailer car', cab: true, pantos: 0, ccd: '', couplerLength: 20400, bodyLength: 19900, cabLength: 2000,
           support1: 'own', support2: 'own', bogieCentres: 13800, motorBogies: 0, doorsPerSide: 4, doorPitch: 4820, doorRearOffset: 2770, tare: 34.8,
           specSeats: 39, specStanding: 113,
           interiorItems: [{ kind: 'wheelchair', bay: 1, side: 'A', place: 'door' }],
         },
         {
-          name: 'M1', desc: 'Motor car with pantographs', cab: false, couplerLength: 20000, bodyLength: 19500,
+          name: 'M1', desc: 'Motor car with pantographs', cab: false, pantos: 2, ccd: '', couplerLength: 20000, bodyLength: 19500,
           support1: 'own', support2: 'own', bogieCentres: 13800, motorBogies: 2, doorsPerSide: 4, doorPitch: 4820, doorRearOffset: 2770, tare: 37.2,
           specSeats: 48, specStanding: 117,
           interiorItems: [],
         },
         {
-          name: 'M2', desc: 'Motor car with APU', cab: false, couplerLength: 20000, bodyLength: 19500,
+          name: 'M2', desc: 'Motor car with APU', cab: false, pantos: 0, ccd: '', couplerLength: 20000, bodyLength: 19500,
           support1: 'own', support2: 'own', bogieCentres: 13800, motorBogies: 2, doorsPerSide: 4, doorPitch: 4820, doorRearOffset: 2770, tare: 37.2,
           specSeats: 48, specStanding: 117,
           interiorItems: [],
@@ -1289,7 +1319,7 @@ table.data select { min-width: 104px; }
           specSeats: '', specStanding: '', interiorItems: [{ kind: 'wheelchair', bay: 1, side: 'B', place: 'door' }],
         },
         {
-          name: 'T', desc: 'Trailer car with pantograph', cab: false, couplerLength: 22710, bodyLength: 22010,
+          name: 'T', desc: 'Trailer car with pantograph', cab: false, pantos: 1, couplerLength: 22710, bodyLength: 22010,
           support1: 'own', support2: 'own', bogieCentres: 15000, motorBogies: 0, doorsPerSide: 4, doorPitch: 5230, doorRearOffset: 3510, tare: 33,
           specSeats: '', specStanding: '', interiorItems: [],
         },
@@ -1385,7 +1415,7 @@ table.data select { min-width: 104px; }
         { name: 'A', desc: 'End section with cab, motor bogie', end1: 'cab', end2: 'artic', cab: true, couplerLength: 12300, bodyLength: 11900, cabLength: 1800,
           support1: 'own', support2: 'shared', centreBogie: false, bogieCentres: 6300, motorBogies: '1e1', doorsPerSide: 2, doorPitch: 4000, doorRearOffset: 2000, tare: 20.3,
           specSeats: '', specStanding: '', interiorItems: [{ kind: 'wheelchair', bay: 1, side: 'A', place: 'door' }] },
-        { name: 'B', desc: 'Centre section on two Jacobs bogies, pantograph', end1: 'artic', end2: 'artic', cab: false, couplerLength: 6000, bodyLength: 5600,
+        { name: 'B', pantos: 1, desc: 'Centre section on two Jacobs bogies, pantograph', end1: 'artic', end2: 'artic', cab: false, couplerLength: 6000, bodyLength: 5600,
           support1: 'shared', support2: 'shared', centreBogie: false, bogieCentres: 6000, motorBogies: 0, doorsPerSide: 1, doorPitch: 3000, doorRearOffset: 3000, tare: 6.9,
           specSeats: '', specStanding: '', interiorItems: [] },
       ],
@@ -1424,7 +1454,7 @@ table.data select { min-width: 104px; }
         { name: 'S', desc: 'Suspended module with doors', end1: 'artic', end2: 'artic', cab: false, couplerLength: 6800, bodyLength: 6600,
           support1: 'none', support2: 'none', centreBogie: false, bogieCentres: 0, motorBogies: 0, doorsPerSide: 2, doorPitch: 3400, doorRearOffset: 1700, tare: 5.1,
           specSeats: '', specStanding: '', interiorItems: [{ kind: 'wheelchair', bay: 1, side: 'A', place: 'middle' }] },
-        { name: 'M', desc: 'Centre module on one trailer bogie, pantograph', end1: 'artic', end2: 'artic', cab: false, couplerLength: 4500, bodyLength: 4300,
+        { name: 'M', pantos: 1, desc: 'Centre module on one trailer bogie, pantograph', end1: 'artic', end2: 'artic', cab: false, couplerLength: 4500, bodyLength: 4300,
           support1: 'none', support2: 'none', centreBogie: true, bogieCentres: 0, motorBogies: 0, doorsPerSide: 0, doorPitch: 3000, doorRearOffset: 2250, tare: 8.4,
           specSeats: '', specStanding: '', interiorItems: [] },
       ],
@@ -1467,7 +1497,7 @@ table.data select { min-width: 104px; }
           support1: 'own', support2: 'own', centreBogie: false, bogieCentres: 17200, motorBogies: 2, doorsPerSide: 2, doorPitch: 19200, doorRearOffset: 2700, tare: 44.7,
           seatClass: 'std', firstLength: 0, specSeats: '', specStanding: '',
           interiorItems: [{ kind: 'toilet', bay: 1, side: 'A', place: 'end1', length: 1100, depth: 1200 }] },
-        { name: 'TP', desc: 'Trailer with pantograph and main transformer, standard class', end1: 'gangway', end2: 'gangway', cab: false, couplerLength: 24600, bodyLength: 24000,
+        { name: 'TP', pantos: 1, desc: 'Trailer with pantograph and main transformer, standard class', end1: 'gangway', end2: 'gangway', cab: false, couplerLength: 24600, bodyLength: 24000,
           support1: 'own', support2: 'own', centreBogie: false, bogieCentres: 17200, motorBogies: 0, doorsPerSide: 2, doorPitch: 19200, doorRearOffset: 2700, tare: 46.7,
           seatClass: 'std', firstLength: 0, specSeats: '', specStanding: '', interiorItems: [] },
       ],
@@ -1630,13 +1660,6 @@ table.data select { min-width: 104px; }
     const e2 = lay.cab2 ? [[bodyR - 650, -hw], [bodyR - 200, -hw + 260], [bodyR, -hw + 750], [bodyR, hw - 750], [bodyR - 200, hw - 260], [bodyR - 650, hw]] : [[bodyR, -hw], [bodyR, hw]];
     return e1.concat(e2);
   }
-  /* Car has third-rail shoe gear (power collection = third rail / both, car variant in the shoe list) */
-  TLT.carHasShoes = function (type, cfg) {
-    const P = TLT.powerCfg(cfg);
-    if (!P.third) return false;
-    const list = P.shoeCars && !/^all$/i.test(P.shoeCars) ? P.shoeCars.split(/[\s,;]+/).filter(Boolean) : null;
-    return !list || list.includes(type.name);
-  };
   /* Couplers, joints and gangway bellows at both ends, plan or side (draw(vv, endType, shared)) */
   function eachEnd(v, lay, point, draw) {
     draw(v, lay.ends.e1, lay.shared[0], lay.hinge[0]);
@@ -1730,10 +1753,9 @@ table.data select { min-width: 104px; }
     });
 
     // Bogies (own, shared or centre) and third-rail shoe gear
-    const shoes = TLT.carHasShoes(type, cfg);
+    TLT.shoeLayout(lay, cfg).forEach(xs => { v.rect(xs - 260, 90, xs + 260, 180, 'BOGIE', { fill: '#5a5a5a' }); v.line(xs, 180, xs, D / 2 - 80, 'BOGIE'); });
     lay.bogieInfo.forEach(bg => {
       const xb = bg.x, motor = bg.motor;
-      if (shoes) { v.rect(xb - 260, 90, xb + 260, 180, 'BOGIE', { fill: '#5a5a5a' }); v.line(xb, 180, xb, D / 2 - 80, 'BOGIE'); }
       v.rect(xb - wb / 2 - 420, D / 2 - 80, xb + wb / 2 + 420, D / 2 + 300, 'BOGIE', { fill: '#fbe9e7' });
       v.rect(xb - 350, D / 2 + 300, xb + 350, sole, 'BOGIE');
       [-1, 1].forEach(k => {
@@ -2413,7 +2435,7 @@ table.data select { min-width: 104px; }
     const m = v => (v / 1000).toFixed(1);
     let t = `Power: ${P.label}, ${P.collector === 'panto' ? 'pantograph' : P.collector === 'third' ? `third rail (${P.contact} contact)` : `pantograph + third rail (${P.contact} contact)`}.`;
     if (P.panto) t += ` ${Q.pantos.length} pantograph(s)${Q.pantos.length > 1 ? `, outermost ${m(Q.pantoSpan)} m apart` : ''}.`;
-    if (P.third) t += ` ${Q.shoes.length} shoe-gear positions per side, span ${m(Q.span)} m, max. spacing ${m(Q.maxSpacing)} m.`;
+    if (P.third) t += ` ${Q.shoesTrain} CCD shoes (${Q.shoes.length} per side), span ${m(Q.span)} m, max. spacing ${m(Q.maxSpacing)} m.`;
     return t;
   }
   TLT.powerNote = powerNote;
@@ -2676,14 +2698,14 @@ table.data select { min-width: 104px; }
       else if (et === 'cab' || et === 'aux') vv.rect(0, -110, 160, 110, 'BODY');
       if (et !== 'artic' && !(shared && et !== 'cab')) vv.rect(et === 'cab' || et === 'aux' ? 160 : 0, -60, bodyF + 250, 60, 'BODY_THIN');
     });
-    const shoes = TLT.carHasShoes(type, cfg), PWc = TLT.powerCfg(cfg);
+    const PWc = TLT.powerCfg(cfg);
+    TLT.shoeLayout(lay, cfg).forEach(xs => [-1, 1].forEach(k => { const yo = Math.min(PWc.railOffset, hw + 150); v.rect(xs - 260, k * (yo - 120), xs + 260, k * (yo + 120), 'BOGIE', { fill: '#5a5a5a' }); v.line(xs, k * 1050, xs, k * (yo - 120), 'BOGIE'); }));
     // centre lines
     v.line(-200, 0, Lc + 200, 0, 'CENTER');
     v.line(mid, -hw - 400, mid, hw + 400, 'CENTER');
     // bogies
     lay.bogieInfo.forEach(bg => {
       const xb = bg.x, motor = bg.motor;
-      if (shoes) [-1, 1].forEach(k => { const yo = Math.min(PWc.railOffset, hw + 150); v.rect(xb - 260, k * (yo - 120), xb + 260, k * (yo + 120), 'BOGIE', { fill: '#5a5a5a' }); v.line(xb, k * 1050, xb, k * (yo - 120), 'BOGIE'); });
       v.rect(xb - wb / 2 - 420, -1050, xb + wb / 2 + 420, 1050, 'BOGIE', { fill: '#fdf1ef' });
       [-1, 1].forEach(k => {
         const xa = xb + k * wb / 2;
@@ -3510,14 +3532,14 @@ table.data select { min-width: 104px; }
       ${F('Supply system', 'power.system', 'select', { re: true, options: TLT.POWER_SYSTEMS })}
       ${PC.system === '25kV' ? '<div class="f"><label>Current collection</label><div class="hint" style="margin:8px 0 0">Pantograph (overhead line)</div></div>'
         : F('Current collection', 'power.collector', 'select', { re: true, options: [['panto', 'Pantograph (overhead line)'], ['third', 'Third rail (CCD shoe gear)'], ['both', 'Pantograph + third rail']] })}
-      ${PC.panto ? F('Pantograph on car variants (template)', 'power.pantoCars', 'text', { hint: 'e.g. <code>M1</code> or <code>TP</code>; blank = first car without cab' }) + F('Max. pantographs per train (0 = no check)', 'power.maxPantos', 'num') : ''}
-      ${PC.third ? F('Third rail contact', 'power.contact', 'select', { options: [['bottom', 'Bottom contact'], ['top', 'Top contact'], ['side', 'Side contact']] })
-        + F('Shoe gear on car variants', 'power.shoeCars', 'text', { hint: '<code>all</code> or names, e.g. <code>M1, M2</code>' })
+      ${PC.panto ? F('Max. pantographs per train (0 = no check)', 'power.maxPantos', 'num') + '<div></div>' : ''}
+      ${PC.third ? F('Third rail contact', 'power.contact', 'select', { options: [['bottom', 'Bottom contact'], ['top', 'Top contact'], ['side', 'Side contact']] }) + '<div></div>'
         + F('Conductor rail centre from track centre', 'power.railOffset', 'num', { unit: 'mm' }) + F('Longest conductor-rail gap (check)', 'power.maxGap', 'num', { unit: 'mm', hint: '0 = no check' }) : ''}
       ${PC.system === '25kV' ? F('HV clearance on roof (note)', 'power.hvClearance', 'num', { unit: 'mm', hint: 'Shown as a note; confirm per EN 50119 / EN 50124-1 and the specification.' }) : ''}
     </div>
+    <h4 style="margin:12px 0 6px;font-size:13px">Per car variant</h4><div id="powerTable">${powerTableHtml()}</div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px"><button class="btn small" id="powerTpl">Add ${esc(PC.label)} equipment</button></div>
-    <p class="hint">Adds the typical collection equipment to the equipment list (step 2) and the weight list (step 5) with typical masses: ${PC.system === '25kV' ? 'pantograph, VCB, earthing switch and arrester on the roof, main transformer under the floor' : `${PC.panto ? 'pantograph and arrester on the roof, HSCB under the floor' : 'HSCB under the floor'}${PC.third ? '; shoe fuses and CCD shoe gear on each bogie of the shoe cars' : ''}`}. Rows that already exist are kept. The checks count pantographs per unit and the shoe span along the train.</p>`);
+    <p class="hint">Adds the typical collection equipment to the equipment list (step 2) and the weight list (step 5) with typical masses: ${PC.system === '25kV' ? 'pantograph, VCB, earthing switch and arrester on the roof, main transformer under the floor' : `${PC.panto ? 'pantograph and arrester on the roof, HSCB under the floor' : 'HSCB under the floor'}${PC.third ? '; shoe fuses and CCD shoe gear on each bogie of the shoe cars' : ''}`}. Rows that already exist are kept. The checks count pantographs per unit and the shoe span along the train.</p>`, ' style="grid-column:1/-1"');
     const MLon = PT === 'mainline', MLc = TLT.mainlineCfg(cfg);
     const abOpts = [['2+2', '2+2'], ['2+1', '2+1'], ['3+2', '3+2'], ['1+1', '1+1'], ['2+0', '2 + 0']];
     h += card('Interior & seating rules', `<div class="fields">
@@ -3602,6 +3624,33 @@ table.data select { min-width: 104px; }
       </div></div>`;
   }
 
+  /* Power collection: pantographs (target, checked against the equipment list) and CCD shoes per car, with train totals */
+  function powerTableHtml() {
+    const P = TLT.powerCfg(cfg);
+    let R = null; try { R = TLT.compute(cfg); } catch (e) { /* */ }
+    const pv = R ? new Map(R.power.perVariant.map(q => [q.name, q])) : new Map();
+    const nCars = n => (R ? R.form.cars.filter(c => c.type.name === n).length : 0);
+    let tT = 0, tA = 0, tS = 0, anyT = false;
+    const rows = cfg.carTypes.map((t, i) => {
+      const q = pv.get(t.name), cars = nCars(t.name);
+      const target = TLT.pantoTarget(t), actual = q ? q.actual : 0, shoes = q ? q.shoesPerCar : 0;
+      if (target != null) { anyT = true; tT += target * cars; }
+      tA += actual * cars; tS += shoes * cars;
+      const bad = P.panto && target != null && target !== actual;
+      return `<tr><td><b>${esc(t.name)}</b></td><td class="num">${cars}</td>
+        ${P.panto ? `<td><input class="num" id="pw-${i}-p" type="number" min="0" step="1" data-path="carTypes.${i}.pantos" data-kind="num" value="${esc(t.pantos == null ? '' : t.pantos)}" placeholder="—"></td>
+        <td class="num"${bad ? ' style="color:var(--warn);font-weight:600"' : ''}>${actual}</td><td class="num">${target != null ? target * cars : '—'}</td>` : ''}
+        ${P.third ? `<td><input class="num" id="pw-${i}-c" type="number" min="0" step="2" data-path="carTypes.${i}.ccd" data-kind="num" value="${esc(t.ccd == null ? '' : t.ccd)}" placeholder="0"></td><td class="num">${shoes * cars}</td>` : ''}</tr>`;
+    }).join('');
+    const badA = P.panto && P.maxPantos > 0 && tA > P.maxPantos, badT = P.panto && P.maxPantos > 0 && anyT && tT > P.maxPantos;
+    const red = ' style="color:var(--warn);font-weight:600"';
+    return `<div class="scroll-x"><table class="data"><thead><tr><th>Variant</th><th>Cars in train</th>
+      ${P.panto ? '<th>Pantographs per car (target)</th><th>In equipment list (per car)</th><th>Pantographs per train (target)</th>' : ''}${P.third ? '<th>CCD shoes per car (both sides)</th><th>CCD shoes per train</th>' : ''}</tr></thead><tbody>${rows}
+      <tr class="total"><td>Train</td><td class="num">${R ? R.form.cars.length : ''}</td>
+      ${P.panto ? `<td></td><td class="num"${badA ? red : ''}>${tA} in list</td><td class="num"${badT ? red : ''}>${anyT ? tT : '—'}${P.maxPantos > 0 ? ` (max. ${P.maxPantos})` : ''}</td>` : ''}
+      ${P.third ? `<td></td><td class="num">${tS}</td>` : ''}</tr></tbody></table></div>
+      <p class="hint">${P.panto ? 'Pantograph target: blank = no check; the drawings use the pantograph (PAN…) rows of the equipment list. ' : ''}${P.third ? 'CCD shoes: total per car on both sides, placed on the bogies from END 1 (e.g. 4 = one each side of both bogies, 2 = END 1 bogie only).' : ''}</p>`;
+  }
   const SUPPORTS = [['own', 'Own bogie'], ['shared', 'Shared (Jacobs) bogie at the joint'], ['none', 'No bogie (overhang / carried by joint)']];
   function runningGearText(t) {
     let lay = null; try { lay = TLT.layoutCar(t, cfg); } catch (e) { return ''; }
@@ -3956,8 +4005,8 @@ table.data select { min-width: 104px; }
     const P = TLT.powerCfg(cfg);
     const eq = cfg.equipment = cfg.equipment || [], wt = cfg.weightItems = cfg.weightItems || [];
     const names = s => String(s || '').split(/[\s,;]+/).filter(Boolean);
-    let pCars = names(cfg.power.pantoCars).filter(n => cfg.carTypes.some(t => t.name === n));
-    if (!pCars.length) { const t = cfg.carTypes.find(q => !TLT.hasCab(q)) || cfg.carTypes[0]; pCars = [t.name]; }
+    let pCars = cfg.carTypes.filter(t => (TLT.pantoTarget(t) || 0) > 0).map(t => t.name);
+    if (!pCars.length && P.panto) { toast('Set the pantographs per car in the Power collection table first.', true); return; }
     let nE = 0, nW = 0;
     // an item counts as present when the car already has a row of that type (PAN1 / PAN2 are pantographs, LA is an arrester …)
     const SAME = { PAN: /^(PAN|PANTO)/i, ARR: /^(ARR|LA\b|SA\b)|arrest/i, VCB: /VCB|MCB|circuit/i, ES: /^ES\b|earth/i, 'MAIN TRANSFORMER': /transf|^MTR?\b|^TFR?\b/i, HSCB: /HSCB/i, 'SHOE FUSE': /shoe/i };
@@ -3975,7 +4024,15 @@ table.data select { min-width: 104px; }
     if (P.panto) pCars.forEach(car => {
       const t = cfg.carTypes.find(q => q.name === car); const half = TLT.num(t.couplerLength, 20000) / 2;
       const xp = Math.round(half - 2600);
-      add(car, 'PAN', 'roof', 1700, 1800, 450, xp, 0, P.system === '25kV' ? 260 : 200, 'panto');
+      // pantographs up to the target count (PAN1 towards END 1, PAN2 towards END 2, PAN3 at the centre)
+      const want = TLT.pantoTarget(t) || 0;
+      const haveP = eq.filter(r => String(r.car).trim() === car && TLT.normEquipRow(r).kind === 'panto').length;
+      const pos = [xp, -xp, 0, Math.round(xp / 2)];
+      for (let k = haveP; k < want; k++) {
+        let nm = 'PAN' + (k + 1); while (eq.some(r => String(r.car).trim() === car && String(r.name).trim() === nm)) nm += "'";
+        eq.push({ car, name: nm, loc: 'roof', length: 1700, width: 1800, height: 450, x: pos[k % 4], y: 0, kind: 'panto' }); nE++;
+        addW(car, 'Roof', nm, 1700, 1800, 450, pos[k % 4], 0, P.system === '25kV' ? 260 : 200);
+      }
       add(car, 'ARR', 'roof', 400, 400, 450, xp - 1500, -700, 25, 'box');
       if (P.system === '25kV') {
         add(car, 'VCB', 'roof', 1000, 800, 400, xp - 1700, 0, 180, 'box');
@@ -3984,14 +4041,14 @@ table.data select { min-width: 104px; }
       } else add(car, 'HSCB', 'under', 900, 700, 450, xp - 2500, -900, 150, 'box');
     });
     if (P.third) {
-      const list = P.shoeCars && !/^all$/i.test(P.shoeCars) ? names(P.shoeCars) : cfg.carTypes.map(t => t.name);
-      list.forEach(car => {
-        const t = cfg.carTypes.find(q => q.name === car); if (!t) return;
+      cfg.carTypes.forEach(t => {
+        const car = t.name;
         let lay = null; try { lay = TLT.layoutCar(t, cfg); } catch (e) { return; }
-        if (!lay.bogieInfo.length) return;
+        const xs = TLT.shoeLayout(lay, cfg);
+        if (!xs.length) return;
         if (!P.panto) add(car, 'HSCB', 'under', 900, 700, 450, Math.round(lay.mid - lay.Lc * 0.35), -900, 150, 'box');
         add(car, 'SHOE FUSE', 'under', 700, 500, 400, 0, 900, 40, 'box');
-        if (!wt.some(r => String(r.car).trim() === car && /shoe gear/i.test(r.name || ''))) lay.bogieInfo.forEach((bg, k) => addW(car, 'Bogie', `CCD shoe gear ${bg.end === 0 ? 'centre' : 'END ' + bg.end}`, 600, 3000, 300, Math.round(lay.mid - bg.x), 0, 120));
+        if (!wt.some(r => String(r.car).trim() === car && /shoe gear/i.test(r.name || ''))) xs.forEach((x, k) => addW(car, 'Bogie', `CCD shoe gear ${k + 1} (both sides)`, 600, 3000, 300, Math.round(lay.mid - x), 0, 120));
       });
     }
     renderPane1(); markChanged();
@@ -4213,7 +4270,7 @@ table.data select { min-width: 104px; }
   function markChanged() {
     persist();
     clearTimeout(timer);
-    timer = setTimeout(() => { if (ui.pane === 1) refreshPane1Info(); if (ui.pane === 2) refreshRowStatus(); if (ui.pane === 5) refreshWeightResults(); }, 250);
+    timer = setTimeout(() => { if (ui.pane === 1) { refreshPane1Info(); const pt = $('powerTable'); if (pt && !pt.contains(document.activeElement)) pt.innerHTML = powerTableHtml(); } if (ui.pane === 2) refreshRowStatus(); if (ui.pane === 5) refreshWeightResults(); }, 250);
   }
 
   /* ---------- events ---------- */
@@ -4235,6 +4292,7 @@ table.data select { min-width: 104px; }
     if (nameMatch && oldName !== v) [cfg.equipment || [], cfg.weightItems || []].forEach(L => L.forEach(r => { if (String(r.car).trim() === oldName) r.car = v; }));
     if (e.type === 'change' && (el.dataset.rerender || nameMatch)) { if (ui.pane === 1) renderPane1(); }
     if (e.type === 'change' && el.dataset.rerender5) renderWeightEdit();
+    if (e.type === 'change' && /^carTypes\.\d+\.(pantos|ccd)$/.test(path) && $('powerTable')) $('powerTable').innerHTML = powerTableHtml();
     markChanged();
   }
 

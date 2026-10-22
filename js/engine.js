@@ -195,6 +195,30 @@
       maxPantos: Math.round(num(p.maxPantos, 0)), hvClearance: num(p.hvClearance, 270) };
   };
 
+  /* Pantograph target per car variant (check only; blank = no check) */
+  TLT.pantoTarget = t => { const v = num(t.pantos, NaN); return Number.isFinite(v) ? Math.max(0, Math.round(v)) : null; };
+  /* Third-rail shoes of one car: total shoes per car (both sides) from the variant, placed on the bogies from END 1.
+   * Returns the x positions (car local) of one side; the other side mirrors them. */
+  TLT.shoeLayout = function (lay, cfg) {
+    const P = TLT.powerCfg(cfg);
+    const B = lay.bogieInfo;
+    if (!P.third || !B.length) return [];
+    const anySet = (cfg.carTypes || []).some(t => num(t.ccd, 0) > 0);
+    let n;
+    if (anySet) n = Math.max(0, Math.round(num(lay.type.ccd, 0)));
+    else {   // older inputs: list of car variants, one shoe per bogie side
+      const list = P.shoeCars && !/^all$/i.test(P.shoeCars) ? P.shoeCars.split(/[\s,;]+/).filter(Boolean) : null;
+      n = list && !list.includes(lay.type.name) ? 0 : 2 * B.length;
+    }
+    const perSide = Math.ceil(n / 2);
+    if (!perSide) return [];
+    const per = B.map(() => 0);
+    for (let i = 0; i < perSide; i++) per[i % B.length]++;
+    const xs = [];
+    B.forEach((bg, i) => { const k = per[i]; for (let j = 0; j < k; j++) xs.push(bg.x + (j - (k - 1) / 2) * 700); });
+    return xs.sort((a, b) => a - b);
+  };
+
   /* ---------------- Driver's cab, windows, front view ---------------- */
   TLT.cabCfg = function (cfg) {
     const c = cfg.cab || {};
@@ -686,6 +710,18 @@
     pantos.sort((a, b) => a.tx - b.tx);
     if (P.panto && !pantos.length) warn.push(`Power collection: ${P.label} pantograph is selected, but there is no pantograph (PAN…) row in the equipment list.`);
     if (!P.panto && pantos.length) warn.push(`Power collection is third rail only, but the equipment list has ${pantos.length} pantograph(s).`);
+    // pantographs per car variant: target (power card) against the equipment list
+    const perVariant = R.used.map(n => {
+      const l = R.layouts.get(n), cars = R.form.cars.filter(c => c.type.name === n).length;
+      const actual = l.equipment.items.filter(e => e.loc === 'roof' && e.kind === 'panto').length;
+      const target = TLT.pantoTarget(l.type);
+      const shoesPerCar = 2 * TLT.shoeLayout(l, R.cfg).length;
+      if (P.panto && target != null && target !== actual) warn.push(`${n}: ${target} pantograph(s) per car required (Power collection), the equipment list has ${actual}.`);
+      if (P.third && num(l.type.ccd, 0) % 2 === 1) warn.push(`${n}: ${l.type.ccd} CCD shoes per car is odd; ${shoesPerCar} are placed (same number on both sides).`);
+      return { name: n, cars, target, actual, shoesPerCar };
+    });
+    const targetTrain = perVariant.some(q => q.target != null) ? perVariant.reduce((a, q) => a + (q.target || 0) * q.cars, 0) : null;
+    if (P.panto && P.maxPantos > 0 && targetTrain != null && targetTrain > P.maxPantos) warn.push(`Pantograph target ${targetTrain} per train exceeds the maximum of ${P.maxPantos}.`);
     if (P.panto && pantos.length) {
       for (let u = 0; u < R.form.units; u++) if (!pantos.some(q => q.unit === u)) warn.push(`Unit ${u + 1} has no pantograph.`);
       if (P.maxPantos > 0 && pantos.length > P.maxPantos) {
@@ -702,15 +738,9 @@
     // third-rail shoe gear on the bogies of the selected car variants (both sides)
     const shoes = [];
     if (P.third) {
-      const list = P.shoeCars && !/^all$/i.test(P.shoeCars) ? P.shoeCars.split(/[\s,;]+/).filter(Boolean) : null;
-      R.form.cars.forEach(car => {
-        if (list && !list.includes(car.type.name) && !list.includes(car.label)) return;
-        R.layouts.get(car.type.name).bogieInfo.forEach(bg => shoes.push({ car, tx: tx(car, bg.x), unit: car.unit }));
-      });
+      R.form.cars.forEach(car => TLT.shoeLayout(R.layouts.get(car.type.name), R.cfg).forEach(x => shoes.push({ car, tx: tx(car, x), unit: car.unit })));
       shoes.sort((a, b) => a.tx - b.tx);
-      const uniq = shoes.filter((q, i) => !i || q.tx - shoes[i - 1].tx > 1);
-      shoes.length = 0; uniq.forEach(q => shoes.push(q));
-      if (!shoes.length) warn.push('Third rail: no shoe gear — check "Shoe gear on car variants".');
+      if (!shoes.length) warn.push('Third rail: no CCD shoes — set the shoes per car in Power collection.');
     }
     const span = shoes.length ? shoes[shoes.length - 1].tx - shoes[0].tx : 0;
     let maxSpacing = 0;
@@ -726,7 +756,7 @@
     }
     let pantoSpacing = 0;
     for (let i = 1; i < pantos.length; i++) pantoSpacing = Math.max(pantoSpacing, pantos[i].tx - pantos[i - 1].tx);
-    return { cfg: P, pantos, shoes, span, maxSpacing, unitSpans, pantoSpacing,
+    return { cfg: P, pantos, shoes, span, maxSpacing, unitSpans, pantoSpacing, perVariant, targetTrain, shoesTrain: 2 * shoes.length,
       pantoSpan: pantos.length > 1 ? pantos[pantos.length - 1].tx - pantos[0].tx : 0 };
   };
 
