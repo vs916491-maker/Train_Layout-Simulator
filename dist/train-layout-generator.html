@@ -270,6 +270,18 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   TLT.num = num;
 
   /* ---------------- Formation ---------------- */
+  /* Formation text with the multiple-unit factor: unit, then the unit turned round, alternately (DM-T-M-T | T'-M'-T'-DM') */
+  TLT.muFactor = cfg => Math.max(1, Math.min(6, Math.round(num(cfg.muFactor, 1))));
+  TLT.formationText = function (cfg) {
+    const base = String(cfg.formation || '').replace(/\s+/g, ' ').trim();
+    const n = TLT.muFactor(cfg);
+    if (n === 1) return base;
+    const turn = tok => (tok.endsWith('*') ? tok.slice(0, -1) : tok.endsWith("'") ? tok.slice(0, -1) : tok + "'");
+    const rev = base.split('|').map(u => u.trim().split(/[\s,\-]+/).filter(Boolean)).reverse().map(u => u.reverse().map(turn).join('-')).join(' | ');
+    const parts = [];
+    for (let k = 0; k < n; k++) parts.push(k % 2 ? rev : base);
+    return parts.join(' | ');
+  };
   TLT.parseFormation = function (str, types) {
     const errors = [];
     const cars = [];
@@ -485,6 +497,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     const xs = [];
     B.forEach((bg, i) => { const k = per[i]; for (let j = 0; j < k; j++) xs.push(bg.x + (j - (k - 1) / 2) * 700); });
     return xs.sort((a, b) => a - b);
+  };
+
+  /* Aerodynamic nose (mainline only): nose length and shape follow the design speed.
+   * Classes: <=160 km/h blunt, 200 rounded, 250 streamlined, >=300 long high-speed nose; lengths interpolated in between. */
+  TLT.aeroCfg = function (cfg) {
+    const a = cfg.aero || {};
+    const on = TLT.productType(cfg) === 'mainline';
+    const V = Math.max(80, Math.min(400, num(a.speed, 160)));
+    const tbl = [[120, 1200], [160, 1600], [200, 2600], [250, 4200], [300, 6800], [350, 9000], [400, 11000]];
+    let auto = tbl[tbl.length - 1][1];
+    for (let i = 1; i < tbl.length; i++) if (V <= tbl[i][0]) { const [v0, l0] = tbl[i - 1], [v1, l1] = tbl[i]; auto = l0 + ((Math.max(V, v0) - v0) * (l1 - l0)) / (v1 - v0); break; }
+    const man = num(a.noseLength, 0);
+    const f = Math.max(0, Math.min(1, (V - 160) / 140));        // 0 = blunt (160 km/h) … 1 = high speed (300 km/h)
+    const cls = V <= 170 ? 'Blunt nose (≤ 160 km/h)' : V <= 220 ? 'Rounded nose (200 km/h)' : V <= 275 ? 'Streamlined nose (250 km/h)' : 'Long high-speed nose (≥ 300 km/h)';
+    return { on, speed: V, noseLen: Math.round(man > 0 ? man : auto), auto: Math.round(auto), manual: man > 0, f, cls };
   };
 
   /* ---------------- Driver's cab, windows, front view ---------------- */
@@ -822,7 +849,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if (E.cab1 && cabLen < 1200) warn.push(`${type.name}: END 1 cab length ${cabLen} mm looks too short.`);
     if (E.cab2 && cabLen2 < 1200) warn.push(`${type.name}: END 2 cab length ${cabLen2} mm looks too short.`);
     let cabDoorX = NaN, cabDoorX2 = NaN;
-    const cdPos = L => (Number.isFinite(DC.cabSide.pos) ? DC.cabSide.pos : Math.max(700, L * 0.6));
+    const AE = TLT.aeroCfg(cfg);
+    const noseLen = AE.on && (E.cab1 || E.cab2) ? AE.noseLen : 0;
+    const noseDesk = noseLen > 1600 ? Math.round(noseLen * 0.5) : 300;     // desk starts behind the narrow tip of a long nose
+    if (noseLen) [[E.cab1, cabLen, 1], [E.cab2, cabLen2, 2]].forEach(([on, L, k]) => {
+      const need = Math.round(Math.max(noseDesk + num(cfg.cab && cfg.cab.deskDepth, 800) + 1100, DC.cabSide.on ? noseLen * 0.7 + DC.cabSide.width / 2 + 150 : 0));
+      if (on && L < need) warn.push(`${type.name}: END ${k} cab length ${L} mm is short for the ${noseLen} mm nose at ${AE.speed} km/h (desk and seat need about ${need} mm).`);
+    });
+    const cdPos = L => (Number.isFinite(DC.cabSide.pos) ? DC.cabSide.pos : Math.min(Math.max(700, L * 0.6, noseLen ? noseLen * 0.7 : 0), L - DC.cabSide.width / 2 - 150));
+    if (noseLen && DC.cabSide.on && Number.isFinite(DC.cabSide.pos) && DC.cabSide.pos - DC.cabSide.width / 2 < noseLen * 0.6)
+      warn.push(`${type.name}: cab side door at ${DC.cabSide.pos} mm lies in the tapered part of the ${noseLen} mm nose.`);
     if (DC.cabSide.on) {
       if (E.cab1) {
         cabDoorX = bodyF + cdPos(cabLen);
@@ -839,6 +875,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       warn.push(`${type.name}: cab-to-saloon door does not fit across the car at offset ${DC.cabSaloon.y} mm.`);
 
     return {
+      noseLen, noseDesk, aeroF: AE.f,
       type, Lc, Lb, bodyF, bodyR, mid, bogies, bogieInfo, bc, axles, shared: [sh1, sh2], hinge: [h1, h2], ends: E, cab1: E.cab1, cab2: E.cab2,
       W, Wi, doors, dw, cabLen, cabLen2, salStart, salEnd, bays,
       seatBlocks, wheelchairs, cabinets, screens, standRects, seats, seatsFirst, vestibules, xFirst, mainline: ML.on,
@@ -913,7 +950,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     const types = (cfg.carTypes || []).filter(t => t && t.name);
     const names = new Set();
     types.forEach(t => { if (names.has(t.name)) warnings.push(`Car type name "${t.name}" is used twice.`); names.add(t.name); });
-    const form = TLT.parseFormation(cfg.formation, types);
+    const form = TLT.parseFormation(TLT.formationText(cfg), types);
+    form.text = TLT.formationText(cfg);
     form.errors.forEach(e => warnings.push(e));
     const layouts = new Map();
     types.forEach(t => { const l = TLT.layoutCar(t, cfg); layouts.set(t.name, l); l.capacity = TLT.capacity(l, cfg); });
@@ -1493,8 +1531,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     'mainline-emu4': () => ({
       meta: { preset: 'mainline-emu4', title: 'Mainline EMU — 4-car, 25 kV (template)' },
       productType: 'mainline',
-      project: { company: 'CAF', project: 'Regional EMU — 4-car, 25 kV AC (template)', client: '—', drawingNo: 'EMU-ARR-001', revision: 'A', drawnBy: '', checkedBy: '', date: today(), paper: 'A3', status: 'TEMPLATE — INDICATIVE', trainRows: '1' },
+      project: { company: 'CAF', project: 'Regional EMU — 4-car, 25 kV AC (template)', client: '—', drawingNo: 'EMU-ARR-001', revision: 'A', drawnBy: '', checkedBy: '', date: today(), paper: 'A3', status: 'TEMPLATE — INDICATIVE', trainRows: '2' },
       formation: 'DM-T-M-T',
+      muFactor: 2,
+      aero: { speed: 160, noseLength: 0 },
       power: { system: '25kV', collector: 'panto', contact: 'top', shoeCars: 'all', railOffset: 1450, maxGap: 0, maxPantos: 0, hvClearance: 270 },
       equipment: ML_EQ.map(rowObj),
       weightItems: [].concat(
@@ -1688,10 +1728,31 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     };
   }
   /* Plan outline with cab noses at END 1 and / or END 2 */
+  /* Aerodynamic nose (mainline): superellipse profiles whose length and fullness follow the design speed.
+   * Side: returns points bottom → top for the END 1 side (d = +1) or END 2 side (d = -1). */
+  function aeroSide(lay, xF, d, fh, rh, sole) {
+    const L = lay.noseLen, f = lay.aeroF;
+    const zTip = fh + 420 - 520 * f;                  // nose tip drops towards the coupler at high speed
+    const m = 3.4 - 1.4 * f;                          // fuller (boxier) at low speed, rounder at high speed
+    const up = [], lo = [];
+    for (let i = 0; i <= 20; i++) { const t = (i / 20) * Math.PI / 2; up.push([xF + d * L * (1 - Math.pow(Math.cos(t), 2 / m)), zTip + (rh - zTip) * Math.pow(Math.sin(t), 2 / m)]); }
+    const Ll = Math.min(L * (0.12 + 0.3 * f), 2600);
+    for (let i = 0; i <= 10; i++) { const t = (i / 10) * Math.PI / 2; lo.push([xF + d * Ll * (1 - Math.pow(Math.cos(t), 2 / m)), zTip - (zTip - sole) * Math.pow(Math.sin(t), 2 / m)]); }
+    return { pts: lo.reverse().concat(up.slice(1)), up, zTip, m };
+  }
+  function aeroPlan(lay, xF, d) {
+    const hw = lay.W / 2, L = lay.noseLen * (0.8 + 0.15 * lay.aeroF), f = lay.aeroF;
+    const tip = 520 - 330 * f, m = 3.0 - 1.0 * f;
+    const q = [];
+    for (let i = 0; i <= 18; i++) { const t = (i / 18) * Math.PI / 2; q.push([xF + d * L * (1 - Math.pow(Math.sin(t), 2 / m)), tip + (hw - tip) * Math.pow(Math.cos(t), 2 / m)]); }
+    return q.reverse();   // from the tip (x = xF) towards full width
+  }
   function planOutline(lay) {
     const { bodyF, bodyR } = lay, hw = lay.W / 2;
-    const e1 = lay.cab1 ? [[bodyF + 650, hw], [bodyF + 200, hw - 260], [bodyF, hw - 750], [bodyF, -hw + 750], [bodyF + 200, -hw + 260], [bodyF + 650, -hw]] : [[bodyF, hw], [bodyF, -hw]];
-    const e2 = lay.cab2 ? [[bodyR - 650, -hw], [bodyR - 200, -hw + 260], [bodyR, -hw + 750], [bodyR, hw - 750], [bodyR - 200, hw - 260], [bodyR - 650, hw]] : [[bodyR, -hw], [bodyR, hw]];
+    const aero = lay.noseLen > 0;
+    const half1 = aero ? aeroPlan(lay, bodyF, 1) : null, half2 = aero ? aeroPlan(lay, bodyR, -1) : null;
+    const e1 = !lay.cab1 ? [[bodyF, hw], [bodyF, -hw]] : aero ? half1.slice().reverse().concat(half1.map(([x, y]) => [x, -y])) : [[bodyF + 650, hw], [bodyF + 200, hw - 260], [bodyF, hw - 750], [bodyF, -hw + 750], [bodyF + 200, -hw + 260], [bodyF + 650, -hw]];
+    const e2 = !lay.cab2 ? [[bodyR, -hw], [bodyR, hw]] : aero ? half2.slice().reverse().map(([x, y]) => [x, -y]).concat(half2) : [[bodyR - 650, -hw], [bodyR - 200, -hw + 260], [bodyR, -hw + 750], [bodyR, hw - 750], [bodyR - 200, hw - 260], [bodyR - 650, hw]];
     return e1.concat(e2);
   }
   /* Couplers, joints and gangway bellows at both ends, plan or side (draw(vv, endType, shared)) */
@@ -1712,14 +1773,24 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     const detail = !!o.detail;
 
     // Body outline (cab nose at END 1 and / or END 2)
-    const prof = (cab, xF, d) => (cab ? [[xF, sole], [xF, fh + 650], [xF + d * 120, fh + 900], [xF + d * 380, fh + 1600], [xF + d * 820, rh - 140], [xF + d * 1150, rh]]
+    const aero = lay.noseLen > 0;
+    const prof = (cab, xF, d) => (cab ? (aero ? aeroSide(lay, xF, d, fh, rh, sole).pts : [[xF, sole], [xF, fh + 650], [xF + d * 120, fh + 900], [xF + d * 380, fh + 1600], [xF + d * 820, rh - 140], [xF + d * 1150, rh]])
       : [[xF, sole], [xF, rh - 100], [xF + d * 120, rh]]);
     v.poly(prof(lay.cab2, bodyR, -1).concat(prof(lay.cab1, bodyF, 1).reverse()), true, 'BODY', { fill: '#f7f8fa' });
-    v.line(lay.cab1 ? bodyF + 900 : bodyF, rh - 280, lay.cab2 ? bodyR - 900 : bodyR, rh - 280, 'BODY_THIN');
-    v.line(bodyF + (lay.cab1 ? 80 : 0), sole + 120, bodyR - (lay.cab2 ? 80 : 0), sole + 120, 'BODY_THIN');
+    const nl = aero ? lay.noseLen : 900;
+    v.line(lay.cab1 ? bodyF + nl : bodyF, rh - 280, lay.cab2 ? bodyR - nl : bodyR, rh - 280, 'BODY_THIN');
+    v.line(bodyF + (lay.cab1 ? (aero ? Math.min(lay.noseLen * 0.4, 2600) : 80) : 0), sole + 120, bodyR - (lay.cab2 ? (aero ? Math.min(lay.noseLen * 0.4, 2600) : 80) : 0), sole + 120, 'BODY_THIN');
     const sideCab = (vv, cdx) => {
-      vv.poly([[bodyF + 380, fh + 1600], [bodyF + 820, rh - 140]], false, 'WINDOW', { lw: 0.5 });
-      vv.circle(bodyF + 90, fh + 450, 55, 'BODY_THIN');
+      if (aero) {
+        // windscreen follows the nose curve; headlight near the tip
+        const A = aeroSide(lay, bodyF, 1, fh, rh, sole), up = A.up, i0 = 7, i1 = 15, h = 380 - 120 * lay.aeroF;
+        const top = up.slice(i0, i1 + 1).map(([x, z]) => [x + 40, z - 40]);
+        vv.poly(top.concat(top.slice().reverse().map(([x, z], k) => [x + 160 + k * 6, z - h])), true, 'WINDOW', { fill: '#dce8f7', lw: 0.3 });
+        vv.circle(up[2][0] + 160, up[2][1] - 60, 60, 'BODY_THIN', { fill: '#fffbe6' });
+      } else {
+        vv.poly([[bodyF + 380, fh + 1600], [bodyF + 820, rh - 140]], false, 'WINDOW', { lw: 0.5 });
+        vv.circle(bodyF + 90, fh + 450, 55, 'BODY_THIN');
+      }
       if (DC.cabSide.on && Number.isFinite(cdx)) {
         const cw = DC.cabSide.width, ch = DC.cabSide.height;
         vv.rect(cdx - cw / 2, fh, cdx + cw / 2, fh + ch, 'DOOR');
@@ -1899,24 +1970,25 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         if (!dz || dz[1] <= y0 || dz[0] >= y1) return [[y0, y1]];
         const out = []; if (dz[0] > y0 + 150) out.push([y0, dz[0]]); if (dz[1] < y1 - 150) out.push([dz[1], y1]); return out;
       };
+      const dk0 = lay.noseDesk || 300;   // desk starts behind the narrow part of a long aerodynamic nose
       // co-driver desk: console in front of the co-driver seat, clear of the detrainment door and the main desk
       const coDesk = (ks, d1, block) => {
         const outer = hi - 120, inner = hi - 120 - CB.coDeskWidth;
         const y0 = ks > 0 ? inner : -outer, y1 = ks > 0 ? outer : -inner;
         freeSpans(y0, y1).forEach(([a, b]) => {
           if (block) { if (b > block[0] && a < block[1]) { if (ks > 0) a = Math.max(a, block[1]); else b = Math.min(b, block[0]); } }
-          if (b - a > 150) v.rect(bodyF + 300, a, d1, b, 'CAB', { fill: '#e4e4e4' });
+          if (b - a > 150) v.rect(bodyF + dk0, a, d1, b, 'CAB', { fill: '#e4e4e4' });
         });
       };
       if (lay.openCab) {
         // GoA4: covered console across the front, no driver seat; the rest of the cab is passenger area
         const c1 = bodyF + CB.consoleDepth;
-        freeSpans(-hi + 120, hi - 120).forEach(([y0, y1]) => v.rect(bodyF + 300, y0, c1, y1, 'CAB', { fill: '#ececec' }));
+        freeSpans(-hi + 120, hi - 120).forEach(([y0, y1]) => v.rect(bodyF + dk0, y0, c1, y1, 'CAB', { fill: '#ececec' }));
         v.line(c1, -hi, c1, hi, 'CAB', { dash: [1.5, 1] });
-        if (detail) v.text(bodyF + 300 + (CB.consoleDepth - 300) / 2, dz && dz[0] < 0 && dz[1] > 0 ? hi - 520 : 0, 'COVERED CONSOLE', 1.3, { anchor: 'middle', valign: 'middle', rot: 90, ly: 'CAB', color: '#4a4a4a' });
+        if (detail) v.text(bodyF + dk0 + (CB.consoleDepth - 300) / 2, dz && dz[0] < 0 && dz[1] > 0 ? hi - 520 : 0, 'COVERED CONSOLE', 1.3, { anchor: 'middle', valign: 'middle', rot: 90, ly: 'CAB', color: '#4a4a4a' });
       } else if (CB.desk === 'central') {
-        const d1 = bodyF + Math.min(lay.cabLen * 0.55, 300 + CB.deskDepth);
-        freeSpans(-CB.deskWidth / 2, CB.deskWidth / 2).forEach(([y0, y1]) => v.rect(bodyF + 300, y0, d1, y1, 'CAB', { fill: '#ececec' }));
+        const d1 = bodyF + dk0 + Math.min(Math.max(300, lay.cabLen * 0.55 - 300), CB.deskDepth);
+        freeSpans(-CB.deskWidth / 2, CB.deskWidth / 2).forEach(([y0, y1]) => v.rect(bodyF + dk0, y0, d1, y1, 'CAB', { fill: '#ececec' }));
         v.circle(d1 + 380, 0, 240, 'CAB', { fill: '#ffffff' });
         if (detail) v.text(d1 + 380, 0, 'DRIVER', 1.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a' });
         if (CB.observer) {
@@ -1927,9 +1999,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         }
       } else {
         const k = CB.deskSide === 'A' ? 1 : -1;
-        const d1 = bodyF + Math.min(lay.cabLen * 0.55, 300 + CB.deskDepth);
+        const d1 = bodyF + dk0 + Math.min(Math.max(300, lay.cabLen * 0.55 - 300), CB.deskDepth);
         const yIn = dz ? (k > 0 ? Math.max(dz[1], 120) : Math.min(dz[0], -120)) : k * 120;
-        v.rect(bodyF + 300, k > 0 ? yIn : -hi + 120, d1, k > 0 ? hi - 120 : yIn, 'CAB', { fill: '#ececec' });
+        v.rect(bodyF + dk0, k > 0 ? yIn : -hi + 120, d1, k > 0 ? hi - 120 : yIn, 'CAB', { fill: '#ececec' });
         const sy = k * (Math.abs(yIn) + (hi - 120 - Math.abs(yIn)) / 2);
         v.circle(d1 + 360, sy, 240, 'CAB', { fill: '#ffffff' });
         if (detail) v.text(d1 + 360, sy, 'DRIVER', 1.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a' });
@@ -2218,31 +2290,43 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       v.rect(-260, ch - 150, 260, ch + 150, 'BODY', { fill: '#e4e7ea' });
       v.rect(-110, ch - 230, 110, ch - 150, 'BODY_THIN');
     } else {
-      // ===== Mainline EMU: streamlined nose (cf. regional EMU front) =====
-      const top = rh + 40;
-      const body = [[-(hw - 260), sole - 120], [-(hw - 40), fh + 150], [-hw, fh + 1100], [-(hw - 120), rh - 900], [-(hw - 380), rh - 300], [-(hw - 760), top - 40], [0, top],
-        [hw - 760, top - 40], [hw - 380, rh - 300], [hw - 120, rh - 900], [hw, fh + 1100], [hw - 40, fh + 150], [hw - 260, sole - 120]];
+      // ===== Mainline EMU: streamlined nose; fuller at low design speed, rounder and narrower at high speed =====
+      const f = lay.aeroF || 0;
+      const top = rh + 40, zs = fh + 1100 - 250 * f, me = 3.2 - 1.3 * f;          // shoulder height, superellipse exponent
+      const half = [];
+      for (let i = 0; i <= 20; i++) { const t = (i / 20) * Math.PI / 2; half.push([hw * Math.pow(Math.cos(t), 2 / me), zs + (top - zs) * Math.pow(Math.sin(t), 2 / me)]); }
+      const sideL = [[-(hw - 260 - 120 * f), sole - 120], [-(hw - 40), fh + 150]];
+      const body = sideL.concat(half.map(([x, z]) => [-x, z]), half.slice().reverse().map(([x, z]) => [x, z]).slice(1), sideL.slice().reverse().map(([x, z]) => [-x, z]));
       v.poly(body, true, 'BODY', { fill: '#fbfcfd' });
-      // character lines from the roof down to the lamp clusters
-      [-1, 1].forEach(k => v.poly([[k * (hw - 700), top - 80], [k * (hw - 330), rh - 520], [k * (hw - 170), fh + 1150]], false, 'BODY_THIN', { lw: 0.15 }));
-      // one large windscreen
-      const z0 = fh + F.wsBottom, z1 = F.wsTop > 0 ? fh + F.wsTop : rh - 520, bw = hw - 470, tw = hw - 780;
+      // character lines following the shoulder
+      [-1, 1].forEach(k => v.poly(half.filter((p, i) => i >= 3 && i <= 15).map(([x, z]) => [k * (x - 220), z - 160]), false, 'BODY_THIN', { lw: 0.15 }));
+      // windscreen: wide and upright at low speed, narrower and smaller at high speed
+      const z0 = fh + F.wsBottom + 100 * f, z1 = F.wsTop > 0 ? fh + F.wsTop : rh - 520 - 220 * f;
+      const bw = hw - 470 - 260 * f, tw = hw - 780 - 330 * f;
       v.poly([[-bw, z0 + 60], [-bw + 60, z0], [bw - 60, z0], [bw, z0 + 60], [tw, z1 - 60], [tw - 80, z1], [-tw + 80, z1], [-tw, z1 - 60]], true, 'WINDOW', { fill: glass, lw: 0.3 });
       wipersOver([[-bw, bw]], z0, z1);
       // upper light cluster
       v.poly(rr(-330, z1 + 80, 330, z1 + 300, 100), true, 'BODY_THIN', { lw: 0.2 });
       [-180, 0, 180].forEach(x => v.circle(x, z1 + 190, 70, 'BODY', { fill: '#fffbe6' }));
-      // lamp clusters at the lower corners
+      // lamps: upright clusters at low speed, slim swept lamps at high speed
       [-1, 1].forEach(k => {
-        const x = k * (hw - 420);
-        v.poly(rr(x - 170, fh + 300, x + 170, fh + 950, 150), true, 'BODY_THIN', { lw: 0.25 });
-        v.circle(x, fh + 780, 95, 'BODY', { fill: '#fffbe6' });
-        v.circle(x, fh + 560, 80, 'BODY', { fill: '#fffbe6' });
-        v.rect(x - 45, fh + 360, x + 45, fh + 440, 'NOTE', { fill: '#f6b3ad' });
+        if (f < 0.5) {
+          const x = k * (hw - 420);
+          v.poly(rr(x - 170, fh + 300, x + 170, fh + 950, 150), true, 'BODY_THIN', { lw: 0.25 });
+          v.circle(x, fh + 780, 95, 'BODY', { fill: '#fffbe6' });
+          v.circle(x, fh + 560, 80, 'BODY', { fill: '#fffbe6' });
+          v.rect(x - 45, fh + 360, x + 45, fh + 440, 'NOTE', { fill: '#f6b3ad' });
+        } else {
+          const x0 = k * (hw - 260), x1 = k * (hw - 820), zA = fh + 700, zB = fh + 900;
+          v.poly([[x0, zA], [x1, zA + 60], [x1, zB - 40], [x0, zB + 40]], true, 'BODY_THIN', { fill: '#eef2f6', lw: 0.25 });
+          v.circle(k * (hw - 420), (zA + zB) / 2 + 20, 70, 'BODY', { fill: '#fffbe6' });
+          v.circle(k * (hw - 640), (zA + zB) / 2 + 40, 45, 'NOTE', { fill: '#f6b3ad' });
+        }
       });
-      // nose cover over the coupler
-      v.poly(rr(-(hw - 760), sole - 60, hw - 760, fh + 850, 260), true, 'BODY_THIN', { lw: 0.3 });
-      v.line(-(hw - 900), fh + 500, hw - 900, fh + 500, 'BODY_THIN', { lw: 0.12 });
+      // nose cover over the coupler: narrower and lower at high speed
+      const nc = hw - 760 - 220 * f;
+      v.poly(rr(-nc, sole - 60, nc, fh + 850 - 250 * f, 260 + 200 * f), true, 'BODY_THIN', { lw: 0.3 });
+      v.line(-(nc - 140), fh + 500 - 150 * f, nc - 140, fh + 500 - 150 * f, 'BODY_THIN', { lw: 0.12 });
       if (DC.detrain.on) doorOutline(detX, null);
     }
     // centre line and dimensions
@@ -2257,7 +2341,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     v.text(-xr, -380 - 9.5 * s, 'SIDE A', 1.6, { anchor: 'start', color: '#555555', bold: true });
     v.text(xr, -380 - 9.5 * s, 'SIDE B', 1.6, { anchor: 'end', color: '#555555', bold: true });
     const info = [`Windscreen: ${F.wsSplit === 'two' ? 'two panes' : 'one pane'}, from ${F.wsBottom} mm above floor · wipers: ${n ? `${n} × ${F.wiperType === 'pantograph' ? 'pantograph' : 'single-arm'}` : 'none'}`, `Detrainment door: ${DC.detrain.on ? `${DC.detrain.width} × ${DC.detrain.height}${Math.abs(detX) > 1 ? ', offset ' + Math.round(Math.abs(detX)) : ', centred'}` : 'none'}`,
-      `Desk: ${CB.goa4 ? 'GoA4, covered console' : (CB.desk === 'central' ? 'central' : 'side ' + CB.deskSide) + (CB.observer ? (CB.coDesk ? ', co-driver seat + desk' : ', co-driver seat') : '')}`, `Power: ${PWf.label}${PWf.third ? ', third rail ' + PWf.contact + ' contact' : ''}${PWf.panto ? ', pantograph' : ''}`];
+      (TLT.aeroCfg(cfg).on ? `Design speed ${TLT.aeroCfg(cfg).speed} km/h: ${TLT.aeroCfg(cfg).cls}, nose ${lay.noseLen} mm · ` : '') + `Desk: ${CB.goa4 ? 'GoA4, covered console' : (CB.desk === 'central' ? 'central' : 'side ' + CB.deskSide) + (CB.observer ? (CB.coDesk ? ', co-driver seat + desk' : ', co-driver seat') : '')}`, `Power: ${PWf.label}${PWf.third ? ', third rail ' + PWf.contact + ' contact' : ''}${PWf.panto ? ', pantograph' : ''}`];
     info.forEach((tx, i) => v.text(-xr, -380 - (13.5 + i * 3.2) * s, tx, 1.6, { color: '#333333' }));
   }
 
@@ -2412,7 +2496,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     const p = new View(1, 0, 0);
     const ptype = TLT.productType(cfg);
     p.text(20, PH - 19, `TRAIN FORMATION & VEHICLE LAYOUT — ${ptype === 'tram' ? `${n}-MODULE TRAM` : ptype === 'lrv' ? `${n}-SECTION LRV` : `${n}-CAR ${ptype === 'mainline' ? 'EMU / DMU' : 'TRAIN'}`}`, 4.2, { bold: true });
-    p.text(20, PH - 24.5, `Formation: ${cfg.formation.replace(/\s+/g, ' ')}     ( | = unit boundary )     Overall length ${Math.round(L)} mm over couplers`, 2.2, { color: '#444444' });
+    p.text(20, PH - 24.5, `Formation: ${TLT.formationText(cfg)}     ( | = unit boundary )     Overall length ${Math.round(L)} mm over couplers`, 2.2, { color: '#444444' });
     const units = [];
     cars.forEach(car => { (units[car.unit] = units[car.unit] || []).push(car); });
 
@@ -2682,7 +2766,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     const [PW, PH] = size;
     const p = new View(1, 0, 0);
     p.text(20, PH - 19, 'PASSENGER CAPACITY CALCULATION', 4.2, { bold: true });
-    p.text(20, PH - 24.5, `Formation ${cfg.formation.replace(/\s+/g, ' ')}  ·  ${R.form.cars.length} cars  ·  train length ${R.form.length} mm over couplers`, 2.2, { color: '#444444' });
+    p.text(20, PH - 24.5, `Formation ${TLT.formationText(cfg)}  ·  ${R.form.cars.length} cars  ·  train length ${R.form.length} mm over couplers`, 2.2, { color: '#444444' });
     const I = cfg.interior, Ld = cfg.loads;
     const used = R.used.map(n => R.layouts.get(n));
     const cases = cfg.cases || [];
@@ -2829,7 +2913,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     const { bodyF, bodyR, Lc, W, type, mid } = lay;
     const hw = W / 2;
     v.poly(planOutline(lay), true, 'BODY', { fill: '#fafbfc' });
-    v.rect(bodyF + (lay.cab1 ? 900 : 150), -hw + 180, bodyR - (lay.cab2 ? 900 : 150), hw - 180, 'BODY_THIN');
+    const nr = lay.noseLen > 0 ? lay.noseLen : 900;
+    v.rect(bodyF + (lay.cab1 ? nr : 150), -hw + 180, bodyR - (lay.cab2 ? nr : 150), hw - 180, 'BODY_THIN');
     v.line(-200, 0, Lc + 200, 0, 'CENTER');
     v.line(mid, -hw - 400, mid, hw + 400, 'CENTER');
     lay.bogies.forEach(xb => v.line(xb, -hw - 250, xb, hw + 250, 'CENTER'));
@@ -2983,7 +3068,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     const cases = F.cases;
     const d1 = v => (Number.isFinite(v) ? v.toFixed(1) : '—');
     p.text(20, PH - 19, 'WEIGHT CALCULATION — FIXED TARE (TARGET MASSES)', 4.2, { bold: true });
-    p.text(20, PH - 24.5, `Formation ${cfg.formation.replace(/\s+/g, ' ')}  ·  ${R.form.cars.length} cars  ·  train tare ${d1(F.tareTrain)} t  ·  ${cases.length} load case(s)`, 2.2, { color: '#444444' });
+    p.text(20, PH - 24.5, `Formation ${TLT.formationText(cfg)}  ·  ${R.form.cars.length} cars  ·  train tare ${d1(F.tareTrain)} t  ·  ${cases.length} load case(s)`, 2.2, { color: '#444444' });
     let y = PH - 32;
     p.text(20, y, '1. BASIS', 2.6, { bold: true });
     const basis = [
@@ -3099,7 +3184,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     const p = new View(1, 0, 0);
     const cases = cfg.cases || [];
     p.text(20, PH - 19, 'WEIGHT CALCULATION — TRAIN, BOGIE AND AXLE LOADS', 4.2, { bold: true });
-    p.text(20, PH - 24.5, `Formation ${cfg.formation.replace(/\s+/g, ' ')}  ·  ${W.bogies.length} bogies (${W.bogies.filter(b => b.parts.length > 1).length} shared)  ·  calculated train tare ${t2(W.tareTrain)} t`, 2.2, { color: '#444444' });
+    p.text(20, PH - 24.5, `Formation ${TLT.formationText(cfg)}  ·  ${W.bogies.length} bogies (${W.bogies.filter(b => b.parts.length > 1).length} shared)  ·  calculated train tare ${t2(W.tareTrain)} t`, 2.2, { color: '#444444' });
     let y = PH - 32;
     p.text(20, y, '1. AXLE LOAD PER BOGIE (t)  /  WHEEL LOAD IMBALANCE (%)', 2.6, { bold: true });
     const wc = Math.min(36, (PW - 40 - 84) / Math.max(1, cases.length));
@@ -3635,6 +3720,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       <div class="f"><label>Template</label><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-height:36px"><button class="btn small" data-template="${PT}" title="Replace all inputs with the ${esc(ptLabel)} example">Load ${esc(PT === 'mainline' ? 'mainline' : PT === 'lrv' ? 'LRV' : PT)} template</button>${ui.undoCfg ? '<button class="btn small" data-undotpl="1">Undo</button>' : ''}</div></div>
       <p class="hint" style="grid-column:1/-1;margin-top:0">Product type switches the relevant inputs (mainline interior only for Mainline EMU / DMU). The template replaces all inputs with an example of that product type (Save inputs first to keep yours).</p>
       ${F('Formation', 'formation', 'text', { wide: true, hint: 'Car variants from END 1 to END 2, separated by <code>-</code>; <code>|</code> between units. <code>X\'</code> = variant X turned round; <code>X*</code> also turns a car. Driving cars at the train ends face outwards.' })}
+      ${F('Multiple unit factor', 'muFactor', 'num', { re: true, hint: `Number of units coupled: 2 gives <code>${esc(TLT.formationText(Object.assign({}, cfg, { muFactor: 2 })))}</code>; every second unit is turned round.` })}
+      <div class="f"><label>Train formation used</label><div class="hint" style="margin:6px 0 0"><code>${esc(TLT.formationText(cfg))}</code></div></div>
       <div class="f"><label for="variantCount">Number of car variants</label><div class="in"><input id="variantCount" type="number" min="1" max="12" step="1" value="${cfg.carTypes.length}"></div></div>
       <div class="f"><label>Variants in formation</label><div class="hint" id="formationInfo" style="margin:6px 0 0"></div></div>
     </div>`);
@@ -3701,6 +3788,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       ${F('Show vehicle gauge outline', 'front.showGauge', 'check', { wide: true, re: true })}
       ${TLT.frontCfg(cfg).showGauge ? F('Gauge width', 'front.gaugeWidth', 'num', { unit: 'mm' }) + F('Gauge height ATR', 'front.gaugeHeight', 'num', { unit: 'mm' }) : ''}
     </div><p class="hint">Windscreen is split around the detrainment door (Door system). The gauge outline is simplified (rectangle with chamfered corners); use the project's kinematic gauge for checks.</p>`);
+    if (PT === 'mainline') {
+      const AE = TLT.aeroCfg(cfg);
+      h += card('Design speed & nose (mainline)', `<div class="fields">
+        ${F('Design speed', 'aero.speed', 'select', { re: true, numeric: true, options: [['120', '120 km/h'], ['160', '160 km/h'], ['200', '200 km/h'], ['250', '250 km/h'], ['300', '300 km/h'], ['350', '350 km/h']] })}
+        ${F('Nose length (0 = from speed)', 'aero.noseLength', 'num', { unit: 'mm', re: true })}
+      </div><p class="hint">Aerodynamic model: <b>${esc(AE.cls)}</b>, nose ${AE.noseLen} mm${AE.manual ? ' (entered)' : ' (from the design speed)'}. The side view, plan and front view follow it: higher speed gives a longer, lower and rounder nose, a smaller raked windscreen and slim swept lamps. Lengths used: ≤ 160 km/h about 1.6 m, 200 km/h 2.6 m, 250 km/h 4.2 m, 300 km/h 6.8 m, 350 km/h 9 m. Check the cab length of the driving car (the tool warns if the desk and the cab side door do not fit behind the nose).</p>`);
+    }
     const PC = TLT.powerCfg(cfg);
     h += card('Power collection', `<div class="fields">
       ${F('Supply system', 'power.system', 'select', { re: true, options: TLT.POWER_SYSTEMS })}
@@ -4083,7 +4177,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     ['Project', 'Drawing No.', 'project.drawingNo', 'text'], ['Project', 'Revision', 'project.revision', 'text'], ['Project', 'Drawn by', 'project.drawnBy', 'text'],
     ['Project', 'Checked by', 'project.checkedBy', 'text'], ['Project', 'Date', 'project.date', 'text'], ['Project', 'Status stamp', 'project.status', 'text'],
     ['Project', 'Paper size', 'project.paper', ['A3', 'A2', 'A1']], ['Project', 'Train layout rows', 'project.trainRows', ['1', '2']],
-    ['Train', 'Product type', 'productType', ['metro', 'lrv', 'mainline']], ['Train', 'Formation', 'formation', 'text'],
+    ['Train', 'Product type', 'productType', ['metro', 'lrv', 'mainline']], ['Train', 'Formation', 'formation', 'text'], ['Train', 'Multiple unit factor', 'muFactor', 'num'],
+    ['Design speed & nose (mainline)', 'Design speed', 'aero.speed', 'num', 'km/h'], ['Design speed & nose (mainline)', 'Nose length (0 = from speed)', 'aero.noseLength', 'num', 'mm'],
     ['Car body & bogie', 'Body width', 'common.bodyWidth', 'num', 'mm'], ['Car body & bogie', 'Side wall + lining', 'common.wallThk', 'num', 'mm'],
     ['Car body & bogie', 'Floor height ATR', 'common.floorHeight', 'num', 'mm'], ['Car body & bogie', 'Roof height ATR', 'common.roofHeight', 'num', 'mm'],
     ['Car body & bogie', 'Max. height (AC / panto)', 'common.maxHeight', 'num', 'mm'], ['Car body & bogie', 'Floor to equipment mounting face', 'common.mountDepth', 'num', 'mm'],
@@ -4587,6 +4682,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     const base = TLT.PRESETS['dhaka-l5n']();
     ['project', 'common', 'interior', 'loads', 'hvac', 'cab', 'windows', 'front', 'power'].forEach(k => { o[k] = Object.assign({}, base[k], o[k] || {}); });
     if (!o.productType) o.productType = 'metro';
+    if (o.muFactor == null || o.muFactor === '') o.muFactor = 1;
+    o.aero = Object.assign({ speed: 160, noseLength: 0 }, o.aero || {});
     if (o.productType === 'tram') o.productType = 'lrv';
     // earlier versions of "Add equipment" added a second set of pantographs (PAN) to cars that already had PAN1 / PAN2
     if (Array.isArray(o.equipment)) {

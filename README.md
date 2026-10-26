@@ -66,6 +66,14 @@ Placement: next to the door (default), END 1 side, middle or END 2 side of the b
 
 Template values are indicative; replace them with project data.
 
+### Multiple unit factor
+
+Below the formation: **Multiple unit factor** couples that many units; every second unit is turned round. Example: `DM-T-M-T` with factor 2 gives `DM-T-M-T | T'-M'-T'-DM'` (8 cars). The formation actually used is shown next to the field and on all sheets.
+
+### Design speed and aerodynamic nose (Mainline only)
+
+**Design speed & nose** card: design speed 120 … 350 km/h and an optional nose length (0 = from speed). Model classes: ≤ 160 km/h blunt (≈ 1.6 m), 200 km/h rounded (2.6 m), 250 km/h streamlined (4.2 m), 300 km/h long high-speed nose (6.8 m), 350 km/h 9 m, interpolated in between. The side elevation (superellipse nose with lower tip and windscreen along the curve), the plan (tapered nose) and the front view (rounder outline, smaller windscreen, slim swept lamps, smaller nose cover) follow the speed. The desk moves back behind a long nose; the tool warns when the cab length or the cab side door position does not suit the nose.
+
 ### Car ends and running gear (per car variant)
 
 * **END 1 / END 2 type**: driving cab, auxiliary driving desk, gangway to the next car, end wall (no gangway) or articulation joint. Cabs at both ends give a double-ended car; an END 2 cab is drawn turned round. The auxiliary desk (size and side in the Driver's cab card) is placed against the end wall and taken out of the seats and standing area.

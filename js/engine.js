@@ -17,6 +17,18 @@
   TLT.num = num;
 
   /* ---------------- Formation ---------------- */
+  /* Formation text with the multiple-unit factor: unit, then the unit turned round, alternately (DM-T-M-T | T'-M'-T'-DM') */
+  TLT.muFactor = cfg => Math.max(1, Math.min(6, Math.round(num(cfg.muFactor, 1))));
+  TLT.formationText = function (cfg) {
+    const base = String(cfg.formation || '').replace(/\s+/g, ' ').trim();
+    const n = TLT.muFactor(cfg);
+    if (n === 1) return base;
+    const turn = tok => (tok.endsWith('*') ? tok.slice(0, -1) : tok.endsWith("'") ? tok.slice(0, -1) : tok + "'");
+    const rev = base.split('|').map(u => u.trim().split(/[\s,\-]+/).filter(Boolean)).reverse().map(u => u.reverse().map(turn).join('-')).join(' | ');
+    const parts = [];
+    for (let k = 0; k < n; k++) parts.push(k % 2 ? rev : base);
+    return parts.join(' | ');
+  };
   TLT.parseFormation = function (str, types) {
     const errors = [];
     const cars = [];
@@ -232,6 +244,21 @@
     const xs = [];
     B.forEach((bg, i) => { const k = per[i]; for (let j = 0; j < k; j++) xs.push(bg.x + (j - (k - 1) / 2) * 700); });
     return xs.sort((a, b) => a - b);
+  };
+
+  /* Aerodynamic nose (mainline only): nose length and shape follow the design speed.
+   * Classes: <=160 km/h blunt, 200 rounded, 250 streamlined, >=300 long high-speed nose; lengths interpolated in between. */
+  TLT.aeroCfg = function (cfg) {
+    const a = cfg.aero || {};
+    const on = TLT.productType(cfg) === 'mainline';
+    const V = Math.max(80, Math.min(400, num(a.speed, 160)));
+    const tbl = [[120, 1200], [160, 1600], [200, 2600], [250, 4200], [300, 6800], [350, 9000], [400, 11000]];
+    let auto = tbl[tbl.length - 1][1];
+    for (let i = 1; i < tbl.length; i++) if (V <= tbl[i][0]) { const [v0, l0] = tbl[i - 1], [v1, l1] = tbl[i]; auto = l0 + ((Math.max(V, v0) - v0) * (l1 - l0)) / (v1 - v0); break; }
+    const man = num(a.noseLength, 0);
+    const f = Math.max(0, Math.min(1, (V - 160) / 140));        // 0 = blunt (160 km/h) … 1 = high speed (300 km/h)
+    const cls = V <= 170 ? 'Blunt nose (≤ 160 km/h)' : V <= 220 ? 'Rounded nose (200 km/h)' : V <= 275 ? 'Streamlined nose (250 km/h)' : 'Long high-speed nose (≥ 300 km/h)';
+    return { on, speed: V, noseLen: Math.round(man > 0 ? man : auto), auto: Math.round(auto), manual: man > 0, f, cls };
   };
 
   /* ---------------- Driver's cab, windows, front view ---------------- */
@@ -569,7 +596,16 @@
     if (E.cab1 && cabLen < 1200) warn.push(`${type.name}: END 1 cab length ${cabLen} mm looks too short.`);
     if (E.cab2 && cabLen2 < 1200) warn.push(`${type.name}: END 2 cab length ${cabLen2} mm looks too short.`);
     let cabDoorX = NaN, cabDoorX2 = NaN;
-    const cdPos = L => (Number.isFinite(DC.cabSide.pos) ? DC.cabSide.pos : Math.max(700, L * 0.6));
+    const AE = TLT.aeroCfg(cfg);
+    const noseLen = AE.on && (E.cab1 || E.cab2) ? AE.noseLen : 0;
+    const noseDesk = noseLen > 1600 ? Math.round(noseLen * 0.5) : 300;     // desk starts behind the narrow tip of a long nose
+    if (noseLen) [[E.cab1, cabLen, 1], [E.cab2, cabLen2, 2]].forEach(([on, L, k]) => {
+      const need = Math.round(Math.max(noseDesk + num(cfg.cab && cfg.cab.deskDepth, 800) + 1100, DC.cabSide.on ? noseLen * 0.7 + DC.cabSide.width / 2 + 150 : 0));
+      if (on && L < need) warn.push(`${type.name}: END ${k} cab length ${L} mm is short for the ${noseLen} mm nose at ${AE.speed} km/h (desk and seat need about ${need} mm).`);
+    });
+    const cdPos = L => (Number.isFinite(DC.cabSide.pos) ? DC.cabSide.pos : Math.min(Math.max(700, L * 0.6, noseLen ? noseLen * 0.7 : 0), L - DC.cabSide.width / 2 - 150));
+    if (noseLen && DC.cabSide.on && Number.isFinite(DC.cabSide.pos) && DC.cabSide.pos - DC.cabSide.width / 2 < noseLen * 0.6)
+      warn.push(`${type.name}: cab side door at ${DC.cabSide.pos} mm lies in the tapered part of the ${noseLen} mm nose.`);
     if (DC.cabSide.on) {
       if (E.cab1) {
         cabDoorX = bodyF + cdPos(cabLen);
@@ -586,6 +622,7 @@
       warn.push(`${type.name}: cab-to-saloon door does not fit across the car at offset ${DC.cabSaloon.y} mm.`);
 
     return {
+      noseLen, noseDesk, aeroF: AE.f,
       type, Lc, Lb, bodyF, bodyR, mid, bogies, bogieInfo, bc, axles, shared: [sh1, sh2], hinge: [h1, h2], ends: E, cab1: E.cab1, cab2: E.cab2,
       W, Wi, doors, dw, cabLen, cabLen2, salStart, salEnd, bays,
       seatBlocks, wheelchairs, cabinets, screens, standRects, seats, seatsFirst, vestibules, xFirst, mainline: ML.on,
@@ -660,7 +697,8 @@
     const types = (cfg.carTypes || []).filter(t => t && t.name);
     const names = new Set();
     types.forEach(t => { if (names.has(t.name)) warnings.push(`Car type name "${t.name}" is used twice.`); names.add(t.name); });
-    const form = TLT.parseFormation(cfg.formation, types);
+    const form = TLT.parseFormation(TLT.formationText(cfg), types);
+    form.text = TLT.formationText(cfg);
     form.errors.forEach(e => warnings.push(e));
     const layouts = new Map();
     types.forEach(t => { const l = TLT.layoutCar(t, cfg); layouts.set(t.name, l); l.capacity = TLT.capacity(l, cfg); });

@@ -133,10 +133,31 @@
     };
   }
   /* Plan outline with cab noses at END 1 and / or END 2 */
+  /* Aerodynamic nose (mainline): superellipse profiles whose length and fullness follow the design speed.
+   * Side: returns points bottom → top for the END 1 side (d = +1) or END 2 side (d = -1). */
+  function aeroSide(lay, xF, d, fh, rh, sole) {
+    const L = lay.noseLen, f = lay.aeroF;
+    const zTip = fh + 420 - 520 * f;                  // nose tip drops towards the coupler at high speed
+    const m = 3.4 - 1.4 * f;                          // fuller (boxier) at low speed, rounder at high speed
+    const up = [], lo = [];
+    for (let i = 0; i <= 20; i++) { const t = (i / 20) * Math.PI / 2; up.push([xF + d * L * (1 - Math.pow(Math.cos(t), 2 / m)), zTip + (rh - zTip) * Math.pow(Math.sin(t), 2 / m)]); }
+    const Ll = Math.min(L * (0.12 + 0.3 * f), 2600);
+    for (let i = 0; i <= 10; i++) { const t = (i / 10) * Math.PI / 2; lo.push([xF + d * Ll * (1 - Math.pow(Math.cos(t), 2 / m)), zTip - (zTip - sole) * Math.pow(Math.sin(t), 2 / m)]); }
+    return { pts: lo.reverse().concat(up.slice(1)), up, zTip, m };
+  }
+  function aeroPlan(lay, xF, d) {
+    const hw = lay.W / 2, L = lay.noseLen * (0.8 + 0.15 * lay.aeroF), f = lay.aeroF;
+    const tip = 520 - 330 * f, m = 3.0 - 1.0 * f;
+    const q = [];
+    for (let i = 0; i <= 18; i++) { const t = (i / 18) * Math.PI / 2; q.push([xF + d * L * (1 - Math.pow(Math.sin(t), 2 / m)), tip + (hw - tip) * Math.pow(Math.cos(t), 2 / m)]); }
+    return q.reverse();   // from the tip (x = xF) towards full width
+  }
   function planOutline(lay) {
     const { bodyF, bodyR } = lay, hw = lay.W / 2;
-    const e1 = lay.cab1 ? [[bodyF + 650, hw], [bodyF + 200, hw - 260], [bodyF, hw - 750], [bodyF, -hw + 750], [bodyF + 200, -hw + 260], [bodyF + 650, -hw]] : [[bodyF, hw], [bodyF, -hw]];
-    const e2 = lay.cab2 ? [[bodyR - 650, -hw], [bodyR - 200, -hw + 260], [bodyR, -hw + 750], [bodyR, hw - 750], [bodyR - 200, hw - 260], [bodyR - 650, hw]] : [[bodyR, -hw], [bodyR, hw]];
+    const aero = lay.noseLen > 0;
+    const half1 = aero ? aeroPlan(lay, bodyF, 1) : null, half2 = aero ? aeroPlan(lay, bodyR, -1) : null;
+    const e1 = !lay.cab1 ? [[bodyF, hw], [bodyF, -hw]] : aero ? half1.slice().reverse().concat(half1.map(([x, y]) => [x, -y])) : [[bodyF + 650, hw], [bodyF + 200, hw - 260], [bodyF, hw - 750], [bodyF, -hw + 750], [bodyF + 200, -hw + 260], [bodyF + 650, -hw]];
+    const e2 = !lay.cab2 ? [[bodyR, -hw], [bodyR, hw]] : aero ? half2.slice().reverse().map(([x, y]) => [x, -y]).concat(half2) : [[bodyR - 650, -hw], [bodyR - 200, -hw + 260], [bodyR, -hw + 750], [bodyR, hw - 750], [bodyR - 200, hw - 260], [bodyR - 650, hw]];
     return e1.concat(e2);
   }
   /* Couplers, joints and gangway bellows at both ends, plan or side (draw(vv, endType, shared)) */
@@ -157,14 +178,24 @@
     const detail = !!o.detail;
 
     // Body outline (cab nose at END 1 and / or END 2)
-    const prof = (cab, xF, d) => (cab ? [[xF, sole], [xF, fh + 650], [xF + d * 120, fh + 900], [xF + d * 380, fh + 1600], [xF + d * 820, rh - 140], [xF + d * 1150, rh]]
+    const aero = lay.noseLen > 0;
+    const prof = (cab, xF, d) => (cab ? (aero ? aeroSide(lay, xF, d, fh, rh, sole).pts : [[xF, sole], [xF, fh + 650], [xF + d * 120, fh + 900], [xF + d * 380, fh + 1600], [xF + d * 820, rh - 140], [xF + d * 1150, rh]])
       : [[xF, sole], [xF, rh - 100], [xF + d * 120, rh]]);
     v.poly(prof(lay.cab2, bodyR, -1).concat(prof(lay.cab1, bodyF, 1).reverse()), true, 'BODY', { fill: '#f7f8fa' });
-    v.line(lay.cab1 ? bodyF + 900 : bodyF, rh - 280, lay.cab2 ? bodyR - 900 : bodyR, rh - 280, 'BODY_THIN');
-    v.line(bodyF + (lay.cab1 ? 80 : 0), sole + 120, bodyR - (lay.cab2 ? 80 : 0), sole + 120, 'BODY_THIN');
+    const nl = aero ? lay.noseLen : 900;
+    v.line(lay.cab1 ? bodyF + nl : bodyF, rh - 280, lay.cab2 ? bodyR - nl : bodyR, rh - 280, 'BODY_THIN');
+    v.line(bodyF + (lay.cab1 ? (aero ? Math.min(lay.noseLen * 0.4, 2600) : 80) : 0), sole + 120, bodyR - (lay.cab2 ? (aero ? Math.min(lay.noseLen * 0.4, 2600) : 80) : 0), sole + 120, 'BODY_THIN');
     const sideCab = (vv, cdx) => {
-      vv.poly([[bodyF + 380, fh + 1600], [bodyF + 820, rh - 140]], false, 'WINDOW', { lw: 0.5 });
-      vv.circle(bodyF + 90, fh + 450, 55, 'BODY_THIN');
+      if (aero) {
+        // windscreen follows the nose curve; headlight near the tip
+        const A = aeroSide(lay, bodyF, 1, fh, rh, sole), up = A.up, i0 = 7, i1 = 15, h = 380 - 120 * lay.aeroF;
+        const top = up.slice(i0, i1 + 1).map(([x, z]) => [x + 40, z - 40]);
+        vv.poly(top.concat(top.slice().reverse().map(([x, z], k) => [x + 160 + k * 6, z - h])), true, 'WINDOW', { fill: '#dce8f7', lw: 0.3 });
+        vv.circle(up[2][0] + 160, up[2][1] - 60, 60, 'BODY_THIN', { fill: '#fffbe6' });
+      } else {
+        vv.poly([[bodyF + 380, fh + 1600], [bodyF + 820, rh - 140]], false, 'WINDOW', { lw: 0.5 });
+        vv.circle(bodyF + 90, fh + 450, 55, 'BODY_THIN');
+      }
       if (DC.cabSide.on && Number.isFinite(cdx)) {
         const cw = DC.cabSide.width, ch = DC.cabSide.height;
         vv.rect(cdx - cw / 2, fh, cdx + cw / 2, fh + ch, 'DOOR');
@@ -344,24 +375,25 @@
         if (!dz || dz[1] <= y0 || dz[0] >= y1) return [[y0, y1]];
         const out = []; if (dz[0] > y0 + 150) out.push([y0, dz[0]]); if (dz[1] < y1 - 150) out.push([dz[1], y1]); return out;
       };
+      const dk0 = lay.noseDesk || 300;   // desk starts behind the narrow part of a long aerodynamic nose
       // co-driver desk: console in front of the co-driver seat, clear of the detrainment door and the main desk
       const coDesk = (ks, d1, block) => {
         const outer = hi - 120, inner = hi - 120 - CB.coDeskWidth;
         const y0 = ks > 0 ? inner : -outer, y1 = ks > 0 ? outer : -inner;
         freeSpans(y0, y1).forEach(([a, b]) => {
           if (block) { if (b > block[0] && a < block[1]) { if (ks > 0) a = Math.max(a, block[1]); else b = Math.min(b, block[0]); } }
-          if (b - a > 150) v.rect(bodyF + 300, a, d1, b, 'CAB', { fill: '#e4e4e4' });
+          if (b - a > 150) v.rect(bodyF + dk0, a, d1, b, 'CAB', { fill: '#e4e4e4' });
         });
       };
       if (lay.openCab) {
         // GoA4: covered console across the front, no driver seat; the rest of the cab is passenger area
         const c1 = bodyF + CB.consoleDepth;
-        freeSpans(-hi + 120, hi - 120).forEach(([y0, y1]) => v.rect(bodyF + 300, y0, c1, y1, 'CAB', { fill: '#ececec' }));
+        freeSpans(-hi + 120, hi - 120).forEach(([y0, y1]) => v.rect(bodyF + dk0, y0, c1, y1, 'CAB', { fill: '#ececec' }));
         v.line(c1, -hi, c1, hi, 'CAB', { dash: [1.5, 1] });
-        if (detail) v.text(bodyF + 300 + (CB.consoleDepth - 300) / 2, dz && dz[0] < 0 && dz[1] > 0 ? hi - 520 : 0, 'COVERED CONSOLE', 1.3, { anchor: 'middle', valign: 'middle', rot: 90, ly: 'CAB', color: '#4a4a4a' });
+        if (detail) v.text(bodyF + dk0 + (CB.consoleDepth - 300) / 2, dz && dz[0] < 0 && dz[1] > 0 ? hi - 520 : 0, 'COVERED CONSOLE', 1.3, { anchor: 'middle', valign: 'middle', rot: 90, ly: 'CAB', color: '#4a4a4a' });
       } else if (CB.desk === 'central') {
-        const d1 = bodyF + Math.min(lay.cabLen * 0.55, 300 + CB.deskDepth);
-        freeSpans(-CB.deskWidth / 2, CB.deskWidth / 2).forEach(([y0, y1]) => v.rect(bodyF + 300, y0, d1, y1, 'CAB', { fill: '#ececec' }));
+        const d1 = bodyF + dk0 + Math.min(Math.max(300, lay.cabLen * 0.55 - 300), CB.deskDepth);
+        freeSpans(-CB.deskWidth / 2, CB.deskWidth / 2).forEach(([y0, y1]) => v.rect(bodyF + dk0, y0, d1, y1, 'CAB', { fill: '#ececec' }));
         v.circle(d1 + 380, 0, 240, 'CAB', { fill: '#ffffff' });
         if (detail) v.text(d1 + 380, 0, 'DRIVER', 1.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a' });
         if (CB.observer) {
@@ -372,9 +404,9 @@
         }
       } else {
         const k = CB.deskSide === 'A' ? 1 : -1;
-        const d1 = bodyF + Math.min(lay.cabLen * 0.55, 300 + CB.deskDepth);
+        const d1 = bodyF + dk0 + Math.min(Math.max(300, lay.cabLen * 0.55 - 300), CB.deskDepth);
         const yIn = dz ? (k > 0 ? Math.max(dz[1], 120) : Math.min(dz[0], -120)) : k * 120;
-        v.rect(bodyF + 300, k > 0 ? yIn : -hi + 120, d1, k > 0 ? hi - 120 : yIn, 'CAB', { fill: '#ececec' });
+        v.rect(bodyF + dk0, k > 0 ? yIn : -hi + 120, d1, k > 0 ? hi - 120 : yIn, 'CAB', { fill: '#ececec' });
         const sy = k * (Math.abs(yIn) + (hi - 120 - Math.abs(yIn)) / 2);
         v.circle(d1 + 360, sy, 240, 'CAB', { fill: '#ffffff' });
         if (detail) v.text(d1 + 360, sy, 'DRIVER', 1.2, { anchor: 'middle', valign: 'middle', ly: 'CAB', color: '#4a4a4a' });
@@ -663,31 +695,43 @@
       v.rect(-260, ch - 150, 260, ch + 150, 'BODY', { fill: '#e4e7ea' });
       v.rect(-110, ch - 230, 110, ch - 150, 'BODY_THIN');
     } else {
-      // ===== Mainline EMU: streamlined nose (cf. regional EMU front) =====
-      const top = rh + 40;
-      const body = [[-(hw - 260), sole - 120], [-(hw - 40), fh + 150], [-hw, fh + 1100], [-(hw - 120), rh - 900], [-(hw - 380), rh - 300], [-(hw - 760), top - 40], [0, top],
-        [hw - 760, top - 40], [hw - 380, rh - 300], [hw - 120, rh - 900], [hw, fh + 1100], [hw - 40, fh + 150], [hw - 260, sole - 120]];
+      // ===== Mainline EMU: streamlined nose; fuller at low design speed, rounder and narrower at high speed =====
+      const f = lay.aeroF || 0;
+      const top = rh + 40, zs = fh + 1100 - 250 * f, me = 3.2 - 1.3 * f;          // shoulder height, superellipse exponent
+      const half = [];
+      for (let i = 0; i <= 20; i++) { const t = (i / 20) * Math.PI / 2; half.push([hw * Math.pow(Math.cos(t), 2 / me), zs + (top - zs) * Math.pow(Math.sin(t), 2 / me)]); }
+      const sideL = [[-(hw - 260 - 120 * f), sole - 120], [-(hw - 40), fh + 150]];
+      const body = sideL.concat(half.map(([x, z]) => [-x, z]), half.slice().reverse().map(([x, z]) => [x, z]).slice(1), sideL.slice().reverse().map(([x, z]) => [-x, z]));
       v.poly(body, true, 'BODY', { fill: '#fbfcfd' });
-      // character lines from the roof down to the lamp clusters
-      [-1, 1].forEach(k => v.poly([[k * (hw - 700), top - 80], [k * (hw - 330), rh - 520], [k * (hw - 170), fh + 1150]], false, 'BODY_THIN', { lw: 0.15 }));
-      // one large windscreen
-      const z0 = fh + F.wsBottom, z1 = F.wsTop > 0 ? fh + F.wsTop : rh - 520, bw = hw - 470, tw = hw - 780;
+      // character lines following the shoulder
+      [-1, 1].forEach(k => v.poly(half.filter((p, i) => i >= 3 && i <= 15).map(([x, z]) => [k * (x - 220), z - 160]), false, 'BODY_THIN', { lw: 0.15 }));
+      // windscreen: wide and upright at low speed, narrower and smaller at high speed
+      const z0 = fh + F.wsBottom + 100 * f, z1 = F.wsTop > 0 ? fh + F.wsTop : rh - 520 - 220 * f;
+      const bw = hw - 470 - 260 * f, tw = hw - 780 - 330 * f;
       v.poly([[-bw, z0 + 60], [-bw + 60, z0], [bw - 60, z0], [bw, z0 + 60], [tw, z1 - 60], [tw - 80, z1], [-tw + 80, z1], [-tw, z1 - 60]], true, 'WINDOW', { fill: glass, lw: 0.3 });
       wipersOver([[-bw, bw]], z0, z1);
       // upper light cluster
       v.poly(rr(-330, z1 + 80, 330, z1 + 300, 100), true, 'BODY_THIN', { lw: 0.2 });
       [-180, 0, 180].forEach(x => v.circle(x, z1 + 190, 70, 'BODY', { fill: '#fffbe6' }));
-      // lamp clusters at the lower corners
+      // lamps: upright clusters at low speed, slim swept lamps at high speed
       [-1, 1].forEach(k => {
-        const x = k * (hw - 420);
-        v.poly(rr(x - 170, fh + 300, x + 170, fh + 950, 150), true, 'BODY_THIN', { lw: 0.25 });
-        v.circle(x, fh + 780, 95, 'BODY', { fill: '#fffbe6' });
-        v.circle(x, fh + 560, 80, 'BODY', { fill: '#fffbe6' });
-        v.rect(x - 45, fh + 360, x + 45, fh + 440, 'NOTE', { fill: '#f6b3ad' });
+        if (f < 0.5) {
+          const x = k * (hw - 420);
+          v.poly(rr(x - 170, fh + 300, x + 170, fh + 950, 150), true, 'BODY_THIN', { lw: 0.25 });
+          v.circle(x, fh + 780, 95, 'BODY', { fill: '#fffbe6' });
+          v.circle(x, fh + 560, 80, 'BODY', { fill: '#fffbe6' });
+          v.rect(x - 45, fh + 360, x + 45, fh + 440, 'NOTE', { fill: '#f6b3ad' });
+        } else {
+          const x0 = k * (hw - 260), x1 = k * (hw - 820), zA = fh + 700, zB = fh + 900;
+          v.poly([[x0, zA], [x1, zA + 60], [x1, zB - 40], [x0, zB + 40]], true, 'BODY_THIN', { fill: '#eef2f6', lw: 0.25 });
+          v.circle(k * (hw - 420), (zA + zB) / 2 + 20, 70, 'BODY', { fill: '#fffbe6' });
+          v.circle(k * (hw - 640), (zA + zB) / 2 + 40, 45, 'NOTE', { fill: '#f6b3ad' });
+        }
       });
-      // nose cover over the coupler
-      v.poly(rr(-(hw - 760), sole - 60, hw - 760, fh + 850, 260), true, 'BODY_THIN', { lw: 0.3 });
-      v.line(-(hw - 900), fh + 500, hw - 900, fh + 500, 'BODY_THIN', { lw: 0.12 });
+      // nose cover over the coupler: narrower and lower at high speed
+      const nc = hw - 760 - 220 * f;
+      v.poly(rr(-nc, sole - 60, nc, fh + 850 - 250 * f, 260 + 200 * f), true, 'BODY_THIN', { lw: 0.3 });
+      v.line(-(nc - 140), fh + 500 - 150 * f, nc - 140, fh + 500 - 150 * f, 'BODY_THIN', { lw: 0.12 });
       if (DC.detrain.on) doorOutline(detX, null);
     }
     // centre line and dimensions
@@ -702,7 +746,7 @@
     v.text(-xr, -380 - 9.5 * s, 'SIDE A', 1.6, { anchor: 'start', color: '#555555', bold: true });
     v.text(xr, -380 - 9.5 * s, 'SIDE B', 1.6, { anchor: 'end', color: '#555555', bold: true });
     const info = [`Windscreen: ${F.wsSplit === 'two' ? 'two panes' : 'one pane'}, from ${F.wsBottom} mm above floor · wipers: ${n ? `${n} × ${F.wiperType === 'pantograph' ? 'pantograph' : 'single-arm'}` : 'none'}`, `Detrainment door: ${DC.detrain.on ? `${DC.detrain.width} × ${DC.detrain.height}${Math.abs(detX) > 1 ? ', offset ' + Math.round(Math.abs(detX)) : ', centred'}` : 'none'}`,
-      `Desk: ${CB.goa4 ? 'GoA4, covered console' : (CB.desk === 'central' ? 'central' : 'side ' + CB.deskSide) + (CB.observer ? (CB.coDesk ? ', co-driver seat + desk' : ', co-driver seat') : '')}`, `Power: ${PWf.label}${PWf.third ? ', third rail ' + PWf.contact + ' contact' : ''}${PWf.panto ? ', pantograph' : ''}`];
+      (TLT.aeroCfg(cfg).on ? `Design speed ${TLT.aeroCfg(cfg).speed} km/h: ${TLT.aeroCfg(cfg).cls}, nose ${lay.noseLen} mm · ` : '') + `Desk: ${CB.goa4 ? 'GoA4, covered console' : (CB.desk === 'central' ? 'central' : 'side ' + CB.deskSide) + (CB.observer ? (CB.coDesk ? ', co-driver seat + desk' : ', co-driver seat') : '')}`, `Power: ${PWf.label}${PWf.third ? ', third rail ' + PWf.contact + ' contact' : ''}${PWf.panto ? ', pantograph' : ''}`];
     info.forEach((tx, i) => v.text(-xr, -380 - (13.5 + i * 3.2) * s, tx, 1.6, { color: '#333333' }));
   }
 
@@ -857,7 +901,7 @@
     const p = new View(1, 0, 0);
     const ptype = TLT.productType(cfg);
     p.text(20, PH - 19, `TRAIN FORMATION & VEHICLE LAYOUT — ${ptype === 'tram' ? `${n}-MODULE TRAM` : ptype === 'lrv' ? `${n}-SECTION LRV` : `${n}-CAR ${ptype === 'mainline' ? 'EMU / DMU' : 'TRAIN'}`}`, 4.2, { bold: true });
-    p.text(20, PH - 24.5, `Formation: ${cfg.formation.replace(/\s+/g, ' ')}     ( | = unit boundary )     Overall length ${Math.round(L)} mm over couplers`, 2.2, { color: '#444444' });
+    p.text(20, PH - 24.5, `Formation: ${TLT.formationText(cfg)}     ( | = unit boundary )     Overall length ${Math.round(L)} mm over couplers`, 2.2, { color: '#444444' });
     const units = [];
     cars.forEach(car => { (units[car.unit] = units[car.unit] || []).push(car); });
 
@@ -1127,7 +1171,7 @@
     const [PW, PH] = size;
     const p = new View(1, 0, 0);
     p.text(20, PH - 19, 'PASSENGER CAPACITY CALCULATION', 4.2, { bold: true });
-    p.text(20, PH - 24.5, `Formation ${cfg.formation.replace(/\s+/g, ' ')}  ·  ${R.form.cars.length} cars  ·  train length ${R.form.length} mm over couplers`, 2.2, { color: '#444444' });
+    p.text(20, PH - 24.5, `Formation ${TLT.formationText(cfg)}  ·  ${R.form.cars.length} cars  ·  train length ${R.form.length} mm over couplers`, 2.2, { color: '#444444' });
     const I = cfg.interior, Ld = cfg.loads;
     const used = R.used.map(n => R.layouts.get(n));
     const cases = cfg.cases || [];
@@ -1274,7 +1318,8 @@
     const { bodyF, bodyR, Lc, W, type, mid } = lay;
     const hw = W / 2;
     v.poly(planOutline(lay), true, 'BODY', { fill: '#fafbfc' });
-    v.rect(bodyF + (lay.cab1 ? 900 : 150), -hw + 180, bodyR - (lay.cab2 ? 900 : 150), hw - 180, 'BODY_THIN');
+    const nr = lay.noseLen > 0 ? lay.noseLen : 900;
+    v.rect(bodyF + (lay.cab1 ? nr : 150), -hw + 180, bodyR - (lay.cab2 ? nr : 150), hw - 180, 'BODY_THIN');
     v.line(-200, 0, Lc + 200, 0, 'CENTER');
     v.line(mid, -hw - 400, mid, hw + 400, 'CENTER');
     lay.bogies.forEach(xb => v.line(xb, -hw - 250, xb, hw + 250, 'CENTER'));
@@ -1428,7 +1473,7 @@
     const cases = F.cases;
     const d1 = v => (Number.isFinite(v) ? v.toFixed(1) : '—');
     p.text(20, PH - 19, 'WEIGHT CALCULATION — FIXED TARE (TARGET MASSES)', 4.2, { bold: true });
-    p.text(20, PH - 24.5, `Formation ${cfg.formation.replace(/\s+/g, ' ')}  ·  ${R.form.cars.length} cars  ·  train tare ${d1(F.tareTrain)} t  ·  ${cases.length} load case(s)`, 2.2, { color: '#444444' });
+    p.text(20, PH - 24.5, `Formation ${TLT.formationText(cfg)}  ·  ${R.form.cars.length} cars  ·  train tare ${d1(F.tareTrain)} t  ·  ${cases.length} load case(s)`, 2.2, { color: '#444444' });
     let y = PH - 32;
     p.text(20, y, '1. BASIS', 2.6, { bold: true });
     const basis = [
@@ -1544,7 +1589,7 @@
     const p = new View(1, 0, 0);
     const cases = cfg.cases || [];
     p.text(20, PH - 19, 'WEIGHT CALCULATION — TRAIN, BOGIE AND AXLE LOADS', 4.2, { bold: true });
-    p.text(20, PH - 24.5, `Formation ${cfg.formation.replace(/\s+/g, ' ')}  ·  ${W.bogies.length} bogies (${W.bogies.filter(b => b.parts.length > 1).length} shared)  ·  calculated train tare ${t2(W.tareTrain)} t`, 2.2, { color: '#444444' });
+    p.text(20, PH - 24.5, `Formation ${TLT.formationText(cfg)}  ·  ${W.bogies.length} bogies (${W.bogies.filter(b => b.parts.length > 1).length} shared)  ·  calculated train tare ${t2(W.tareTrain)} t`, 2.2, { color: '#444444' });
     let y = PH - 32;
     p.text(20, y, '1. AXLE LOAD PER BOGIE (t)  /  WHEEL LOAD IMBALANCE (%)', 2.6, { bold: true });
     const wc = Math.min(36, (PW - 40 - 84) / Math.max(1, cases.length));

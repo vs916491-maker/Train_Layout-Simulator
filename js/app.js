@@ -99,6 +99,8 @@
       <div class="f"><label>Template</label><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-height:36px"><button class="btn small" data-template="${PT}" title="Replace all inputs with the ${esc(ptLabel)} example">Load ${esc(PT === 'mainline' ? 'mainline' : PT === 'lrv' ? 'LRV' : PT)} template</button>${ui.undoCfg ? '<button class="btn small" data-undotpl="1">Undo</button>' : ''}</div></div>
       <p class="hint" style="grid-column:1/-1;margin-top:0">Product type switches the relevant inputs (mainline interior only for Mainline EMU / DMU). The template replaces all inputs with an example of that product type (Save inputs first to keep yours).</p>
       ${F('Formation', 'formation', 'text', { wide: true, hint: 'Car variants from END 1 to END 2, separated by <code>-</code>; <code>|</code> between units. <code>X\'</code> = variant X turned round; <code>X*</code> also turns a car. Driving cars at the train ends face outwards.' })}
+      ${F('Multiple unit factor', 'muFactor', 'num', { re: true, hint: `Number of units coupled: 2 gives <code>${esc(TLT.formationText(Object.assign({}, cfg, { muFactor: 2 })))}</code>; every second unit is turned round.` })}
+      <div class="f"><label>Train formation used</label><div class="hint" style="margin:6px 0 0"><code>${esc(TLT.formationText(cfg))}</code></div></div>
       <div class="f"><label for="variantCount">Number of car variants</label><div class="in"><input id="variantCount" type="number" min="1" max="12" step="1" value="${cfg.carTypes.length}"></div></div>
       <div class="f"><label>Variants in formation</label><div class="hint" id="formationInfo" style="margin:6px 0 0"></div></div>
     </div>`);
@@ -165,6 +167,13 @@
       ${F('Show vehicle gauge outline', 'front.showGauge', 'check', { wide: true, re: true })}
       ${TLT.frontCfg(cfg).showGauge ? F('Gauge width', 'front.gaugeWidth', 'num', { unit: 'mm' }) + F('Gauge height ATR', 'front.gaugeHeight', 'num', { unit: 'mm' }) : ''}
     </div><p class="hint">Windscreen is split around the detrainment door (Door system). The gauge outline is simplified (rectangle with chamfered corners); use the project's kinematic gauge for checks.</p>`);
+    if (PT === 'mainline') {
+      const AE = TLT.aeroCfg(cfg);
+      h += card('Design speed & nose (mainline)', `<div class="fields">
+        ${F('Design speed', 'aero.speed', 'select', { re: true, numeric: true, options: [['120', '120 km/h'], ['160', '160 km/h'], ['200', '200 km/h'], ['250', '250 km/h'], ['300', '300 km/h'], ['350', '350 km/h']] })}
+        ${F('Nose length (0 = from speed)', 'aero.noseLength', 'num', { unit: 'mm', re: true })}
+      </div><p class="hint">Aerodynamic model: <b>${esc(AE.cls)}</b>, nose ${AE.noseLen} mm${AE.manual ? ' (entered)' : ' (from the design speed)'}. The side view, plan and front view follow it: higher speed gives a longer, lower and rounder nose, a smaller raked windscreen and slim swept lamps. Lengths used: ≤ 160 km/h about 1.6 m, 200 km/h 2.6 m, 250 km/h 4.2 m, 300 km/h 6.8 m, 350 km/h 9 m. Check the cab length of the driving car (the tool warns if the desk and the cab side door do not fit behind the nose).</p>`);
+    }
     const PC = TLT.powerCfg(cfg);
     h += card('Power collection', `<div class="fields">
       ${F('Supply system', 'power.system', 'select', { re: true, options: TLT.POWER_SYSTEMS })}
@@ -547,7 +556,8 @@
     ['Project', 'Drawing No.', 'project.drawingNo', 'text'], ['Project', 'Revision', 'project.revision', 'text'], ['Project', 'Drawn by', 'project.drawnBy', 'text'],
     ['Project', 'Checked by', 'project.checkedBy', 'text'], ['Project', 'Date', 'project.date', 'text'], ['Project', 'Status stamp', 'project.status', 'text'],
     ['Project', 'Paper size', 'project.paper', ['A3', 'A2', 'A1']], ['Project', 'Train layout rows', 'project.trainRows', ['1', '2']],
-    ['Train', 'Product type', 'productType', ['metro', 'lrv', 'mainline']], ['Train', 'Formation', 'formation', 'text'],
+    ['Train', 'Product type', 'productType', ['metro', 'lrv', 'mainline']], ['Train', 'Formation', 'formation', 'text'], ['Train', 'Multiple unit factor', 'muFactor', 'num'],
+    ['Design speed & nose (mainline)', 'Design speed', 'aero.speed', 'num', 'km/h'], ['Design speed & nose (mainline)', 'Nose length (0 = from speed)', 'aero.noseLength', 'num', 'mm'],
     ['Car body & bogie', 'Body width', 'common.bodyWidth', 'num', 'mm'], ['Car body & bogie', 'Side wall + lining', 'common.wallThk', 'num', 'mm'],
     ['Car body & bogie', 'Floor height ATR', 'common.floorHeight', 'num', 'mm'], ['Car body & bogie', 'Roof height ATR', 'common.roofHeight', 'num', 'mm'],
     ['Car body & bogie', 'Max. height (AC / panto)', 'common.maxHeight', 'num', 'mm'], ['Car body & bogie', 'Floor to equipment mounting face', 'common.mountDepth', 'num', 'mm'],
@@ -1051,6 +1061,8 @@
     const base = TLT.PRESETS['dhaka-l5n']();
     ['project', 'common', 'interior', 'loads', 'hvac', 'cab', 'windows', 'front', 'power'].forEach(k => { o[k] = Object.assign({}, base[k], o[k] || {}); });
     if (!o.productType) o.productType = 'metro';
+    if (o.muFactor == null || o.muFactor === '') o.muFactor = 1;
+    o.aero = Object.assign({ speed: 160, noseLength: 0 }, o.aero || {});
     if (o.productType === 'tram') o.productType = 'lrv';
     // earlier versions of "Add equipment" added a second set of pantographs (PAN) to cars that already had PAN1 / PAN2
     if (Array.isArray(o.equipment)) {
