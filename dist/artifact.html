@@ -3656,7 +3656,7 @@ table.data select { min-width: 104px; }
     let input;
     if (kind === 'select') input = `<div class="in"><select id="${id}" data-path="${full}" data-kind="${o.numeric ? 'num' : 'text'}"${o.re ? ' data-rerender="1"' : ''}>${o.options.map(op => { const [val, lab] = Array.isArray(op) ? op : [op, op]; return `<option value="${esc(val)}"${String(val) === String(v) ? ' selected' : ''}>${esc(lab)}</option>`; }).join('')}</select></div>`;
     else if (kind === 'area') input = `<div class="in"><textarea id="${id}" data-path="${full}" data-kind="text" rows="${o.rows || 3}" spellcheck="false">${esc(v)}</textarea></div>`;
-    else input = `<div class="in"><input id="${id}" data-path="${full}" data-kind="${kind}" type="${kind === 'num' ? 'number' : 'text'}" step="any" value="${esc(v)}">${o.unit ? `<span class="unit">${esc(o.unit)}</span>` : ''}</div>`;
+    else input = `<div class="in"><input id="${id}" data-path="${full}" data-kind="${kind}" type="${kind === 'num' ? 'number' : 'text'}" step="any" value="${esc(v)}"${o.re ? ' data-rerender="1"' : ''}>${o.unit ? `<span class="unit">${esc(o.unit)}</span>` : ''}</div>`;
     return `<div class="${cls}"><label for="${id}">${esc(label)}</label>${input}${o.hint ? `<div class="hint">${o.hint}</div>` : ''}</div>`;
   }
   const card = (title, body, extra) => `<div class="card"${extra || ''}><h3>${esc(title)}</h3>${body}</div>`;
@@ -3688,7 +3688,7 @@ table.data select { min-width: 104px; }
       <p class="hint" style="grid-column:1/-1;margin-top:0">Product type switches the relevant inputs (mainline interior only for Mainline EMU / DMU). The template replaces all inputs with an example of that product type (Save inputs first to keep yours).</p>
       ${F('Formation', 'formation', 'text', { wide: true, hint: 'Car variants from END 1 to END 2, separated by <code>-</code>; <code>|</code> between units. <code>X\'</code> = variant X turned round; <code>X*</code> also turns a car. Driving cars at the train ends face outwards.' })}
       ${F('Multiple unit factor', 'muFactor', 'num', { re: true, hint: `Number of units coupled: 2 gives <code>${esc(TLT.formationText(Object.assign({}, cfg, { muFactor: 2 })))}</code>; every second unit is turned round.` })}
-      <div class="f"><label>Train formation used</label><div class="hint" style="margin:6px 0 0"><code>${esc(TLT.formationText(cfg))}</code></div></div>
+      <div class="f"><label>Train formation used</label><div class="hint" style="margin:6px 0 0"><code id="formationUsed">${esc(TLT.formationText(cfg))}</code></div></div>
       <div class="f"><label for="variantCount">Number of car variants</label><div class="in"><input id="variantCount" type="number" min="1" max="12" step="1" value="${cfg.carTypes.length}"></div></div>
       <div class="f"><label>Variants in formation</label><div class="hint" id="formationInfo" style="margin:6px 0 0"></div></div>
     </div>`);
@@ -3760,7 +3760,10 @@ table.data select { min-width: 104px; }
       h += card('Design speed & nose (mainline)', `<div class="fields">
         ${F('Design speed', 'aero.speed', 'select', { re: true, numeric: true, options: [['120', '120 km/h'], ['160', '160 km/h'], ['200', '200 km/h'], ['250', '250 km/h'], ['300', '300 km/h'], ['350', '350 km/h']] })}
         ${F('Nose length (0 = from speed)', 'aero.noseLength', 'num', { unit: 'mm', re: true })}
-      </div><p class="hint">Aerodynamic model: <b>${esc(AE.cls)}</b>, nose ${AE.noseLen} mm${AE.manual ? ' (entered)' : ' (from the design speed)'}. The side view, plan and front view follow it: higher speed gives a longer, lower and rounder nose, a smaller raked windscreen and slim swept lamps. Lengths used: ≤ 160 km/h about 1.6 m, 200 km/h 2.6 m, 250 km/h 4.2 m, 300 km/h 6.8 m, 350 km/h 9 m. Check the cab length of the driving car (the tool warns if the desk and the cab side door do not fit behind the nose).</p>`);
+      </div>${(() => { const L = AE.noseLen, dd = TLT.num(cfg.cab.deskDepth, 800), DCx = TLT.doorCfg(cfg);
+        const need = Math.round(Math.max((L > 1600 ? L * 0.5 : 300) + dd + 1100, DCx.cabSide.on ? L * 0.7 + DCx.cabSide.width / 2 + 150 : 0));
+        const door = Math.round(L * 0.7);
+        return `<div class="hint" style="background:var(--soft);border-radius:6px;padding:8px 10px;margin:8px 0"><b>Nose length</b> = horizontal distance from the front tip of the body to where the nose reaches full roof height and full car width. Leave <b>0</b> to use the value for the design speed (now ${AE.auto} mm); enter your own value only to match a reference train or your CAD nose, e.g. 3500.<br>For this nose the driving car needs a <b>cab length of at least ${need} mm</b> (car variant card) and a <b>cab side door centre at about ${door} mm or more</b> from the cab-end body face (Door system), otherwise the desk or the door would sit in the tapered nose. A longer cab also moves the first passenger door back: lengthen the car (Length over couplers and Body length) by the same amount, or shorten the door pitch.</div>`; })()}<p class="hint">Aerodynamic model: <b>${esc(AE.cls)}</b>, nose ${AE.noseLen} mm${AE.manual ? ' (entered)' : ' (from the design speed)'}. The side view, plan and front view follow it: higher speed gives a longer, lower and rounder nose, a smaller raked windscreen and slim swept lamps. Lengths used: ≤ 160 km/h about 1.6 m, 200 km/h 2.6 m, 250 km/h 4.2 m, 300 km/h 6.8 m, 350 km/h 9 m. Check the cab length of the driving car (the tool warns if the desk and the cab side door do not fit behind the nose).</p>`);
     }
     const PC = TLT.powerCfg(cfg);
     h += card('Power collection', `<div class="fields">
@@ -3971,6 +3974,7 @@ table.data select { min-width: 104px; }
       const n = R.form.cars.filter(c => c.type === t).length;
       el.textContent = l ? `${n}× in train · ${l.seats} seats · ${l.areas.standing.toFixed(1)} m²` : '';
     });
+    const fu = $('formationUsed'); if (fu) fu.textContent = TLT.formationText(cfg);
     const info = $('formationInfo');
     if (info && R) {
       const counts = R.used.map(nm => `${nm} ×${R.form.cars.filter(c => c.type.name === nm).length}`).join(', ');
