@@ -84,6 +84,14 @@ select.sel { border: 1px solid var(--line); background: var(--panel); border-rad
 .hint code, .mono { font-family: var(--f-mono); font-size: 12px; }
 .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
 .fields .wide { grid-column: 1 / -1; }
+.prof-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 18px; align-items: start; }
+@media (max-width: 760px) { .prof-row { grid-template-columns: 1fr; } }
+.prof-main { border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); padding: 6px; }
+.prof-cap { text-align: center; font-size: 13px; margin-top: 2px; }
+.prof-thumbs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.prof-thumb { border: 1px solid var(--line); border-radius: var(--r); background: var(--soft); padding: 4px; cursor: pointer; color: var(--ink); font: inherit; font-size: 12px; }
+.prof-thumb.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); background: var(--accent-soft); }
+.prof-thumb span { display: block; margin-top: 2px; }
 .f { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .f label { font-size: 11.5px; color: var(--muted); letter-spacing: 0.02em; }
 .f .in { display: flex; align-items: center; border: 1px solid var(--line); border-radius: var(--r); background: var(--soft); }

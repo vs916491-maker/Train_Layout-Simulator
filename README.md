@@ -74,6 +74,18 @@ Below the formation: **Multiple unit factor** couples that many units; every sec
 
 **Design speed & nose** card: design speed 120 … 350 km/h and an optional nose length (0 = from speed). Model classes: ≤ 160 km/h blunt (≈ 1.6 m), 200 km/h rounded (2.6 m), 250 km/h streamlined (4.2 m), 300 km/h long high-speed nose (6.8 m), 350 km/h 9 m, interpolated in between. The side elevation (superellipse nose with lower tip and windscreen along the curve), the plan (tapered nose) and the front view (rounder outline, smaller windscreen, slim swept lamps, smaller nose cover) follow the speed. The desk moves back behind a long nose; the tool warns when the cab length or the cab side door position does not suit the nose.
 
+### Car body cross-section
+The four CAF standard car body sections are selectable at the top of step 1, with a preview of the selected section (click a thumbnail or use the dropdown):
+
+| Section | Side wall |
+|---|---|
+| Type 1 – inclined wall 2.2° | vertical up to 616.5 mm above floor, then straight, inclined 2.2° |
+| Type 2 – vertical wall | vertical |
+| Type 3 – R2000 wall, 2.9° | vertical up to 617 mm, then R2000 arc to 2.9° at the top |
+| Type 4 – R2000 wall 6°, cambered roof | as Type 3 but 6° at the top, cambered roof |
+
+The section shapes the Metro / LRV front view. For capacity, the standing area uses the usable interior width at the **reference height** (default 1,200 mm above floor): interior width minus the wall inset at that height on both sides. Seats and the aisle sit below the wall start, where all four sections have the full interior width. Excel parameters: `common.profile` (t1…t4) and `interior.widthRefHeight`.
+
 ### Car ends and running gear (per car variant)
 
 * **END 1 / END 2 type**: driving cab, auxiliary driving desk, gangway to the next car, end wall (no gangway) or articulation joint. Cabs at both ends give a double-ended car; an END 2 cab is drawn turned round. The auxiliary desk (size and side in the Driver's cab card) is placed against the end wall and taken out of the seats and standing area.

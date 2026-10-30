@@ -261,6 +261,49 @@
     return { on, speed: V, noseLen: Math.round(man > 0 ? man : auto), auto: Math.round(auto), manual: man > 0, f, cls };
   };
 
+  /* Car body cross-section (CAF standard sections). Side wall: vertical up to z0 above floor, then inclined
+   * (straight) or an R arc turning into a straight wall at the top angle; roof shoulder radius; roof camber. */
+  TLT.PROFILES = [
+    { id: 't1', label: 'Type 1 – inclined wall 2.2°', kind: 'incl', z0: 616.5, angle: 2.2, R: 0, roofR: 420, camber: 0 },
+    { id: 't2', label: 'Type 2 – vertical wall', kind: 'vert', z0: 0, angle: 0, R: 0, roofR: 420, camber: 0 },
+    { id: 't3', label: 'Type 3 – R2000 wall, 2.9°', kind: 'arc', z0: 617, angle: 2.9, R: 2000, roofR: 420, camber: 0 },
+    { id: 't4', label: 'Type 4 – R2000 wall 6°, cambered roof', kind: 'arc', z0: 617, angle: 6, R: 2000, roofR: 330, camber: 160 },
+  ];
+  TLT.profileCfg = function (cfg) {
+    const id = (cfg.common || {}).profile;
+    const P = TLT.PROFILES.find(p => p.id === id) || TLT.PROFILES[1];
+    return Object.assign({}, P, { refH: num((cfg.interior || {}).widthRefHeight, 1200) });
+  };
+  // horizontal inset of the side wall at height h above the floor (mm, each side)
+  TLT.profileInset = function (P, h) {
+    if (P.kind === 'vert' || h <= P.z0) return 0;
+    const dz = h - P.z0, a = (P.angle * Math.PI) / 180;
+    if (P.kind === 'incl') return dz * Math.tan(a);
+    const dza = P.R * Math.sin(a);
+    if (dz <= dza) return P.R - Math.sqrt(P.R * P.R - dz * dz);
+    return P.R * (1 - Math.cos(a)) + (dz - dza) * Math.tan(a);
+  };
+  // right half of the section, floor (z = 0) up to the roof centre (z = H), half width at floor = halfW
+  TLT.profileOutline = function (P, halfW, H) {
+    const pts = [];
+    const zw = H - P.camber - P.roofR;
+    for (let z = 0; z < zw; z += 50) pts.push([halfW - TLT.profileInset(P, z), z]);
+    const xw = halfW - TLT.profileInset(P, zw);
+    pts.push([xw, zw]);
+    const r = P.roofR, xc = xw - r, zc = zw;
+    if (!(P.camber > 0)) {
+      for (let k = 1; k <= 8; k++) { const t = (Math.PI / 2) * (k / 8); pts.push([xc + r * Math.cos(t), zc + r * Math.sin(t)]); }
+      for (let k = 1; k <= 8; k++) pts.push([xc * (1 - k / 8), H]);
+      return pts;
+    }
+    // cambered roof: large radius through the roof centre, tangent to the shoulder radius
+    const d = H - zc, Rr = (xc * xc + d * d - r * r) / (2 * (d - r)), zr = H - Rr;
+    const tt = Math.atan2(zc - zr, xc);
+    for (let k = 1; k <= 8; k++) { const t = tt * (k / 8); pts.push([xc + r * Math.cos(t), zc + r * Math.sin(t)]); }
+    for (let k = 1; k <= 10; k++) { const t = tt + (Math.PI / 2 - tt) * (k / 10); pts.push([Rr * Math.cos(t), zr + Rr * Math.sin(t)]); }
+    return pts;
+  };
+
   /* ---------------- Driver's cab, windows, front view ---------------- */
   TLT.cabCfg = function (cfg) {
     const c = cfg.cab || {};
@@ -583,7 +626,9 @@
       aWc += (w.x1 - w.x0) * w.depth;
       if (!r.wcAsStanding) { const [y0, y1] = sideY(w.side, w.depth); occ.push({ x0: w.x0, x1: w.x1, y0, y1 }); }
     });
-    const standRects = TLT.freeRects(standStart, standEnd, -half, half, occ);
+    const PF = TLT.profileCfg(cfg);
+    const insetRef = Math.max(0, TLT.profileInset(PF, PF.refH));
+    const standRects = TLT.freeRects(standStart, standEnd, -half + insetRef, half - insetRef, occ);
     const aStand = standRects.reduce((s, q) => s + (q.x1 - q.x0) * (q.y1 - q.y0), 0);
     const aSaloon = Math.max(0, standEnd - standStart) * Wi;
     const aVest = vestibules.reduce((s, q) => s + (q.x1 - q.x0) * Wi, 0);
@@ -628,7 +673,7 @@
       seatBlocks, wheelchairs, cabinets, screens, standRects, seats, seatsFirst, vestibules, xFirst, mainline: ML.on,
       doorCfg: DC, cabDoorX, cabDoorX2, cabCfg: CB, openCab, openCab2, standStart, standEnd,
       areas: { saloon: aSaloon / 1e6, seat: aSeat / 1e6, foot: aFoot / 1e6, wheelchair: aWc / 1e6, cabinet: aCab / 1e6, standing: aStand / 1e6, vestibule: aVest / 1e6 },
-      aisle, warnings: warn,
+      aisle, warnings: warn, profile: PF, insetRef, usableWidth: Wi - 2 * insetRef,
       equipment: TLT.equipmentFor(type, cfg),
       motorBogies: bogieInfo.filter(bg => bg.motor).length,
     };

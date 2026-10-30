@@ -84,6 +84,14 @@ select.sel { border: 1px solid var(--line); background: var(--panel); border-rad
 .hint code, .mono { font-family: var(--f-mono); font-size: 12px; }
 .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
 .fields .wide { grid-column: 1 / -1; }
+.prof-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 18px; align-items: start; }
+@media (max-width: 760px) { .prof-row { grid-template-columns: 1fr; } }
+.prof-main { border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); padding: 6px; }
+.prof-cap { text-align: center; font-size: 13px; margin-top: 2px; }
+.prof-thumbs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.prof-thumb { border: 1px solid var(--line); border-radius: var(--r); background: var(--soft); padding: 4px; cursor: pointer; color: var(--ink); font: inherit; font-size: 12px; }
+.prof-thumb.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); background: var(--accent-soft); }
+.prof-thumb span { display: block; margin-top: 2px; }
 .f { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .f label { font-size: 11.5px; color: var(--muted); letter-spacing: 0.02em; }
 .f .in { display: flex; align-items: center; border: 1px solid var(--line); border-radius: var(--r); background: var(--soft); }
@@ -514,6 +522,49 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return { on, speed: V, noseLen: Math.round(man > 0 ? man : auto), auto: Math.round(auto), manual: man > 0, f, cls };
   };
 
+  /* Car body cross-section (CAF standard sections). Side wall: vertical up to z0 above floor, then inclined
+   * (straight) or an R arc turning into a straight wall at the top angle; roof shoulder radius; roof camber. */
+  TLT.PROFILES = [
+    { id: 't1', label: 'Type 1 – inclined wall 2.2°', kind: 'incl', z0: 616.5, angle: 2.2, R: 0, roofR: 420, camber: 0 },
+    { id: 't2', label: 'Type 2 – vertical wall', kind: 'vert', z0: 0, angle: 0, R: 0, roofR: 420, camber: 0 },
+    { id: 't3', label: 'Type 3 – R2000 wall, 2.9°', kind: 'arc', z0: 617, angle: 2.9, R: 2000, roofR: 420, camber: 0 },
+    { id: 't4', label: 'Type 4 – R2000 wall 6°, cambered roof', kind: 'arc', z0: 617, angle: 6, R: 2000, roofR: 330, camber: 160 },
+  ];
+  TLT.profileCfg = function (cfg) {
+    const id = (cfg.common || {}).profile;
+    const P = TLT.PROFILES.find(p => p.id === id) || TLT.PROFILES[1];
+    return Object.assign({}, P, { refH: num((cfg.interior || {}).widthRefHeight, 1200) });
+  };
+  // horizontal inset of the side wall at height h above the floor (mm, each side)
+  TLT.profileInset = function (P, h) {
+    if (P.kind === 'vert' || h <= P.z0) return 0;
+    const dz = h - P.z0, a = (P.angle * Math.PI) / 180;
+    if (P.kind === 'incl') return dz * Math.tan(a);
+    const dza = P.R * Math.sin(a);
+    if (dz <= dza) return P.R - Math.sqrt(P.R * P.R - dz * dz);
+    return P.R * (1 - Math.cos(a)) + (dz - dza) * Math.tan(a);
+  };
+  // right half of the section, floor (z = 0) up to the roof centre (z = H), half width at floor = halfW
+  TLT.profileOutline = function (P, halfW, H) {
+    const pts = [];
+    const zw = H - P.camber - P.roofR;
+    for (let z = 0; z < zw; z += 50) pts.push([halfW - TLT.profileInset(P, z), z]);
+    const xw = halfW - TLT.profileInset(P, zw);
+    pts.push([xw, zw]);
+    const r = P.roofR, xc = xw - r, zc = zw;
+    if (!(P.camber > 0)) {
+      for (let k = 1; k <= 8; k++) { const t = (Math.PI / 2) * (k / 8); pts.push([xc + r * Math.cos(t), zc + r * Math.sin(t)]); }
+      for (let k = 1; k <= 8; k++) pts.push([xc * (1 - k / 8), H]);
+      return pts;
+    }
+    // cambered roof: large radius through the roof centre, tangent to the shoulder radius
+    const d = H - zc, Rr = (xc * xc + d * d - r * r) / (2 * (d - r)), zr = H - Rr;
+    const tt = Math.atan2(zc - zr, xc);
+    for (let k = 1; k <= 8; k++) { const t = tt * (k / 8); pts.push([xc + r * Math.cos(t), zc + r * Math.sin(t)]); }
+    for (let k = 1; k <= 10; k++) { const t = tt + (Math.PI / 2 - tt) * (k / 10); pts.push([Rr * Math.cos(t), zr + Rr * Math.sin(t)]); }
+    return pts;
+  };
+
   /* ---------------- Driver's cab, windows, front view ---------------- */
   TLT.cabCfg = function (cfg) {
     const c = cfg.cab || {};
@@ -836,7 +887,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       aWc += (w.x1 - w.x0) * w.depth;
       if (!r.wcAsStanding) { const [y0, y1] = sideY(w.side, w.depth); occ.push({ x0: w.x0, x1: w.x1, y0, y1 }); }
     });
-    const standRects = TLT.freeRects(standStart, standEnd, -half, half, occ);
+    const PF = TLT.profileCfg(cfg);
+    const insetRef = Math.max(0, TLT.profileInset(PF, PF.refH));
+    const standRects = TLT.freeRects(standStart, standEnd, -half + insetRef, half - insetRef, occ);
     const aStand = standRects.reduce((s, q) => s + (q.x1 - q.x0) * (q.y1 - q.y0), 0);
     const aSaloon = Math.max(0, standEnd - standStart) * Wi;
     const aVest = vestibules.reduce((s, q) => s + (q.x1 - q.x0) * Wi, 0);
@@ -881,7 +934,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       seatBlocks, wheelchairs, cabinets, screens, standRects, seats, seatsFirst, vestibules, xFirst, mainline: ML.on,
       doorCfg: DC, cabDoorX, cabDoorX2, cabCfg: CB, openCab, openCab2, standStart, standEnd,
       areas: { saloon: aSaloon / 1e6, seat: aSeat / 1e6, foot: aFoot / 1e6, wheelchair: aWc / 1e6, cabinet: aCab / 1e6, standing: aStand / 1e6, vestibule: aVest / 1e6 },
-      aisle, warnings: warn,
+      aisle, warnings: warn, profile: PF, insetRef, usableWidth: Wi - 2 * insetRef,
       equipment: TLT.equipmentFor(type, cfg),
       motorBogies: bogieInfo.filter(bg => bg.motor).length,
     };
@@ -1359,7 +1412,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       common: {
         bodyWidth: 2950, wallThk: 60, floorHeight: 1130, roofHeight: 3650, maxHeight: 4100,
         endWallThk: 150, gangwayWidth: 1100,
-        wheelDia: 860, wheelbase: 2100, mountDepth: 250,
+        wheelDia: 860, wheelbase: 2100, mountDepth: 250, profile: 't2',
       },
       doors: {
         type: 'Bi-parting sliding (pocket)', width: 1500, height: 1850,
@@ -1372,6 +1425,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       front: { wsSplit: 'single', wsDoorGap: 150, wsTop: 0, wiperLength: 0, wsBottom: 900, wipers: 2, wiperType: 'single', lightsZ: 350, lightsInset: 420, destination: true, couplerHeight: 720, showGauge: true, gaugeWidth: 3000, gaugeHeight: 4100 },
       hvac: { unitsPerCar: 2, cabHvac: false },
       interior: {
+        widthRefHeight: 1200,
         seatType: 'longitudinal', seatWidth: 430, seatDepth: 550, footZone: 300, doorClearance: 330, endClearance: 0, minDoorClearance: 100,
         transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,
         wcLength: 1300, wcWidth: 700, wcTurning: 1500, wcAsStanding: true, minAisle: 900, cabinetDepth: 600,
@@ -1465,13 +1519,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         weightRows('T', 22000, 15000, METRO_EQ, 5800),
         weightRows('M', 22000, 15000, METRO_EQ, 7400)),
       weightSource: 'Template values', equipmentSource: 'Template values',
-      common: { bodyWidth: 2900, wallThk: 60, floorHeight: 1100, roofHeight: 3800, maxHeight: 4250, endWallThk: 150, gangwayWidth: 1300, wheelDia: 860, wheelbase: 2300, mountDepth: 250 },
+      common: { bodyWidth: 2900, wallThk: 60, floorHeight: 1100, roofHeight: 3800, maxHeight: 4250, endWallThk: 150, gangwayWidth: 1300, wheelDia: 860, wheelbase: 2300, mountDepth: 250, profile: 't1' },
       doors: { type: 'Bi-parting sliding (pocket)', width: 1400, height: 1900, detrain: { on: true, width: 800, height: 1800 }, cabSide: { on: true, width: 600, height: 1900, pos: 1200 }, cabSaloon: { on: true, width: 700, height: 1900, y: 0, type: 'Hinged' } },
       cab: { desk: 'side', deskSide: 'B', observer: true, goa4: false, consoleDepth: 700, deskDepth: 800, deskWidth: 1400, auxLength: 700, auxDepth: 1000, auxSide: 'B', coDesk: false, coDeskWidth: 650 },
       windows: { inner: 'single', end: 'single', singleWidth: 0, doubleWidth: 1000, height: 900, sill: 820, drop: 'ends', dropDepth: 400, doorWin: true, doorWinWidth: 0, doorWinHeight: 750, doorWinSill: 950 },
       front: { wsSplit: 'single', wsDoorGap: 150, wsTop: 0, wiperLength: 0, wsBottom: 900, wipers: 2, wiperType: 'single', lightsZ: 350, lightsInset: 420, destination: true, couplerHeight: 720, showGauge: true, gaugeWidth: 3100, gaugeHeight: 4250 },
       hvac: { unitsPerCar: 2, cabHvac: false },
-      interior: { seatType: 'longitudinal', seatWidth: 450, seatDepth: 550, footZone: 300, doorClearance: 330, endClearance: 0, minDoorClearance: 100, transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,
+      interior: { widthRefHeight: 1200, seatType: 'longitudinal', seatWidth: 450, seatDepth: 550, footZone: 300, doorClearance: 330, endClearance: 0, minDoorClearance: 100, transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,
         wcLength: 1300, wcWidth: 750, wcTurning: 1500, wcAsStanding: true, minAisle: 900, cabinetDepth: 600 },
       loads: { paxMass: 65, maxAxleLoad: 17, axlesPerCar: 4, standCase: '', rounding: 'floor', wheelSpacing: 1500, imbalanceLimit: 15 },
       cases: [
@@ -1504,13 +1558,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         simpleWeights('A', 11500, [[4500, 4600], [-7500, 3900]], LRV_EQ, [W('A', 'Cab', 'Cab equipment & desk', 1200, 2400, 1000, 6200, 0, 1500, 600)]),
         simpleWeights('B', 11500, [[4500, 4600]], LRV_EQ, [W('B', 'Cab', 'Cab equipment & desk', 1200, 2400, 1000, 6200, 0, 1500, 600)])),
       weightSource: 'Template values', equipmentSource: 'Template values',
-      common: { bodyWidth: 2650, wallThk: 60, floorHeight: 900, roofHeight: 3400, maxHeight: 3800, endWallThk: 100, gangwayWidth: 1300, wheelDia: 660, wheelbase: 1900, mountDepth: 200 },
+      common: { bodyWidth: 2650, wallThk: 60, floorHeight: 900, roofHeight: 3400, maxHeight: 3800, endWallThk: 100, gangwayWidth: 1300, wheelDia: 660, wheelbase: 1900, mountDepth: 200, profile: 't2' },
       doors: { type: 'Bi-parting sliding plug', width: 1300, height: 1900, detrain: { on: true, width: 700, height: 1700 }, cabSide: { on: false, width: 600, height: 1800, pos: 1000 }, cabSaloon: { on: true, width: 650, height: 1900, y: -600, type: 'Hinged' } },
       cab: Object.assign({}, baseCab),
       windows: Object.assign({}, baseWindows),
       front: { wsSplit: 'single', wsDoorGap: 150, wsTop: 0, wiperLength: 0, wsBottom: 900, wipers: 1, wiperType: 'pantograph', lightsZ: 300, lightsInset: 380, destination: true, couplerHeight: 600, showGauge: true, gaugeWidth: 2750, gaugeHeight: 3800 },
       hvac: { unitsPerCar: 1, cabHvac: false },
-      interior: { seatType: 'transverse', seatWidth: 450, seatDepth: 500, footZone: 300, doorClearance: 200, endClearance: 0, minDoorClearance: 100, transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,
+      interior: { widthRefHeight: 1200, seatType: 'transverse', seatWidth: 450, seatDepth: 500, footZone: 300, doorClearance: 200, endClearance: 0, minDoorClearance: 100, transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,
         wcLength: 1300, wcWidth: 750, wcTurning: 1500, wcAsStanding: true, minAisle: 600, cabinetDepth: 600 },
       loads: { paxMass: 70, maxAxleLoad: 11, axlesPerCar: 4, standCase: '', rounding: 'floor', wheelSpacing: 1500, imbalanceLimit: 15 },
       cases: [
@@ -1542,13 +1596,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         simpleWeights('T', 25000, [[8600, 6800], [-8600, 6800]], ML_EQ, [W('T', 'Interior', 'Toilet module', 1100, 1200, 2200, 6500, 800, '', 600)]),
         simpleWeights('M', 26000, [[8600, 8600], [-8600, 8600]], ML_EQ)),
       weightSource: 'Template values', equipmentSource: 'Template values',
-      common: { bodyWidth: 2900, wallThk: 70, floorHeight: 1150, roofHeight: 3850, maxHeight: 4300, endWallThk: 150, gangwayWidth: 1100, wheelDia: 920, wheelbase: 2500, mountDepth: 200 },
+      common: { bodyWidth: 2900, wallThk: 70, floorHeight: 1150, roofHeight: 3850, maxHeight: 4300, endWallThk: 150, gangwayWidth: 1100, wheelDia: 920, wheelbase: 2500, mountDepth: 200, profile: 't3' },
       doors: { type: 'Bi-parting sliding plug', width: 1300, height: 2000, detrain: { on: false, width: 700, height: 1800 }, cabSide: { on: true, width: 650, height: 1900, pos: 1700 }, cabSaloon: { on: true, width: 700, height: 1950, y: 0, type: 'Sliding' } },
       cab: Object.assign({}, baseCab),
       windows: Object.assign({}, baseWindows, { inner: 'double', doubleWidth: 1500, sill: 800, height: 900, drop: 'none' }),
       front: { wsSplit: 'single', wsDoorGap: 150, wsTop: 0, wiperLength: 0, wsBottom: 1050, wipers: 2, wiperType: 'pantograph', lightsZ: 300, lightsInset: 420, destination: true, couplerHeight: 1025, showGauge: true, gaugeWidth: 3150, gaugeHeight: 4300 },
       hvac: { unitsPerCar: 2, cabHvac: true },
-      interior: { seatType: 'transverse', seatWidth: 450, seatDepth: 500, footZone: 300, doorClearance: 200, endClearance: 0, minDoorClearance: 100, transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,
+      interior: { widthRefHeight: 1200, seatType: 'transverse', seatWidth: 450, seatDepth: 500, footZone: 300, doorClearance: 200, endClearance: 0, minDoorClearance: 100, transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,
         wcLength: 1300, wcWidth: 750, wcTurning: 1500, wcAsStanding: true, minAisle: 600, cabinetDepth: 600,
         mlStdAbreast: '2+2', mlStdPitch: 850, mlFirstAbreast: '2+1', mlFirstPitch: 1000, mlFirstSeatWidth: 520, mlArrangement: 'facing', mlSeatLength: 520,
         mlVestibules: true, mlVestLength: 2600, mlVestDoor: 900 },
@@ -2222,20 +2276,19 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     v.poly([[-(hw - 350), 160], [hw - 350, 160], [hw - 250, 480], [-(hw - 250), 480]], true, 'BODY_THIN', { fill: '#f4f5f6' });
     if (!nose) {
       // ===== Metro / LRV: flat front (cf. typical metro front) =====
-      const r0 = 330;
-      const body = [[-(hw - 120), sole - 40], [-hw, fh + 120], [-hw, rh - 520]].concat(
-        (() => { const q = []; for (let k = 0; k <= 6; k++) { const a = Math.PI - (Math.PI / 2) * (k / 6); q.push([-hw + r0 + r0 * Math.cos(a), rh - 520 + (r0 + 160) * Math.sin(a) * 0.9]); } return q; })(),
-        [[0, rh - 60]],
-        (() => { const q = []; for (let k = 0; k <= 6; k++) { const a = (Math.PI / 2) * (k / 6); q.push([hw - r0 + r0 * Math.cos(a), rh - 520 + (r0 + 160) * Math.sin(a) * 0.9]); } return q.reverse(); })(),
-        [[hw, rh - 520], [hw, fh + 120], [hw - 120, sole - 40]]);
+      // body outline follows the selected car body cross-section (side wall inclination / R2000 wall, roof camber)
+      const PFf = lay.profile || TLT.profileCfg(cfg);
+      const half = TLT.profileOutline(PFf, hw, rh - fh - 40).map(([x, z]) => [x, z + fh]);
+      const xAt = z => { for (let i = 1; i < half.length; i++) if (half[i][1] >= z) { const [x0, z0p] = half[i - 1], [x1, z1p] = half[i]; return z1p === z0p ? x1 : x0 + ((x1 - x0) * (z - z0p)) / (z1p - z0p); } return 0; };
+      const body = [[-(hw - 120), sole - 40], [-hw, fh]].concat(half.map(([x, z]) => [-x, z]), half.slice(0, -1).reverse(), [[hw, fh], [hw - 120, sole - 40]]);
       v.poly(body, true, 'BODY', { fill: '#fbfcfd' });
       v.line(-(hw - 40), fh + 160, hw - 40, fh + 160, 'BODY_THIN');
       // destination band across the top
-      const bz0 = rh - 600, bz1 = rh - 330, bx = hw - 260;
+      const bz0 = rh - 600, bz1 = rh - 330 - PFf.camber * 0.5, bx = Math.min(hw - 260, xAt(bz1) - 160);
       v.poly(rr(-bx, bz0, bx, bz1, 90), true, 'WINDOW', { fill: glass, lw: 0.25 });
       if (F.destination) v.rect(-650, bz0 + 50, 650, bz1 - 50, 'BODY_THIN', { fill: '#2b2f33' });
       // windows / windscreen
-      const ox = hw - 170, z0 = fh + F.wsBottom, z1 = F.wsTop > 0 ? Math.min(fh + F.wsTop, bz0 - 80) : rh - 720;
+      const z0 = fh + F.wsBottom, z1 = F.wsTop > 0 ? Math.min(fh + F.wsTop, bz0 - 80) : rh - 720, ox = Math.min(hw - 170, xAt(z1) - 120);
       const glassPane = ([a, b2]) => v.poly(rr(a, z0, b2, z1, 70), true, 'WINDOW', { fill: glass, lw: 0.3 });
       const offset = DC.detrain.on && !centred;
       let panes;
@@ -2340,7 +2393,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if (DC.detrain.on) v.dimV(detX - dw2, fh - 60, dTop, -hw - 4 * s, { h: 1.5 });   // door height, outside the body (width in the note below)
     v.text(-xr, -380 - 9.5 * s, 'SIDE A', 1.6, { anchor: 'start', color: '#555555', bold: true });
     v.text(xr, -380 - 9.5 * s, 'SIDE B', 1.6, { anchor: 'end', color: '#555555', bold: true });
-    const info = [`Windscreen: ${F.wsSplit === 'two' ? 'two panes' : 'one pane'}, from ${F.wsBottom} mm above floor · wipers: ${n ? `${n} × ${F.wiperType === 'pantograph' ? 'pantograph' : 'single-arm'}` : 'none'}`, `Detrainment door: ${DC.detrain.on ? `${DC.detrain.width} × ${DC.detrain.height}${Math.abs(detX) > 1 ? ', offset ' + Math.round(Math.abs(detX)) : ', centred'}` : 'none'}`,
+    const info = [`Windscreen: ${F.wsSplit === 'two' ? 'two panes' : 'one pane'}, from ${F.wsBottom} mm above floor · wipers: ${n ? `${n} × ${F.wiperType === 'pantograph' ? 'pantograph' : 'single-arm'}` : 'none'}`, `Detrainment door: ${DC.detrain.on ? `${DC.detrain.width} × ${DC.detrain.height}${Math.abs(detX) > 1 ? ', offset ' + Math.round(Math.abs(detX)) : ', centred'}` : 'none'} · Body section: ${(lay.profile || TLT.profileCfg(cfg)).label}`,
       (TLT.aeroCfg(cfg).on ? `Design speed ${TLT.aeroCfg(cfg).speed} km/h: ${TLT.aeroCfg(cfg).cls}, nose ${lay.noseLen} mm · ` : '') + `Desk: ${CB.goa4 ? 'GoA4, covered console' : (CB.desk === 'central' ? 'central' : 'side ' + CB.deskSide) + (CB.observer ? (CB.coDesk ? ', co-driver seat + desk' : ', co-driver seat') : '')}`, `Power: ${PWf.label}${PWf.third ? ', third rail ' + PWf.contact + ' contact' : ''}${PWf.panto ? ', pantograph' : ''}`];
     info.forEach((tx, i) => v.text(-xr, -380 - (13.5 + i * 3.2) * s, tx, 1.6, { color: '#333333' }));
   }
@@ -2781,6 +2834,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       ['Clearance at door / end of seat bays', `${num(I.doorClearance, 330)} / ${num(I.endClearance, 0)} mm`],
       ['Wheelchair space', `${num(I.wcLength, 1300)} × ${num(I.wcWidth, 700)} mm, ${I.wcAsStanding ? 'counted as standing area' : 'excluded from standing area'}`],
       ['Interior width (body - 2 × wall)', `${num(cfg.common.bodyWidth, 2950) - 2 * num(cfg.common.wallThk, 60)} mm`],
+      (() => { const PF = TLT.profileCfg(cfg), Wi = num(cfg.common.bodyWidth, 2950) - 2 * num(cfg.common.wallThk, 60), ins = TLT.profileInset(PF, PF.refH);
+        return ['Car body section / standing width', `${PF.label}; usable ${Math.round(Wi - 2 * ins)} mm at ${PF.refH} mm above floor`]; })(),
       ['Masses and axle loads', 'Step 5 (fixed tare) and step 6 (actual design)'],
       ['Rounding of standing passengers', Ld.rounding === 'round' ? 'Nearest' : Ld.rounding === 'ceil' ? 'Up' : 'Down (floor)'],
     ];
@@ -3694,6 +3749,38 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
   const card = (title, body, extra) => `<div class="card"${extra || ''}><h3>${esc(title)}</h3>${body}</div>`;
 
+  /* car body cross-section preview (SVG, mm coordinates, z up) */
+  function profileSvg(P, o) {
+    o = o || {};
+    const c = cfg.common || {}, W = TLT.num(c.bodyWidth, 2900), wt = TLT.num(c.wallThk, 60);
+    const fh = TLT.num(c.floorHeight, 1100), rh = TLT.num(c.roofHeight, 3800), H = rh - fh;
+    const hw = W / 2, out = TLT.profileOutline(P, hw, H), inn = TLT.profileOutline(P, hw - wt, H - 120);
+    const full = pts => pts.map(([x, z]) => [-x, z]).concat(pts.slice(0, -1).reverse()).map(([x, z]) => `${x.toFixed(0)},${(-z).toFixed(0)}`).join(' ');
+    const sole = -Math.min(fh - 250, 450);
+    const pad = o.mini ? 120 : 900, x0 = -hw - pad, y0 = -H - 180, w = W + 2 * pad, h = H - sole + 420;
+    let g = `<polygon points="${full(out)} ${hw},${-sole} ${-hw},${-sole}" fill="var(--soft)" stroke="var(--ink)" stroke-width="${o.mini ? 40 : 18}" stroke-linejoin="round"/>`;
+    if (!o.mini) {
+      g += `<polyline points="${full(inn)}" fill="none" stroke="var(--muted)" stroke-width="8" stroke-dasharray="40 30"/>`;
+      g += `<line x1="${-hw - 250}" y1="0" x2="${hw + 250}" y2="0" stroke="var(--ink)" stroke-width="10"/><text x="${-hw - 260}" y="-20" text-anchor="end" font-size="110" fill="var(--muted)">floor</text>`;
+      // wall start height
+      if (P.z0 > 0) { const xs = hw - TLT.profileInset(P, P.z0); g += `<line x1="${xs}" y1="${-P.z0}" x2="${hw + 300}" y2="${-P.z0}" stroke="var(--muted)" stroke-width="6"/><text x="${hw + 320}" y="${-P.z0 + 35}" font-size="105" fill="var(--muted)">${P.z0} (wall start)</text>`; }
+      // reference height and usable width
+      const ins = TLT.profileInset(P, P.refH), xu = hw - wt - ins;
+      g += `<line x1="${-xu}" y1="${-P.refH}" x2="${xu}" y2="${-P.refH}" stroke="var(--accent)" stroke-width="14"/>`;
+      g += `<polygon points="${-xu},${-P.refH} ${-xu + 90},${-P.refH - 35} ${-xu + 90},${-P.refH + 35}" fill="var(--accent)"/><polygon points="${xu},${-P.refH} ${xu - 90},${-P.refH - 35} ${xu - 90},${-P.refH + 35}" fill="var(--accent)"/>`;
+      g += `<text x="0" y="${-P.refH - 50}" text-anchor="middle" font-size="125" font-weight="600" fill="var(--accent)">usable ${Math.round(2 * xu)} mm</text>`;
+      g += `<text x="${-hw - 260}" y="${-P.refH + 40}" text-anchor="end" font-size="105" fill="var(--accent)">${P.refH} AFL</text>`;
+      g += `<text x="0" y="${-H + 330 + P.camber}" text-anchor="middle" font-size="120" fill="var(--muted)">${P.kind === 'vert' ? 'vertical wall' : P.kind === 'incl' ? 'inclined ' + P.angle + '°' : 'R' + P.R + ' → ' + P.angle + '°'}${P.camber ? ' · cambered roof' : ''}</text>`;
+      g += `<text x="0" y="${-sole + 190}" text-anchor="middle" font-size="110" fill="var(--muted)">body ${W} · interior at floor ${W - 2 * wt}</text>`;
+    }
+    return `<svg viewBox="${x0} ${y0} ${w} ${h}" width="100%" role="img" aria-label="${esc(P.label)}" style="display:block;max-height:${o.mini ? 70 : 300}px;font-family:var(--f-body)">${g}</svg>`;
+  }
+  function profilePreviewHtml() {
+    const P = TLT.profileCfg(cfg);
+    return `<div class="prof-main">${profileSvg(P)}<div class="prof-cap"><b>${esc(P.label)}</b></div></div>
+      <div class="prof-thumbs">${TLT.PROFILES.map(Q => `<button type="button" class="prof-thumb${Q.id === P.id ? ' on' : ''}" data-profile="${Q.id}" title="${esc(Q.label)}">${profileSvg(Object.assign({}, Q, { refH: P.refH }), { mini: true })}<span>${esc(Q.label.split(' – ')[0])}</span></button>`).join('')}</div>`;
+  }
+
   /* ================= Pane 1: Main Dimensions ================= */
   function renderPane1() {
     const F = (...a) => field('', ...a);
@@ -3704,6 +3791,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       <p class="hint">Importing <b>replaces all inputs of this step</b> with the file (car variants, interior items and load cases not in the file are removed). Save inputs first if you want to keep the current set.</p>
       <button class="btn" id="mainTpl">Download main-inputs template</button></div>
       ${dropZone('main', '.xlsx')}</div></div>`;
+    h += `<div class="card prof-card" style="margin-bottom:14px"><h3>Car body cross-section</h3><div class="prof-row"><div class="fields">
+      ${F('Car body section', 'common.profile', 'select', { wide: true, options: TLT.PROFILES.map(Q => [Q.id, Q.label]) })}
+      ${F('Reference height for standing width', 'interior.widthRefHeight', 'num', { unit: 'mm AFL' })}
+      <div class="f wide"><div class="hint" id="profileInfo" style="margin:0"></div></div>
+      <p class="hint" style="grid-column:1/-1;margin:0">The section sets the side-wall shape of the front view and the usable interior width for the standing area (taken at the reference height above floor; seats and the aisle are at the floor / seat level, where all four sections have the full interior width).</p>
+    </div><div id="profilePreview">${profilePreviewHtml()}</div></div></div>`;
     h += '<div class="cards">';
     h += card('Project & sheet', `<div class="fields">
       ${F('Company', 'project.company', 'text')}${F('Client', 'project.client', 'text')}
@@ -4008,6 +4101,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       el.textContent = l ? `${n}× in train · ${l.seats} seats · ${l.areas.standing.toFixed(1)} m²` : '';
     });
     const fu = $('formationUsed'); if (fu) fu.textContent = TLT.formationText(cfg);
+    const pp = $('profilePreview'); if (pp) pp.innerHTML = profilePreviewHtml();
+    const pi = $('profileInfo');
+    if (pi && R) { const l = R.layouts.get(R.used[0]); if (l) pi.innerHTML = `Standing width at ${l.profile.refH} mm: <b>${Math.round(l.usableWidth)} mm</b> (wall inset ${Math.round(l.insetRef)} mm each side) · ${esc(l.type.name)} standing area ${l.areas.standing.toFixed(2)} m²`; }
     const info = $('formationInfo');
     if (info && R) {
       const counts = R.used.map(nm => `${nm} ×${R.form.cars.filter(c => c.type.name === nm).length}`).join(', ');
@@ -4183,6 +4279,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     ['Project', 'Paper size', 'project.paper', ['A3', 'A2', 'A1']], ['Project', 'Train layout rows', 'project.trainRows', ['1', '2']],
     ['Train', 'Product type', 'productType', ['metro', 'lrv', 'mainline']], ['Train', 'Formation', 'formation', 'text'], ['Train', 'Multiple unit factor', 'muFactor', 'num'],
     ['Design speed & nose (mainline)', 'Design speed', 'aero.speed', 'num', 'km/h'], ['Design speed & nose (mainline)', 'Nose length (0 = from speed)', 'aero.noseLength', 'num', 'mm'],
+    ['Car body & bogie', 'Car body section (t1 = Type 1 inclined 2.2°, t2 = Type 2 vertical, t3 = Type 3 R2000 2.9°, t4 = Type 4 R2000 6° cambered roof)', 'common.profile', 'text', ''],
+    ['Car body & bogie', 'Reference height for standing width (above floor)', 'interior.widthRefHeight', 'num', 'mm'],
     ['Car body & bogie', 'Body width', 'common.bodyWidth', 'num', 'mm'], ['Car body & bogie', 'Side wall + lining', 'common.wallThk', 'num', 'mm'],
     ['Car body & bogie', 'Floor height ATR', 'common.floorHeight', 'num', 'mm'], ['Car body & bogie', 'Roof height ATR', 'common.roofHeight', 'num', 'mm'],
     ['Car body & bogie', 'Max. height (AC / panto)', 'common.maxHeight', 'num', 'mm'], ['Car body & bogie', 'Floor to equipment mounting face', 'common.mountDepth', 'num', 'mm'],
@@ -4789,6 +4887,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     document.addEventListener('input', e => { if (e.target.closest('#pane-1, #pane-2, #weight-edit, #fixed-edit')) onInput(e); });
     document.addEventListener('change', e => { if (e.target.closest('#pane-1, #pane-2, #weight-edit, #fixed-edit')) onInput(e); });
     document.addEventListener('click', e => {
+      const pb = e.target.closest('[data-profile]');
+      if (pb) { cfg.common.profile = pb.dataset.profile; const sel = $('f-common_profile'); if (sel) sel.value = pb.dataset.profile; markChanged(); const pp = $('profilePreview'); if (pp) pp.innerHTML = profilePreviewHtml(); return; }
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.pane) return showPane(+b.dataset.pane);
       if (b.dataset.goto) return showPane(+b.dataset.goto);

@@ -627,20 +627,19 @@
     v.poly([[-(hw - 350), 160], [hw - 350, 160], [hw - 250, 480], [-(hw - 250), 480]], true, 'BODY_THIN', { fill: '#f4f5f6' });
     if (!nose) {
       // ===== Metro / LRV: flat front (cf. typical metro front) =====
-      const r0 = 330;
-      const body = [[-(hw - 120), sole - 40], [-hw, fh + 120], [-hw, rh - 520]].concat(
-        (() => { const q = []; for (let k = 0; k <= 6; k++) { const a = Math.PI - (Math.PI / 2) * (k / 6); q.push([-hw + r0 + r0 * Math.cos(a), rh - 520 + (r0 + 160) * Math.sin(a) * 0.9]); } return q; })(),
-        [[0, rh - 60]],
-        (() => { const q = []; for (let k = 0; k <= 6; k++) { const a = (Math.PI / 2) * (k / 6); q.push([hw - r0 + r0 * Math.cos(a), rh - 520 + (r0 + 160) * Math.sin(a) * 0.9]); } return q.reverse(); })(),
-        [[hw, rh - 520], [hw, fh + 120], [hw - 120, sole - 40]]);
+      // body outline follows the selected car body cross-section (side wall inclination / R2000 wall, roof camber)
+      const PFf = lay.profile || TLT.profileCfg(cfg);
+      const half = TLT.profileOutline(PFf, hw, rh - fh - 40).map(([x, z]) => [x, z + fh]);
+      const xAt = z => { for (let i = 1; i < half.length; i++) if (half[i][1] >= z) { const [x0, z0p] = half[i - 1], [x1, z1p] = half[i]; return z1p === z0p ? x1 : x0 + ((x1 - x0) * (z - z0p)) / (z1p - z0p); } return 0; };
+      const body = [[-(hw - 120), sole - 40], [-hw, fh]].concat(half.map(([x, z]) => [-x, z]), half.slice(0, -1).reverse(), [[hw, fh], [hw - 120, sole - 40]]);
       v.poly(body, true, 'BODY', { fill: '#fbfcfd' });
       v.line(-(hw - 40), fh + 160, hw - 40, fh + 160, 'BODY_THIN');
       // destination band across the top
-      const bz0 = rh - 600, bz1 = rh - 330, bx = hw - 260;
+      const bz0 = rh - 600, bz1 = rh - 330 - PFf.camber * 0.5, bx = Math.min(hw - 260, xAt(bz1) - 160);
       v.poly(rr(-bx, bz0, bx, bz1, 90), true, 'WINDOW', { fill: glass, lw: 0.25 });
       if (F.destination) v.rect(-650, bz0 + 50, 650, bz1 - 50, 'BODY_THIN', { fill: '#2b2f33' });
       // windows / windscreen
-      const ox = hw - 170, z0 = fh + F.wsBottom, z1 = F.wsTop > 0 ? Math.min(fh + F.wsTop, bz0 - 80) : rh - 720;
+      const z0 = fh + F.wsBottom, z1 = F.wsTop > 0 ? Math.min(fh + F.wsTop, bz0 - 80) : rh - 720, ox = Math.min(hw - 170, xAt(z1) - 120);
       const glassPane = ([a, b2]) => v.poly(rr(a, z0, b2, z1, 70), true, 'WINDOW', { fill: glass, lw: 0.3 });
       const offset = DC.detrain.on && !centred;
       let panes;
@@ -745,7 +744,7 @@
     if (DC.detrain.on) v.dimV(detX - dw2, fh - 60, dTop, -hw - 4 * s, { h: 1.5 });   // door height, outside the body (width in the note below)
     v.text(-xr, -380 - 9.5 * s, 'SIDE A', 1.6, { anchor: 'start', color: '#555555', bold: true });
     v.text(xr, -380 - 9.5 * s, 'SIDE B', 1.6, { anchor: 'end', color: '#555555', bold: true });
-    const info = [`Windscreen: ${F.wsSplit === 'two' ? 'two panes' : 'one pane'}, from ${F.wsBottom} mm above floor · wipers: ${n ? `${n} × ${F.wiperType === 'pantograph' ? 'pantograph' : 'single-arm'}` : 'none'}`, `Detrainment door: ${DC.detrain.on ? `${DC.detrain.width} × ${DC.detrain.height}${Math.abs(detX) > 1 ? ', offset ' + Math.round(Math.abs(detX)) : ', centred'}` : 'none'}`,
+    const info = [`Windscreen: ${F.wsSplit === 'two' ? 'two panes' : 'one pane'}, from ${F.wsBottom} mm above floor · wipers: ${n ? `${n} × ${F.wiperType === 'pantograph' ? 'pantograph' : 'single-arm'}` : 'none'}`, `Detrainment door: ${DC.detrain.on ? `${DC.detrain.width} × ${DC.detrain.height}${Math.abs(detX) > 1 ? ', offset ' + Math.round(Math.abs(detX)) : ', centred'}` : 'none'} · Body section: ${(lay.profile || TLT.profileCfg(cfg)).label}`,
       (TLT.aeroCfg(cfg).on ? `Design speed ${TLT.aeroCfg(cfg).speed} km/h: ${TLT.aeroCfg(cfg).cls}, nose ${lay.noseLen} mm · ` : '') + `Desk: ${CB.goa4 ? 'GoA4, covered console' : (CB.desk === 'central' ? 'central' : 'side ' + CB.deskSide) + (CB.observer ? (CB.coDesk ? ', co-driver seat + desk' : ', co-driver seat') : '')}`, `Power: ${PWf.label}${PWf.third ? ', third rail ' + PWf.contact + ' contact' : ''}${PWf.panto ? ', pantograph' : ''}`];
     info.forEach((tx, i) => v.text(-xr, -380 - (13.5 + i * 3.2) * s, tx, 1.6, { color: '#333333' }));
   }
@@ -1186,6 +1185,8 @@
       ['Clearance at door / end of seat bays', `${num(I.doorClearance, 330)} / ${num(I.endClearance, 0)} mm`],
       ['Wheelchair space', `${num(I.wcLength, 1300)} × ${num(I.wcWidth, 700)} mm, ${I.wcAsStanding ? 'counted as standing area' : 'excluded from standing area'}`],
       ['Interior width (body - 2 × wall)', `${num(cfg.common.bodyWidth, 2950) - 2 * num(cfg.common.wallThk, 60)} mm`],
+      (() => { const PF = TLT.profileCfg(cfg), Wi = num(cfg.common.bodyWidth, 2950) - 2 * num(cfg.common.wallThk, 60), ins = TLT.profileInset(PF, PF.refH);
+        return ['Car body section / standing width', `${PF.label}; usable ${Math.round(Wi - 2 * ins)} mm at ${PF.refH} mm above floor`]; })(),
       ['Masses and axle loads', 'Step 5 (fixed tare) and step 6 (actual design)'],
       ['Rounding of standing passengers', Ld.rounding === 'round' ? 'Nearest' : Ld.rounding === 'ceil' ? 'Up' : 'Down (floor)'],
     ];

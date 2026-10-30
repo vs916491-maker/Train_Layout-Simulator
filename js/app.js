@@ -73,6 +73,38 @@
   }
   const card = (title, body, extra) => `<div class="card"${extra || ''}><h3>${esc(title)}</h3>${body}</div>`;
 
+  /* car body cross-section preview (SVG, mm coordinates, z up) */
+  function profileSvg(P, o) {
+    o = o || {};
+    const c = cfg.common || {}, W = TLT.num(c.bodyWidth, 2900), wt = TLT.num(c.wallThk, 60);
+    const fh = TLT.num(c.floorHeight, 1100), rh = TLT.num(c.roofHeight, 3800), H = rh - fh;
+    const hw = W / 2, out = TLT.profileOutline(P, hw, H), inn = TLT.profileOutline(P, hw - wt, H - 120);
+    const full = pts => pts.map(([x, z]) => [-x, z]).concat(pts.slice(0, -1).reverse()).map(([x, z]) => `${x.toFixed(0)},${(-z).toFixed(0)}`).join(' ');
+    const sole = -Math.min(fh - 250, 450);
+    const pad = o.mini ? 120 : 900, x0 = -hw - pad, y0 = -H - 180, w = W + 2 * pad, h = H - sole + 420;
+    let g = `<polygon points="${full(out)} ${hw},${-sole} ${-hw},${-sole}" fill="var(--soft)" stroke="var(--ink)" stroke-width="${o.mini ? 40 : 18}" stroke-linejoin="round"/>`;
+    if (!o.mini) {
+      g += `<polyline points="${full(inn)}" fill="none" stroke="var(--muted)" stroke-width="8" stroke-dasharray="40 30"/>`;
+      g += `<line x1="${-hw - 250}" y1="0" x2="${hw + 250}" y2="0" stroke="var(--ink)" stroke-width="10"/><text x="${-hw - 260}" y="-20" text-anchor="end" font-size="110" fill="var(--muted)">floor</text>`;
+      // wall start height
+      if (P.z0 > 0) { const xs = hw - TLT.profileInset(P, P.z0); g += `<line x1="${xs}" y1="${-P.z0}" x2="${hw + 300}" y2="${-P.z0}" stroke="var(--muted)" stroke-width="6"/><text x="${hw + 320}" y="${-P.z0 + 35}" font-size="105" fill="var(--muted)">${P.z0} (wall start)</text>`; }
+      // reference height and usable width
+      const ins = TLT.profileInset(P, P.refH), xu = hw - wt - ins;
+      g += `<line x1="${-xu}" y1="${-P.refH}" x2="${xu}" y2="${-P.refH}" stroke="var(--accent)" stroke-width="14"/>`;
+      g += `<polygon points="${-xu},${-P.refH} ${-xu + 90},${-P.refH - 35} ${-xu + 90},${-P.refH + 35}" fill="var(--accent)"/><polygon points="${xu},${-P.refH} ${xu - 90},${-P.refH - 35} ${xu - 90},${-P.refH + 35}" fill="var(--accent)"/>`;
+      g += `<text x="0" y="${-P.refH - 50}" text-anchor="middle" font-size="125" font-weight="600" fill="var(--accent)">usable ${Math.round(2 * xu)} mm</text>`;
+      g += `<text x="${-hw - 260}" y="${-P.refH + 40}" text-anchor="end" font-size="105" fill="var(--accent)">${P.refH} AFL</text>`;
+      g += `<text x="0" y="${-H + 330 + P.camber}" text-anchor="middle" font-size="120" fill="var(--muted)">${P.kind === 'vert' ? 'vertical wall' : P.kind === 'incl' ? 'inclined ' + P.angle + '°' : 'R' + P.R + ' → ' + P.angle + '°'}${P.camber ? ' · cambered roof' : ''}</text>`;
+      g += `<text x="0" y="${-sole + 190}" text-anchor="middle" font-size="110" fill="var(--muted)">body ${W} · interior at floor ${W - 2 * wt}</text>`;
+    }
+    return `<svg viewBox="${x0} ${y0} ${w} ${h}" width="100%" role="img" aria-label="${esc(P.label)}" style="display:block;max-height:${o.mini ? 70 : 300}px;font-family:var(--f-body)">${g}</svg>`;
+  }
+  function profilePreviewHtml() {
+    const P = TLT.profileCfg(cfg);
+    return `<div class="prof-main">${profileSvg(P)}<div class="prof-cap"><b>${esc(P.label)}</b></div></div>
+      <div class="prof-thumbs">${TLT.PROFILES.map(Q => `<button type="button" class="prof-thumb${Q.id === P.id ? ' on' : ''}" data-profile="${Q.id}" title="${esc(Q.label)}">${profileSvg(Object.assign({}, Q, { refH: P.refH }), { mini: true })}<span>${esc(Q.label.split(' – ')[0])}</span></button>`).join('')}</div>`;
+  }
+
   /* ================= Pane 1: Main Dimensions ================= */
   function renderPane1() {
     const F = (...a) => field('', ...a);
@@ -83,6 +115,12 @@
       <p class="hint">Importing <b>replaces all inputs of this step</b> with the file (car variants, interior items and load cases not in the file are removed). Save inputs first if you want to keep the current set.</p>
       <button class="btn" id="mainTpl">Download main-inputs template</button></div>
       ${dropZone('main', '.xlsx')}</div></div>`;
+    h += `<div class="card prof-card" style="margin-bottom:14px"><h3>Car body cross-section</h3><div class="prof-row"><div class="fields">
+      ${F('Car body section', 'common.profile', 'select', { wide: true, options: TLT.PROFILES.map(Q => [Q.id, Q.label]) })}
+      ${F('Reference height for standing width', 'interior.widthRefHeight', 'num', { unit: 'mm AFL' })}
+      <div class="f wide"><div class="hint" id="profileInfo" style="margin:0"></div></div>
+      <p class="hint" style="grid-column:1/-1;margin:0">The section sets the side-wall shape of the front view and the usable interior width for the standing area (taken at the reference height above floor; seats and the aisle are at the floor / seat level, where all four sections have the full interior width).</p>
+    </div><div id="profilePreview">${profilePreviewHtml()}</div></div></div>`;
     h += '<div class="cards">';
     h += card('Project & sheet', `<div class="fields">
       ${F('Company', 'project.company', 'text')}${F('Client', 'project.client', 'text')}
@@ -387,6 +425,9 @@
       el.textContent = l ? `${n}× in train · ${l.seats} seats · ${l.areas.standing.toFixed(1)} m²` : '';
     });
     const fu = $('formationUsed'); if (fu) fu.textContent = TLT.formationText(cfg);
+    const pp = $('profilePreview'); if (pp) pp.innerHTML = profilePreviewHtml();
+    const pi = $('profileInfo');
+    if (pi && R) { const l = R.layouts.get(R.used[0]); if (l) pi.innerHTML = `Standing width at ${l.profile.refH} mm: <b>${Math.round(l.usableWidth)} mm</b> (wall inset ${Math.round(l.insetRef)} mm each side) · ${esc(l.type.name)} standing area ${l.areas.standing.toFixed(2)} m²`; }
     const info = $('formationInfo');
     if (info && R) {
       const counts = R.used.map(nm => `${nm} ×${R.form.cars.filter(c => c.type.name === nm).length}`).join(', ');
@@ -562,6 +603,8 @@
     ['Project', 'Paper size', 'project.paper', ['A3', 'A2', 'A1']], ['Project', 'Train layout rows', 'project.trainRows', ['1', '2']],
     ['Train', 'Product type', 'productType', ['metro', 'lrv', 'mainline']], ['Train', 'Formation', 'formation', 'text'], ['Train', 'Multiple unit factor', 'muFactor', 'num'],
     ['Design speed & nose (mainline)', 'Design speed', 'aero.speed', 'num', 'km/h'], ['Design speed & nose (mainline)', 'Nose length (0 = from speed)', 'aero.noseLength', 'num', 'mm'],
+    ['Car body & bogie', 'Car body section (t1 = Type 1 inclined 2.2°, t2 = Type 2 vertical, t3 = Type 3 R2000 2.9°, t4 = Type 4 R2000 6° cambered roof)', 'common.profile', 'text', ''],
+    ['Car body & bogie', 'Reference height for standing width (above floor)', 'interior.widthRefHeight', 'num', 'mm'],
     ['Car body & bogie', 'Body width', 'common.bodyWidth', 'num', 'mm'], ['Car body & bogie', 'Side wall + lining', 'common.wallThk', 'num', 'mm'],
     ['Car body & bogie', 'Floor height ATR', 'common.floorHeight', 'num', 'mm'], ['Car body & bogie', 'Roof height ATR', 'common.roofHeight', 'num', 'mm'],
     ['Car body & bogie', 'Max. height (AC / panto)', 'common.maxHeight', 'num', 'mm'], ['Car body & bogie', 'Floor to equipment mounting face', 'common.mountDepth', 'num', 'mm'],
@@ -1168,6 +1211,8 @@
     document.addEventListener('input', e => { if (e.target.closest('#pane-1, #pane-2, #weight-edit, #fixed-edit')) onInput(e); });
     document.addEventListener('change', e => { if (e.target.closest('#pane-1, #pane-2, #weight-edit, #fixed-edit')) onInput(e); });
     document.addEventListener('click', e => {
+      const pb = e.target.closest('[data-profile]');
+      if (pb) { cfg.common.profile = pb.dataset.profile; const sel = $('f-common_profile'); if (sel) sel.value = pb.dataset.profile; markChanged(); const pp = $('profilePreview'); if (pp) pp.innerHTML = profilePreviewHtml(); return; }
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.pane) return showPane(+b.dataset.pane);
       if (b.dataset.goto) return showPane(+b.dataset.goto);
