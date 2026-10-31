@@ -87,7 +87,7 @@
       g += `<polyline points="${full(inn)}" fill="none" stroke="var(--muted)" stroke-width="8" stroke-dasharray="40 30"/>`;
       g += `<line x1="${-hw - 250}" y1="0" x2="${hw + 250}" y2="0" stroke="var(--ink)" stroke-width="10"/><text x="${-hw - 260}" y="-20" text-anchor="end" font-size="110" fill="var(--muted)">floor</text>`;
       // wall start height
-      if (P.z0 > 0) { const xs = hw - TLT.profileInset(P, P.z0); g += `<line x1="${xs}" y1="${-P.z0}" x2="${hw + 300}" y2="${-P.z0}" stroke="var(--muted)" stroke-width="6"/><text x="${hw + 320}" y="${-P.z0 + 35}" font-size="105" fill="var(--muted)">${P.z0} (wall start)</text>`; }
+      if (P.z0 > 0) { const xs = hw - TLT.profileInset(P, P.z0); g += `<line x1="${xs}" y1="${-P.z0}" x2="${hw + 300}" y2="${-P.z0}" stroke="var(--muted)" stroke-width="6"/><text x="${hw + 320}" y="${-P.z0 + 35}" font-size="105" fill="var(--muted)">${P.z0} (R2000 start)</text>`; }
       // reference height and usable width
       const ins = TLT.profileInset(P, P.refH), xu = hw - wt - ins;
       g += `<line x1="${-xu}" y1="${-P.refH}" x2="${xu}" y2="${-P.refH}" stroke="var(--accent)" stroke-width="14"/>`;
@@ -119,7 +119,7 @@
       ${F('Car body section', 'common.profile', 'select', { wide: true, options: TLT.PROFILES.map(Q => [Q.id, Q.label]) })}
       ${F('Reference height for standing width', 'interior.widthRefHeight', 'num', { unit: 'mm AFL' })}
       <div class="f wide"><div class="hint" id="profileInfo" style="margin:0"></div></div>
-      <p class="hint" style="grid-column:1/-1;margin:0">The section sets the side-wall shape of the front view and the usable interior width for the standing area (taken at the reference height above floor; seats and the aisle are at the floor / seat level, where all four sections have the full interior width).</p>
+      <p class="hint" style="grid-column:1/-1;margin:0">The section sets the side-wall shape of the front view and the usable interior width for the standing area (taken at the reference height above floor; seats and the aisle are at the floor / seat level, where the wall inset is still small). Set the reference height to 0 to count the plain floor area.</p>
     </div><div id="profilePreview">${profilePreviewHtml()}</div></div></div>`;
     h += '<div class="cards">';
     h += card('Project & sheet', `<div class="fields">
@@ -603,7 +603,7 @@
     ['Project', 'Paper size', 'project.paper', ['A3', 'A2', 'A1']], ['Project', 'Train layout rows', 'project.trainRows', ['1', '2']],
     ['Train', 'Product type', 'productType', ['metro', 'lrv', 'mainline']], ['Train', 'Formation', 'formation', 'text'], ['Train', 'Multiple unit factor', 'muFactor', 'num'],
     ['Design speed & nose (mainline)', 'Design speed', 'aero.speed', 'num', 'km/h'], ['Design speed & nose (mainline)', 'Nose length (0 = from speed)', 'aero.noseLength', 'num', 'mm'],
-    ['Car body & bogie', 'Car body section (t1 = Type 1 inclined 2.2°, t2 = Type 2 vertical, t3 = Type 3 R2000 2.9°, t4 = Type 4 R2000 6° cambered roof)', 'common.profile', 'text', ''],
+    ['Car body & bogie', 'Car body section (t1 = Type 1 inclined 2.2°, t2 = Type 2 vertical, t3 = Type 3 R2000 2.9°, t4 = Type 4 R2000 6° cambered roof, t5 = Type 5 inclined 4°)', 'common.profile', 'text', ''],
     ['Car body & bogie', 'Reference height for standing width (above floor)', 'interior.widthRefHeight', 'num', 'mm'],
     ['Car body & bogie', 'Body width', 'common.bodyWidth', 'num', 'mm'], ['Car body & bogie', 'Side wall + lining', 'common.wallThk', 'num', 'mm'],
     ['Car body & bogie', 'Floor height ATR', 'common.floorHeight', 'num', 'mm'], ['Car body & bogie', 'Roof height ATR', 'common.roofHeight', 'num', 'mm'],

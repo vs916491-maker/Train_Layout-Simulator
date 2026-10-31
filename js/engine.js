@@ -261,13 +261,15 @@
     return { on, speed: V, noseLen: Math.round(man > 0 ? man : auto), auto: Math.round(auto), manual: man > 0, f, cls };
   };
 
-  /* Car body cross-section (CAF standard sections). Side wall: vertical up to z0 above floor, then inclined
-   * (straight) or an R arc turning into a straight wall at the top angle; roof shoulder radius; roof camber. */
+  /* Car body cross-section (CAF standard sections). Side wall: inclined from the floor (Types 1, 5), vertical
+   * (Type 2), or vertical up to the arc start z0 (= height of the arc centre) then R2000 turning into a straight
+   * wall at the top angle (Types 3, 4; z0 = crossing of the extensions − R·tan(angle/2): 920 → 869.4, 874 → 769.2). */
   TLT.PROFILES = [
-    { id: 't1', label: 'Type 1 – inclined wall 2.2°', kind: 'incl', z0: 616.5, angle: 2.2, R: 0, roofR: 420, camber: 0 },
+    { id: 't1', label: 'Type 1 – inclined wall 2.2°', kind: 'incl', z0: 0, angle: 2.2, R: 0, roofR: 420, camber: 0 },
     { id: 't2', label: 'Type 2 – vertical wall', kind: 'vert', z0: 0, angle: 0, R: 0, roofR: 420, camber: 0 },
-    { id: 't3', label: 'Type 3 – R2000 wall, 2.9°', kind: 'arc', z0: 617, angle: 2.9, R: 2000, roofR: 420, camber: 0 },
-    { id: 't4', label: 'Type 4 – R2000 wall 6°, cambered roof', kind: 'arc', z0: 617, angle: 6, R: 2000, roofR: 330, camber: 160 },
+    { id: 't3', label: 'Type 3 – R2000 wall, 2.9°', kind: 'arc', z0: 869.4, angle: 2.9, R: 2000, roofR: 420, camber: 0 },
+    { id: 't4', label: 'Type 4 – R2000 wall 6°, cambered roof', kind: 'arc', z0: 769.2, angle: 6, R: 2000, roofR: 330, camber: 160 },
+    { id: 't5', label: 'Type 5 – inclined wall 4°', kind: 'incl', z0: 0, angle: 4, R: 0, roofR: 420, camber: 0 },
   ];
   TLT.profileCfg = function (cfg) {
     const id = (cfg.common || {}).profile;

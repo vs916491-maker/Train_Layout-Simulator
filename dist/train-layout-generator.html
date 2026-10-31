@@ -88,7 +88,7 @@ select.sel { border: 1px solid var(--line); background: var(--panel); border-rad
 @media (max-width: 760px) { .prof-row { grid-template-columns: 1fr; } }
 .prof-main { border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); padding: 6px; }
 .prof-cap { text-align: center; font-size: 13px; margin-top: 2px; }
-.prof-thumbs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.prof-thumbs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
 .prof-thumb { border: 1px solid var(--line); border-radius: var(--r); background: var(--soft); padding: 4px; cursor: pointer; color: var(--ink); font: inherit; font-size: 12px; }
 .prof-thumb.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); background: var(--accent-soft); }
 .prof-thumb span { display: block; margin-top: 2px; }
@@ -522,13 +522,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return { on, speed: V, noseLen: Math.round(man > 0 ? man : auto), auto: Math.round(auto), manual: man > 0, f, cls };
   };
 
-  /* Car body cross-section (CAF standard sections). Side wall: vertical up to z0 above floor, then inclined
-   * (straight) or an R arc turning into a straight wall at the top angle; roof shoulder radius; roof camber. */
+  /* Car body cross-section (CAF standard sections). Side wall: inclined from the floor (Types 1, 5), vertical
+   * (Type 2), or vertical up to the arc start z0 (= height of the arc centre) then R2000 turning into a straight
+   * wall at the top angle (Types 3, 4; z0 = crossing of the extensions − R·tan(angle/2): 920 → 869.4, 874 → 769.2). */
   TLT.PROFILES = [
-    { id: 't1', label: 'Type 1 – inclined wall 2.2°', kind: 'incl', z0: 616.5, angle: 2.2, R: 0, roofR: 420, camber: 0 },
+    { id: 't1', label: 'Type 1 – inclined wall 2.2°', kind: 'incl', z0: 0, angle: 2.2, R: 0, roofR: 420, camber: 0 },
     { id: 't2', label: 'Type 2 – vertical wall', kind: 'vert', z0: 0, angle: 0, R: 0, roofR: 420, camber: 0 },
-    { id: 't3', label: 'Type 3 – R2000 wall, 2.9°', kind: 'arc', z0: 617, angle: 2.9, R: 2000, roofR: 420, camber: 0 },
-    { id: 't4', label: 'Type 4 – R2000 wall 6°, cambered roof', kind: 'arc', z0: 617, angle: 6, R: 2000, roofR: 330, camber: 160 },
+    { id: 't3', label: 'Type 3 – R2000 wall, 2.9°', kind: 'arc', z0: 869.4, angle: 2.9, R: 2000, roofR: 420, camber: 0 },
+    { id: 't4', label: 'Type 4 – R2000 wall 6°, cambered roof', kind: 'arc', z0: 769.2, angle: 6, R: 2000, roofR: 330, camber: 160 },
+    { id: 't5', label: 'Type 5 – inclined wall 4°', kind: 'incl', z0: 0, angle: 4, R: 0, roofR: 420, camber: 0 },
   ];
   TLT.profileCfg = function (cfg) {
     const id = (cfg.common || {}).profile;
@@ -3763,7 +3765,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       g += `<polyline points="${full(inn)}" fill="none" stroke="var(--muted)" stroke-width="8" stroke-dasharray="40 30"/>`;
       g += `<line x1="${-hw - 250}" y1="0" x2="${hw + 250}" y2="0" stroke="var(--ink)" stroke-width="10"/><text x="${-hw - 260}" y="-20" text-anchor="end" font-size="110" fill="var(--muted)">floor</text>`;
       // wall start height
-      if (P.z0 > 0) { const xs = hw - TLT.profileInset(P, P.z0); g += `<line x1="${xs}" y1="${-P.z0}" x2="${hw + 300}" y2="${-P.z0}" stroke="var(--muted)" stroke-width="6"/><text x="${hw + 320}" y="${-P.z0 + 35}" font-size="105" fill="var(--muted)">${P.z0} (wall start)</text>`; }
+      if (P.z0 > 0) { const xs = hw - TLT.profileInset(P, P.z0); g += `<line x1="${xs}" y1="${-P.z0}" x2="${hw + 300}" y2="${-P.z0}" stroke="var(--muted)" stroke-width="6"/><text x="${hw + 320}" y="${-P.z0 + 35}" font-size="105" fill="var(--muted)">${P.z0} (R2000 start)</text>`; }
       // reference height and usable width
       const ins = TLT.profileInset(P, P.refH), xu = hw - wt - ins;
       g += `<line x1="${-xu}" y1="${-P.refH}" x2="${xu}" y2="${-P.refH}" stroke="var(--accent)" stroke-width="14"/>`;
@@ -3795,7 +3797,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       ${F('Car body section', 'common.profile', 'select', { wide: true, options: TLT.PROFILES.map(Q => [Q.id, Q.label]) })}
       ${F('Reference height for standing width', 'interior.widthRefHeight', 'num', { unit: 'mm AFL' })}
       <div class="f wide"><div class="hint" id="profileInfo" style="margin:0"></div></div>
-      <p class="hint" style="grid-column:1/-1;margin:0">The section sets the side-wall shape of the front view and the usable interior width for the standing area (taken at the reference height above floor; seats and the aisle are at the floor / seat level, where all four sections have the full interior width).</p>
+      <p class="hint" style="grid-column:1/-1;margin:0">The section sets the side-wall shape of the front view and the usable interior width for the standing area (taken at the reference height above floor; seats and the aisle are at the floor / seat level, where the wall inset is still small). Set the reference height to 0 to count the plain floor area.</p>
     </div><div id="profilePreview">${profilePreviewHtml()}</div></div></div>`;
     h += '<div class="cards">';
     h += card('Project & sheet', `<div class="fields">
@@ -4279,7 +4281,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     ['Project', 'Paper size', 'project.paper', ['A3', 'A2', 'A1']], ['Project', 'Train layout rows', 'project.trainRows', ['1', '2']],
     ['Train', 'Product type', 'productType', ['metro', 'lrv', 'mainline']], ['Train', 'Formation', 'formation', 'text'], ['Train', 'Multiple unit factor', 'muFactor', 'num'],
     ['Design speed & nose (mainline)', 'Design speed', 'aero.speed', 'num', 'km/h'], ['Design speed & nose (mainline)', 'Nose length (0 = from speed)', 'aero.noseLength', 'num', 'mm'],
-    ['Car body & bogie', 'Car body section (t1 = Type 1 inclined 2.2°, t2 = Type 2 vertical, t3 = Type 3 R2000 2.9°, t4 = Type 4 R2000 6° cambered roof)', 'common.profile', 'text', ''],
+    ['Car body & bogie', 'Car body section (t1 = Type 1 inclined 2.2°, t2 = Type 2 vertical, t3 = Type 3 R2000 2.9°, t4 = Type 4 R2000 6° cambered roof, t5 = Type 5 inclined 4°)', 'common.profile', 'text', ''],
     ['Car body & bogie', 'Reference height for standing width (above floor)', 'interior.widthRefHeight', 'num', 'mm'],
     ['Car body & bogie', 'Body width', 'common.bodyWidth', 'num', 'mm'], ['Car body & bogie', 'Side wall + lining', 'common.wallThk', 'num', 'mm'],
     ['Car body & bogie', 'Floor height ATR', 'common.floorHeight', 'num', 'mm'], ['Car body & bogie', 'Roof height ATR', 'common.roofHeight', 'num', 'mm'],
