@@ -4,6 +4,9 @@ A browser tool that draws a metro train's vehicle layout, interior seat layouts 
 
 It is plain HTML + JavaScript. There is nothing to install and no server: open it in Chrome or Edge, including on a locked-down work laptop.
 
+## Versions
+Source: <https://github.com/vs916491-maker/Train_Layout-Simulator>. Each release is tagged `vX.Y.Z` and listed in [CHANGELOG.md](CHANGELOG.md); the version is shown in the app header and on every PDF sheet. To use an older version, open the tag on GitHub and download `dist/train-layout-generator.html`.
+
 ## Workflow — six steps
 
 | Step | Tab | What you do / get |

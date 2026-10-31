@@ -15,6 +15,7 @@
     return Number.isFinite(n) ? n : d;
   };
   TLT.num = num;
+  TLT.VERSION = '1.0.0';   // keep in step with CHANGELOG.md and the git tag
 
   /* ---------------- Formation ---------------- */
   /* Formation text with the multiple-unit factor: unit, then the unit turned round, alternately (DM-T-M-T | T'-M'-T'-DM') */

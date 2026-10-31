@@ -1300,6 +1300,7 @@
 
   /* ---------- start ---------- */
   function start() {
+    if ($('appVersion')) $('appVersion').textContent = 'v' + TLT.VERSION;
     $('preset').innerHTML = TLT.PRESET_LIST.map(p => `<option value="${p.id}">${esc(p.label)}</option>`).join('');
     const saved = restore();
     cfg = normalise(saved && Array.isArray(saved.carTypes) ? saved : TLT.PRESETS['dhaka-l5n']());
@@ -1308,7 +1309,7 @@
     bind();
     generateAll();
     const u = restoreUi();
-    showPane([1, 2, 3, 4, 5].includes(u.pane) ? u.pane : 1);
+    showPane([1, 2, 3, 4, 5, 6].includes(u.pane) ? u.pane : 1);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
