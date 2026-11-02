@@ -15,7 +15,7 @@
     return Number.isFinite(n) ? n : d;
   };
   TLT.num = num;
-  TLT.VERSION = '1.1.0';   // keep in step with CHANGELOG.md and the git tag
+  TLT.VERSION = '1.2.0';   // keep in step with CHANGELOG.md and the git tag
 
   /* ---------------- Formation ---------------- */
   /* Formation text with the multiple-unit factor: unit, then the unit turned round, alternately (DM-T-M-T | T'-M'-T'-DM') */
@@ -171,7 +171,8 @@
   };
 
   /* ---------------- Interior items (per car variant) ----------------
-   * type.interiorItems: [{ kind: wheelchair|cabinet|max|none, bay, side: A|B|AB, place: door|end1|middle|end2, length, depth, height, label, n }]
+   * type.interiorItems: [{ kind: wheelchair|bicycle|folding|cabinet|max|none, bay, side: A|B|AB, place: door|end1|middle|end2, length, depth, height, label, n, stand }]
+   * stand (wheelchair, bicycle, folding seats): 'yes' / 'no' / '' (default) — the space may be used as standing area.
    * Older inputs used a text field type.bays ("1 A wheelchair"); it is converted here.
    */
   TLT.interiorItems = function (type) {
@@ -183,7 +184,8 @@
       src = p.rules.map(q => ({ kind: q.kind === 'max' ? (q.n === 0 ? 'none' : 'max') : q.kind, bay: q.bay, side: q.side, place: 'door', length: q.length, depth: q.depth, label: q.label, n: q.n }));
     }
     src.forEach(q => {
-      const kind = ['wheelchair', 'cabinet', 'max', 'none', 'toilet', 'toiletPrm'].includes(q.kind) ? q.kind : 'cabinet';
+      const kind = ['wheelchair', 'bicycle', 'folding', 'cabinet', 'max', 'none', 'toilet', 'toiletPrm'].includes(q.kind) ? q.kind : 'cabinet';
+      const standOf = v => (/^(y|yes|true|1)$/i.test(String(v)) || v === true ? true : /^(n|no|false|0)$/i.test(String(v)) || v === false ? false : null);
       if (kind === 'toilet' || kind === 'toiletPrm') {
         const prm = kind === 'toiletPrm';
         const side = String(q.side || 'A').toUpperCase() === 'B' ? 'B' : 'A';
@@ -195,7 +197,11 @@
       const side = String(q.side || 'A').toUpperCase();
       const sides = side === 'AB' || side === 'BA' ? ['A', 'B'] : side === 'B' ? ['B'] : ['A'];
       const it = { kind: kind === 'none' ? 'max' : kind, bay, sides, place: ['door', 'end1', 'middle', 'end2'].includes(q.place) ? q.place : 'door',
-        length: num(q.length, 900), depth: num(q.depth, 600), height: num(q.height, NaN), label: String(q.label || 'ELEC. CABINET'), n: kind === 'none' ? 0 : Math.max(0, Math.round(num(q.n, 0))) };
+        length: num(q.length, kind === 'bicycle' ? 1800 : 900), depth: num(q.depth, kind === 'bicycle' ? 700 : 600), height: num(q.height, NaN),
+        label: String(q.label || (kind === 'bicycle' ? 'BICYCLE' : kind === 'folding' ? 'FOLDING SEATS' : 'ELEC. CABINET')),
+        n: kind === 'none' ? 0 : Math.max(0, Math.round(num(q.n, kind === 'folding' ? 2 : 0))), stand: standOf(q.stand) };
+      if (kind === 'folding' && !(it.n > 0)) { errors.push('folding seats need a number of seats.'); return; }
+      if (kind === 'bicycle' && !(it.length > 0 && it.depth > 0)) { errors.push('bicycle space needs a length and depth.'); return; }
       if (kind === 'cabinet' && !(it.length > 0 && it.depth > 0)) { errors.push(`cabinet "${it.label}" needs a length and depth.`); return; }
       out.push(it);
     });
@@ -487,11 +493,13 @@
     const xFirst = !ML.on ? NaN : cls === 'first' ? salEnd + 1 : cls === 'mixed' ? salStart + num(type.firstLength, 0) : NaN;
 
     const seatBlocks = [];   // {side,x0,x1,n,bay,depth,foot[,groups,trans][,rowSeats,per,sw,cls]}
-    const wheelchairs = [];  // {side,x0,x1,depth,bay,place}
+    const wheelchairs = [];  // {side,x0,x1,depth,bay,place,stand}
+    const bicycles = [];     // {side,x0,x1,depth,bay,place,stand}
+    const foldings = [];     // {side,x0,x1,n,depth,foot,bay,place,stand}  folding (tip-up) seats
     const cabinets = [];     // {side,x0,x1,depth,height,label,bay,place[,toilet][,aux]}
     const screens = [];      // draft screens {side,x}
     const placeName = { door: 'next to door', end1: 'END 1 side', middle: 'middle', end2: 'END 2 side' };
-    const nameOf = q => (q.kind === 'wheelchair' ? 'wheelchair space' : q.toilet ? q.label.toLowerCase() : q.aux ? 'auxiliary desk' : 'cabinet "' + q.label + '"');
+    const nameOf = q => (q.kind === 'wheelchair' ? 'wheelchair space' : q.kind === 'bicycle' ? 'bicycle space' : q.kind === 'folding' ? `${q.n} folding seats` : q.toilet ? q.label.toLowerCase() : q.aux ? 'auxiliary desk' : 'cabinet "' + q.label + '"');
 
     // Mainline seat rows in [f0, f1] on one side: facing pairs or airline rows at the class pitch
     const mlRows = (side, f0, f1, bayI, left) => {
@@ -546,16 +554,18 @@
           mine.filter(q => q.kind !== 'max').forEach(q => warn.push(`${type.name}: B${bay.i} side ${side} has no free length (${Math.round(bay.x1 - bay.x0)} mm bay${vestibules.length ? ', vestibule' : ''}) for the ${nameOf(q)}.`));
           return;
         }
-        const boxes = mine.filter(q => q.kind === 'wheelchair' || q.kind === 'cabinet').map(q => {
+        const boxes = mine.filter(q => ['wheelchair', 'bicycle', 'folding', 'cabinet'].includes(q.kind)).map(q => {
           let place = q.place;
           if (place === 'door') place = bay.k0 === 'door' ? 'end1' : bay.k1 === 'door' ? 'end2' : 'middle';
-          return Object.assign({}, q, { at: place, len: q.kind === 'wheelchair' ? wcL : q.length });
+          return Object.assign({}, q, { at: place, len: q.kind === 'wheelchair' ? wcL : q.kind === 'folding' ? q.n * seatW : q.length });
         });
         let lo = a, hi = b;
         const mids = [];
         const put = (q, x0) => {
           const x1 = x0 + q.len;
-          if (q.kind === 'wheelchair') wheelchairs.push({ side, x0, x1, depth: wcW, bay: bay.i, place: q.place });
+          if (q.kind === 'wheelchair') wheelchairs.push({ side, x0, x1, depth: wcW, bay: bay.i, place: q.place, stand: q.stand == null ? !!r.wcAsStanding : q.stand });
+          else if (q.kind === 'bicycle') bicycles.push({ side, x0, x1, depth: q.depth, bay: bay.i, place: q.place, stand: q.stand == null ? true : q.stand });
+          else if (q.kind === 'folding') foldings.push({ side, x0, x1, n: q.n, depth: trans ? tDepth : seatD, foot: trans ? 0 : foot, bay: bay.i, place: q.place, stand: q.stand == null ? true : q.stand });
           else cabinets.push({ side, x0, x1, depth: q.depth, height: q.height, label: q.label, bay: bay.i, place: q.place, toilet: q.toilet, aux: q.aux });
         };
         const tooShort = q => warn.push(`${type.name}: B${bay.i} side ${side} has no room for the ${nameOf(q)} (${Math.round(q.len)} mm, ${placeName[q.place] || q.place}).`);
@@ -606,7 +616,7 @@
     // Wheelchair turning circle: find a centre inside the wheelchair space whose circle stays clear of seats and cabinets
     {
       const R = num(r.wcTurning, 1500) / 2, hh = Wi / 2;
-      const obst = seatBlocks.map(q => ({ x0: q.x0, x1: q.x1, y0: q.side === 'A' ? hh - q.depth : -hh, y1: q.side === 'A' ? hh : -hh + q.depth }))
+      const obst = seatBlocks.concat(foldings, bicycles).map(q => ({ x0: q.x0, x1: q.x1, y0: q.side === 'A' ? hh - q.depth : -hh, y1: q.side === 'A' ? hh : -hh + q.depth }))
         .concat(cabinets.map(q => ({ x0: q.x0, x1: q.x1, y0: q.side === 'A' ? hh - q.depth : -hh, y1: q.side === 'A' ? hh : -hh + q.depth })));
       const hits = (cx, cy) => cx - R < salStart - EPS || cx + R > salEnd + EPS || obst.some(o => {
         const dx = Math.max(o.x0 - cx, 0, cx - o.x1), dy = Math.max(o.y0 - cy, 0, cy - o.y1);
@@ -641,12 +651,26 @@
     cabinets.forEach(cb => { aCab += (cb.x1 - cb.x0) * cb.depth; const [y0, y1] = sideY(cb.side, cb.depth); occ.push({ x0: cb.x0, x1: cb.x1, y0, y1 }); });
     wheelchairs.forEach(w => {
       aWc += (w.x1 - w.x0) * w.depth;
-      if (!r.wcAsStanding) { const [y0, y1] = sideY(w.side, w.depth); occ.push({ x0: w.x0, x1: w.x1, y0, y1 }); }
+      if (!w.stand) { const [y0, y1] = sideY(w.side, w.depth); occ.push({ x0: w.x0, x1: w.x1, y0, y1 }); }
+    });
+    let aBike = 0, aFold = 0;
+    bicycles.forEach(w => {
+      aBike += (w.x1 - w.x0) * w.depth;
+      if (!w.stand) { const [y0, y1] = sideY(w.side, w.depth); occ.push({ x0: w.x0, x1: w.x1, y0, y1 }); }
+    });
+    // folding seats: not marked → always seats (like fixed seats); marked → standing area when folded (per load case)
+    const occUnfold = [];
+    foldings.forEach(f => {
+      aFold += (f.x1 - f.x0) * f.depth;
+      const [y0, y1] = sideY(f.side, f.depth + f.foot);
+      (f.stand ? occUnfold : occ).push({ x0: f.x0, x1: f.x1, y0, y1 });
     });
     const PF = TLT.profileCfg(cfg);
     const insetRef = Math.max(0, TLT.profileInset(PF, PF.refH));
     const standRects = TLT.freeRects(standStart, standEnd, -half + insetRef, half - insetRef, occ);
     const aStand = standRects.reduce((s, q) => s + (q.x1 - q.x0) * (q.y1 - q.y0), 0);
+    const aStandUnfold = occUnfold.length ? TLT.freeRects(standStart, standEnd, -half + insetRef, half - insetRef, occ.concat(occUnfold)).reduce((s, q) => s + (q.x1 - q.x0) * (q.y1 - q.y0), 0) : aStand;
+    const foldSeats = foldings.reduce((s, f) => s + f.n, 0), foldStand = foldings.filter(f => f.stand).reduce((s, f) => s + f.n, 0);
     const aSaloon = Math.max(0, standEnd - standStart) * Wi;
     const aVest = vestibules.reduce((s, q) => s + (q.x1 - q.x0) * Wi, 0);
 
@@ -687,9 +711,9 @@
       noseLen, noseDesk, aeroF: AE.f,
       type, Lc, Lb, bodyF, bodyR, mid, bogies, bogieInfo, bc, axles, shared: [sh1, sh2], hinge: [h1, h2], ends: E, cab1: E.cab1, cab2: E.cab2,
       W, Wi, doors, dw, cabLen, cabLen2, salStart, salEnd, bays,
-      seatBlocks, wheelchairs, cabinets, screens, standRects, seats, seatsFirst, vestibules, xFirst, mainline: ML.on,
+      seatBlocks, wheelchairs, bicycles, foldings, foldSeats, foldStand, cabinets, screens, standRects, seats, seatsFirst, vestibules, xFirst, mainline: ML.on,
       doorCfg: DC, cabDoorX, cabDoorX2, cabCfg: CB, openCab, openCab2, standStart, standEnd,
-      areas: { saloon: aSaloon / 1e6, seat: aSeat / 1e6, foot: aFoot / 1e6, wheelchair: aWc / 1e6, cabinet: aCab / 1e6, standing: aStand / 1e6, vestibule: aVest / 1e6 },
+      areas: { saloon: aSaloon / 1e6, seat: aSeat / 1e6, foot: aFoot / 1e6, wheelchair: aWc / 1e6, bicycle: aBike / 1e6, folding: aFold / 1e6, cabinet: aCab / 1e6, standing: aStand / 1e6, standingUnfolded: aStandUnfold / 1e6, vestibule: aVest / 1e6 },
       aisle, warnings: warn, profile: PF, insetRef, usableWidth: Wi - 2 * insetRef,
       equipment: TLT.equipmentFor(type, cfg),
       motorBogies: bogieInfo.filter(bg => bg.motor).length,
@@ -727,6 +751,10 @@
   };
 
   /* ---------------- Capacity ---------------- */
+  // standing density in persons/m²: 'density' is given in pax/m², 'kgm2' in kg/m² (÷ passenger mass)
+  TLT.caseDensity = (cs, cfg) => (cs.kind === 'kgm2' ? num(cs.density, 0) / Math.max(1, num((cfg.loads || {}).paxMass, 60)) : num(cs.density, 0));
+  // folding seats marked as standing area are folded (area counts as standing, seats not counted) in this case
+  TLT.caseFolded = cs => (cs.fold === 'yes' || cs.fold === true ? true : cs.fold === 'no' || cs.fold === false ? false : cs.kind !== 'seated');
   TLT.capacity = function (lay, cfg) {
     const L = cfg.loads || {};
     const paxMass = num(L.paxMass, 60) / 1000;
@@ -735,7 +763,9 @@
     const tare = num(lay.type.tare, 0);
     const res = {};
     (cfg.cases || []).forEach(cs => {
-      let seated = lay.seats, standing = 0, total;
+      const folded = TLT.caseFolded(cs);
+      let seated = lay.seats + (lay.foldSeats || 0) - (folded ? lay.foldStand || 0 : 0), standing = 0, total;
+      const area = folded ? lay.areas.standing : lay.areas.standingUnfolded;
       if (cs.kind === 'seated') { standing = 0; total = seated; }
       else if (cs.kind === 'factor') {
         const base = res[String(cs.of || '').toLowerCase()];
@@ -743,12 +773,12 @@
         if (!base) { total = NaN; seated = NaN; standing = NaN; }
         else { total = round(base.total * f + 1e-9); standing = total - seated; }
       } else {
-        const dens = num(cs.density, 0);
-        standing = round(lay.areas.standing * dens + 1e-9);
+        const dens = TLT.caseDensity(cs, cfg);
+        standing = round(area * dens + 1e-9);
         total = seated + standing;
       }
       const mass = tare + (Number.isFinite(total) ? total : 0) * paxMass;
-      res[String(cs.name).toLowerCase()] = { name: cs.name, seated, standing, total, mass, axle: axles > 0 ? mass / axles : NaN };
+      res[String(cs.name).toLowerCase()] = { name: cs.name, seated, standing, total, mass, axle: axles > 0 ? mass / axles : NaN, folded, area };
     });
     return res;
   };
