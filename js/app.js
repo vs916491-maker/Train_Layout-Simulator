@@ -250,7 +250,7 @@
       ${F('Wheelchair space length', 'interior.wcLength', 'num', { unit: 'mm' })}${F('Wheelchair space width', 'interior.wcWidth', 'num', { unit: 'mm' })}
       ${F('Turning circle Ø', 'interior.wcTurning', 'num', { unit: 'mm' })}${F('Min. aisle (check)', 'interior.minAisle', 'num', { unit: 'mm' })}
       ${F('Default cubicle depth', 'interior.cabinetDepth', 'num', { unit: 'mm' })}<div></div>
-      ${F('Count wheelchair space as standing area', 'interior.wcAsStanding', 'check', { wide: true })}
+      ${F('Count wheelchair space as standing area (default for each wheelchair space)', 'interior.wcAsStanding', 'check', { wide: true })}
     </div><p class="hint">Defaults follow common EN / PRM practice (wheelchair space 1300 × 700, Ø1500 turning circle). Confirm against the standard for each project.</p>`);
     h += '</div>';
 
@@ -267,16 +267,17 @@
       <td><input class="num" id="mt-${i}-st" type="number" step="any" data-path="carTypes.${i}.specStanding" data-kind="num" value="${esc(t.specStanding)}"></td></tr>`).join('')}
     </tbody></table></div>
     <p class="hint">Tare mass, passenger mass and axle-load limit are entered in step 5 (Weight Cal. Fixed Tare). ${aw ? `The standees target is checked against ${esc(aw.name)} on the capacity sheet.` : 'Choose the load case for the standees check; without one only the seats are checked.'}</p>`; })()}
-    <div class="scroll-x" style="margin-top:10px"><table class="data"><thead><tr><th>Case</th><th>Type</th><th>pax/m² or factor</th><th>Of case</th><th>Note</th><th></th></tr></thead><tbody>
+    <div class="scroll-x" style="margin-top:10px"><table class="data"><thead><tr><th>Case</th><th>Type</th><th>Density or factor</th><th>Of case</th><th title="Folding seats marked as standing area are folded: their area counts as standing and they are not counted as seats">Folding seats folded</th><th>Note</th><th></th></tr></thead><tbody>
     ${cfg.cases.map((c, i) => `<tr>
       <td><input id="case-${i}-name" data-path="cases.${i}.name" data-kind="text" value="${esc(c.name)}"></td>
-      <td><select id="case-${i}-kind" data-path="cases.${i}.kind" data-kind="text" data-rerender="1">${[['seated', 'Seated only'], ['density', 'Density'], ['factor', 'Factor of case']].map(([v, l]) => `<option value="${v}"${c.kind === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>
-      <td>${c.kind === 'density' ? `<input class="num" id="case-${i}-d" type="number" step="any" data-path="cases.${i}.density" data-kind="num" value="${esc(c.density)}">` : c.kind === 'factor' ? `<input class="num" id="case-${i}-f" type="number" step="any" data-path="cases.${i}.factor" data-kind="num" value="${esc(c.factor)}">` : ''}</td>
+      <td><select id="case-${i}-kind" data-path="cases.${i}.kind" data-kind="text" data-rerender="1">${[['seated', 'Seated only'], ['density', 'Density (pax/m²)'], ['kgm2', 'Density (kg/m²)'], ['factor', 'Factor of case']].map(([v, l]) => `<option value="${v}"${c.kind === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>
+      <td>${c.kind === 'density' || c.kind === 'kgm2' ? `<div class="in" style="display:flex;align-items:center;gap:6px"><input class="num" id="case-${i}-d" type="number" step="any" data-path="cases.${i}.density" data-kind="num" value="${esc(c.density)}"><span class="unit">${c.kind === 'kgm2' ? 'kg/m²' : 'pax/m²'}</span></div>` : c.kind === 'factor' ? `<input class="num" id="case-${i}-f" type="number" step="any" data-path="cases.${i}.factor" data-kind="num" value="${esc(c.factor)}">` : ''}</td>
       <td>${c.kind === 'factor' ? `<input id="case-${i}-of" data-path="cases.${i}.of" data-kind="text" value="${esc(c.of)}">` : ''}</td>
+      <td><select id="case-${i}-fold" data-path="cases.${i}.fold" data-kind="text">${[['', `Default (${c.kind === 'seated' ? 'No' : 'Yes'})`], ['yes', 'Yes'], ['no', 'No']].map(([v, l]) => `<option value="${v}"${String(c.fold || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>
       <td><input id="case-${i}-note" data-path="cases.${i}.note" data-kind="text" value="${esc(c.note || '')}"></td>
       <td><button class="btn small" data-delcase="${i}" aria-label="Remove case ${esc(c.name)}">×</button></td></tr>`).join('')}
     </tbody></table></div>
-    <p class="hint">Density: standees = standing area × pax/m². Factor: multiplies the total of another case (TPN = 1.8 × AW2).</p>
+    <p class="hint">Density: standees = standing area × pax/m². Density (kg/m²): standees = standing area × kg/m² ÷ passenger mass (e.g. PXD 500 kg/m²). Factor: multiplies the total of another case (TPN = 1.8 × AW2). Folding seats folded: folding seats marked as standing area count as standing area instead of seats (default: Yes except for seated-only cases).</p>
     <button class="btn small" id="addCase">Add load case</button></div></div>`;
 
     h += `<div class="genbar"><p>All inputs are saved in this browser. Next, check the equipment list, then generate all drawings and calculations.</p><button class="btn primary big" data-pane="2">Next: Equipment Inputs →</button></div>`;
@@ -357,7 +358,7 @@
   }
 
   /* Interior items editor (wheelchair spaces, electrical cabinets, seat limits) */
-  const ITEM_KINDS_BASE = [['wheelchair', 'Wheelchair space'], ['cabinet', 'Electrical cabinet'], ['max', 'Seat limit'], ['none', 'No seats']];
+  const ITEM_KINDS_BASE = [['wheelchair', 'Wheelchair space'], ['bicycle', 'Bicycle space'], ['folding', 'Folding seats'], ['cabinet', 'Electrical cabinet'], ['max', 'Seat limit'], ['none', 'No seats']];
   const itemKinds = () => (TLT.productType(cfg) === 'mainline' ? ITEM_KINDS_BASE.concat([['toilet', 'Toilet (standard)'], ['toiletPrm', 'Toilet (PRM)']]) : ITEM_KINDS_BASE);
   const PLACES = [['door', 'Next to door'], ['end1', 'END 1 side of bay'], ['middle', 'Middle of bay'], ['end2', 'END 2 side of bay']];
   function interiorItemsHtml(t, i) {
@@ -375,19 +376,25 @@
         <div class="f"><label for="${idb}-b">Bay</label><div class="in">${sel(idb + '-b', base + '.bay', bayOpts, it.bay)}</div></div>
         <div class="f"><label for="${idb}-s">Side</label><div class="in">${sel(idb + '-s', base + '.side', [['A', 'A'], ['B', 'B'], ['AB', 'A + B']], it.side)}</div></div>
         <button class="btn small" data-delitem="${i}:${j}" aria-label="Remove item" style="align-self:end">×</button></div>`;
-      if (it.kind === 'wheelchair' || it.kind === 'cabinet' || it.kind === 'toilet' || it.kind === 'toiletPrm') {
+      if (['wheelchair', 'bicycle', 'folding', 'cabinet', 'toilet', 'toiletPrm'].includes(it.kind)) {
         const plc = `<div class="f"><label for="${idb}-p">Placement</label><div class="in">${sel(idb + '-p', base + '.place', PLACES, it.place || 'door')}</div></div>`;
+        const dflt = it.kind === 'wheelchair' ? (cfg.interior.wcAsStanding ? 'yes' : 'no') : 'yes';
+        const stand = `<div class="f"><label for="${idb}-st">${it.kind === 'folding' ? 'Standing area when folded' : 'Use as standing area'}</label><div class="in">${sel(idb + '-st', base + '.stand', [['', `Default (${dflt === 'yes' ? 'Yes' : 'No'})`], ['yes', 'Yes'], ['no', 'No']], it.stand == null ? '' : it.stand)}</div></div>`;
         const prm = it.kind === 'toiletPrm';
         h += it.kind === 'toilet' || prm
           ? `<div class="row2 c3">${plc}${inp(idb + '-l', base + '.length', it.length != null ? it.length : (prm ? 2100 : 1100), 'Length', 'mm')}${inp(idb + '-d', base + '.depth', it.depth != null ? it.depth : (prm ? 1800 : 1200), 'Depth', 'mm')}</div>`
           : it.kind === 'cabinet'
           ? `<div class="row2 c2">${plc}${inp(idb + '-lab', base + '.label', it.label, 'Label', '')}</div><div class="row2 c3">${inp(idb + '-l', base + '.length', it.length, 'Length', 'mm') + inp(idb + '-d', base + '.depth', it.depth, 'Depth', 'mm') + inp(idb + '-h', base + '.height', it.height, 'Height', 'mm')}</div>`
-          : `<div class="row2 c2">${plc}<p class="hint" style="margin:16px 0 0">${TLT.num(cfg.interior.wcLength, 1300)} × ${TLT.num(cfg.interior.wcWidth, 700)} mm, Ø${TLT.num(cfg.interior.wcTurning, 1500)} circle (Interior rules)</p></div>`;
+          : it.kind === 'bicycle'
+          ? `<div class="row2 c2">${plc}${stand}</div><div class="row2 c2">${inp(idb + '-l', base + '.length', it.length != null ? it.length : 1800, 'Length', 'mm')}${inp(idb + '-d', base + '.depth', it.depth != null ? it.depth : 700, 'Depth', 'mm')}</div>`
+          : it.kind === 'folding'
+          ? `<div class="row2 c2">${plc}${stand}</div><div class="row2 c2">${inp(idb + '-n', base + '.n', it.n != null ? it.n : 2, 'Folding seats', 'pax')}<p class="hint" style="margin:16px 0 0">${Math.round((TLT.num(it.n, 2)) * TLT.num(cfg.interior.seatWidth, 430))} mm long (seat width × seats)</p></div>`
+          : `<div class="row2 c2">${plc}${stand}</div><p class="hint" style="margin:4px 0 0">${TLT.num(cfg.interior.wcLength, 1300)} × ${TLT.num(cfg.interior.wcWidth, 700)} mm, Ø${TLT.num(cfg.interior.wcTurning, 1500)} circle (Interior rules)</p>`;
       }
       if (it.kind === 'max') h += `<div class="row2">${inp(idb + '-n', base + '.n', it.n, 'Max. seats per side', 'pax')}</div>`;
       h += '</div>';
     });
-    h += `<div class="additems"><button class="btn small" data-additem="${i}:wheelchair">+ Wheelchair space</button><button class="btn small" data-additem="${i}:cabinet">+ Electrical cabinet</button><button class="btn small" data-additem="${i}:max">+ Seat limit</button>${TLT.productType(cfg) === 'mainline' ? `<button class="btn small" data-additem="${i}:toilet">+ Toilet</button><button class="btn small" data-additem="${i}:toiletPrm">+ PRM toilet</button>` : ''}</div></div>`;
+    h += `<div class="additems"><button class="btn small" data-additem="${i}:wheelchair">+ Wheelchair space</button><button class="btn small" data-additem="${i}:bicycle">+ Bicycle space</button><button class="btn small" data-additem="${i}:folding">+ Folding seats</button><button class="btn small" data-additem="${i}:cabinet">+ Electrical cabinet</button><button class="btn small" data-additem="${i}:max">+ Seat limit</button>${TLT.productType(cfg) === 'mainline' ? `<button class="btn small" data-additem="${i}:toilet">+ Toilet</button><button class="btn small" data-additem="${i}:toiletPrm">+ PRM toilet</button>` : ''}</div></div>`;
     return h;
   }
   function interiorGuide() {
@@ -410,6 +417,7 @@
         <li><b>Bays</b> are the spaces between doors, numbered B0…Bn from END 1. B0 runs from the cab partition or end wall to the first door. Side A is the top of the plan.</li>
         <li><b>Seats</b> fill each bay side automatically: bay length minus the door clearance at each door, divided by the seat width.</li>
         <li><b>Wheelchair space</b> takes its length from the bay (size set in Interior rules); seats fill the rest. The tool places the turning circle clear of seats and warns if it cannot.</li>
+        <li><b>Bicycle space</b> (default 1,800 × 700 mm) and <b>folding seats</b> (number of seats × seat width) are placed like a wheelchair space. <b>Use as standing area</b> counts the space as standing area; folding seats marked so count as standing area (and not as seats) in the load cases where <b>Folding seats folded</b> is ticked.</li>
         <li><b>Electrical cabinet</b>: give label, length, depth and height. It is drawn and dimensioned on the layout, removed from the standing area, and seats fill the rest of the bay.</li>
         <li><b>Placement</b>: next to the door (default), END 1 side, middle or END 2 side of the bay.</li>
         <li><b>Seat limit / No seats</b> caps the seats on that bay side.</li>
@@ -673,11 +681,11 @@
     ['specSeats', 'Seated passengers target', 'num'], ['specStanding', 'Standees target', 'num'], ['tare', 'Tare mass AW0 (t)', 'num'],
     ['pantos', 'Pantographs per car (target)', 'num'], ['ccd', 'CCD shoes per car', 'num'],
   ];
-  const ITEM_COLS = [['car', 'Variant', 'text'], ['kind', 'Item', ['wheelchair', 'cabinet', 'max', 'none', 'toilet', 'toiletPrm']], ['bay', 'Bay (0 = END 1)', 'num'],
+  const ITEM_COLS = [['car', 'Variant', 'text'], ['kind', 'Item', ['wheelchair', 'bicycle', 'folding', 'cabinet', 'max', 'none', 'toilet', 'toiletPrm']], ['bay', 'Bay (0 = END 1)', 'num'],
     ['side', 'Side', ['A', 'B', 'AB']], ['place', 'Placement', ['door', 'end1', 'middle', 'end2']], ['length', 'Length (mm)', 'num'], ['depth', 'Depth (mm)', 'num'],
-    ['height', 'Height (mm)', 'num'], ['label', 'Label', 'text'], ['n', 'Max. seats per side', 'num']];
-  const CASE_COLS = [['name', 'Load case', 'text'], ['kind', 'Type', ['seated', 'density', 'factor']], ['density', 'Density (pax/m²)', 'num'], ['factor', 'Factor', 'num'],
-    ['of', 'Of case', 'text'], ['note', 'Note', 'text'], ['inFixed', 'In fixed-tare calculation', 'bool']];
+    ['height', 'Height (mm)', 'num'], ['label', 'Label', 'text'], ['n', 'Max. seats per side', 'num'], ['stand', 'Standing area (yes / no / blank = default)', ['yes', 'no']]];
+  const CASE_COLS = [['name', 'Load case', 'text'], ['kind', 'Type', ['seated', 'density', 'kgm2', 'factor']], ['density', 'Density (pax/m², or kg/m² for kgm2)', 'num'], ['factor', 'Factor', 'num'],
+    ['of', 'Of case', 'text'], ['note', 'Note', 'text'], ['inFixed', 'In fixed-tare calculation', 'bool'], ['fold', 'Folding seats folded (yes / no / blank = default)', ['yes', 'no']]];
   const xlVal = (v, type) => (type === 'bool' ? (v === false ? 'No' : v === true || v === 'true' ? 'Yes' : v == null || v === '' ? '' : 'Yes') : v == null ? '' : v);
   const parseVal = (raw, type, label, errs) => {
     const s = String(raw == null ? '' : raw).trim();
@@ -805,7 +813,7 @@
     h += card('Settings', `<div class="fields">
       ${F('Passenger mass', 'loads.paxMass', 'num', { unit: 'kg', idp: 'ff-' })}${F('Max. axle load', 'loads.maxAxleLoad', 'num', { unit: 't', idp: 'ff-' })}
     </div><p class="hint">Mass per car and axle load = car mass ÷ axles. The load per bogie and wheel from the equipment distribution is in step 6.</p>`);
-    h += card('Load cases to calculate', `<div class="checks">${cfg.cases.map((c, i) => `<label class="f check" style="display:flex;gap:8px;align-items:center;margin:4px 0"><input type="checkbox" id="fc-${i}" data-path="cases.${i}.inFixed" data-kind="check" data-rerender="1"${c.inFixed !== false ? ' checked' : ''}><span><b>${esc(c.name)}</b> <span class="hint" style="margin:0">${esc(TLT.caseBasis(c))}</span></span></label>`).join('')}</div>
+    h += card('Load cases to calculate', `<div class="checks">${cfg.cases.map((c, i) => `<label class="f check" style="display:flex;gap:8px;align-items:center;margin:4px 0"><input type="checkbox" id="fc-${i}" data-path="cases.${i}.inFixed" data-kind="check" data-rerender="1"${c.inFixed !== false ? ' checked' : ''}><span><b>${esc(c.name)}</b> <span class="hint" style="margin:0">${esc(TLT.caseBasis(c, cfg))}</span></span></label>`).join('')}</div>
       <p class="hint">Load cases are defined in step 1 (Load cases).</p>`);
     h += '</div>';
     h += `<div class="cards" style="margin-top:14px"><div class="card" style="grid-column:1/-1"><h3>Fixed tare mass per car variant</h3><div class="scroll-x"><table class="data"><thead><tr><th>Variant</th><th>Description</th><th>Cars in train</th><th>Bogies</th><th>Axles (for this car)</th><th>Tare mass AW0 (t)</th></tr></thead><tbody>
@@ -1266,6 +1274,8 @@
         const [i, kind] = b.dataset.additem.split(':');
         const t = cfg.carTypes[+i]; t.interiorItems = t.interiorItems || [];
         t.interiorItems.push(kind === 'wheelchair' ? { kind, bay: 1, side: 'A', place: 'door' }
+          : kind === 'bicycle' ? { kind, bay: 1, side: 'B', place: 'door', length: 1800, depth: 700, stand: '' }
+          : kind === 'folding' ? { kind, bay: 1, side: 'A', place: 'door', n: 2, stand: '' }
           : kind === 'toilet' ? { kind, bay: 1, side: 'A', place: 'end1', length: 1100, depth: 1200 }
           : kind === 'toiletPrm' ? { kind, bay: 1, side: 'A', place: 'end1', length: 2100, depth: 1800 }
           : kind === 'cabinet' ? { kind, bay: 0, side: 'A', place: 'end1', label: 'ELEC. CABINET', length: 900, depth: 600, height: 1900 }
