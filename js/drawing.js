@@ -301,9 +301,9 @@
   }
 
   /* Wheelchair sign (access symbol pictogram) centred at (cx, cy), size = height in mm */
-  function wheelchairSign(v, cx, cy, size) {
+  function wheelchairSign(v, cx, cy, size, lw) {
     const P = (x, y) => [cx + (x - 0.5) * size, cy + (y - 0.5) * size];
-    const o = { lw: 0.45 };
+    const o = { lw: lw || 0.45 };
     const [hx, hy] = P(0.43, 0.88);
     v.circle(hx, hy, 0.075 * size, 'WC', { fill: '#1565c0' });
     v.poly([P(0.42, 0.76), P(0.40, 0.46), P(0.68, 0.46), P(0.80, 0.16), P(0.92, 0.16)], false, 'WC', o);   // back, thigh, shin, foot
@@ -523,8 +523,8 @@
         const ym = Number.isFinite(w.cy) ? w.cy : (w.side === 'A' ? hi - R : -hi + R);
         const xm = Number.isFinite(w.cx) ? w.cx : (w.x0 + w.x1) / 2;
         v.circle(xm, ym, R, 'WC_DASH', w.clear === false ? { color: '#b3261e' } : undefined);
-        wheelchairSign(v, (w.x0 + w.x1) / 2, (y0 + y1) / 2, Math.min(w.x1 - w.x0, w.depth) * 0.82);
       }
+      wheelchairSign(v, (w.x0 + w.x1) / 2, (y0 + y1) / 2, Math.min(w.x1 - w.x0, w.depth) * 0.82, detail ? 0.45 : 0.22);
     });
     // Bicycle spaces (bicycle pictogram)
     (lay.bicycles || []).forEach(w => {

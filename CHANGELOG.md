@@ -4,7 +4,7 @@ Versions follow [Semantic Versioning](https://semver.org/): **MAJOR** for change
 
 ## [1.2.0] – 2026-11-02
 - **Bicycle space** (interior item, default 1,800 × 700 mm) drawn with a bicycle symbol, placed per bay / side like the wheelchair space.
-- **Wheelchair sign** (access symbol) drawn inside every wheelchair space on the car layouts (replaces the WHEELCHAIR text).
+- **Wheelchair sign** (access symbol) drawn inside every wheelchair space on the train layout and the car layouts (replaces the WHEELCHAIR text).
 - **Folding seats** (interior item: number of seats × seat width) drawn as seats marked F.
 - **Use as standing area** per wheelchair space, bicycle space and folding-seat group (wheelchair default = the Interior rules tick; bicycle and folding seats default Yes).
 - **Load cases:** new type **Density (kg/m²)** (e.g. PXD 500 kg/m²; persons = area × kg/m² ÷ passenger mass) and **Folding seats folded** per case: marked folding seats then count as standing area and not as seats (default Yes, except seated-only cases) — matches "folding seat, wheelchair spaces and bicycle area are occupied by standing passengers".
