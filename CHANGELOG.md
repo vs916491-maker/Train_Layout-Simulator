@@ -2,6 +2,11 @@
 
 Versions follow [Semantic Versioning](https://semver.org/): **MAJOR** for changes that break saved inputs or Excel templates, **MINOR** for new features, **PATCH** for fixes. The version is shown in the app header and on every PDF sheet (`TLT.VERSION` in `js/engine.js`); each release is a git tag `vX.Y.Z`.
 
+## [1.1.0] – 2026-11-02
+- **Equipment Inputs:** new **Description** column (full name of the equipment) next to **Equipment** (short form shown inside the boxes on the drawings). Read from / written to the equipment Excel file (header "Description"); older files without it still import.
+- Grey suggestions for common short forms (VVVF, APS, HSCB, BCU, CMP, MR, CCD …): double-click an empty cell to take one, or **Fill empty descriptions** for the whole list. Presets and the power-collection template rows come with descriptions.
+- **Underframe Layout:** the equipment table on each sheet (PDF / DXF) has a Description column.
+
 ## [1.0.0] – 2026-10-31
 First version under version control on GitHub. Includes everything developed so far:
 

@@ -123,7 +123,8 @@ One sheet (named `Equipment`, or the first sheet) with a header row. Column orde
 |---|---|
 | Car Type | Car variant name, e.g. `Tc`, `M1`, `M2` |
 | Category | `Equipment` (drawn on the layouts) or `Mass item` (carbody, bogies, cables & cabinets, piping, ceiling, floor, seats, doors, … `Other items` last) |
-| Equipment / Item | Name shown on the drawing or in the weight list |
+| Equipment / Item | Short form shown inside the box on the drawing (or the item name in the weight list) |
+| Description | Optional full name of the equipment, listed in the underframe equipment table (equipment list only) |
 | Location | `Underframe` or `Roof` |
 | Length (mm) / Width (mm) / Height (mm) | Box size; underframe height is measured down from the mounting face, roof height up from the roof |
 | X from car centre (mm) | Equipment centre, **+ towards END 1** |
