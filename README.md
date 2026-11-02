@@ -114,6 +114,7 @@ The section shapes the Metro / LRV front view. For capacity, the standing area u
 * **Windows**: per bay type (between doors / end bays) single, two or no windows; window width, height and sill; drop-down (hopper) windows in end bays or all; windows in the door leaves with their own size.
 * **Seats between doors** (per car variant): Auto, or a fixed 5 … 9-seater. With a fixed count the door clearance shrinks to fit, down to *Min. door clearance* (Interior rules); below that the tool warns. The card shows how many seats fit.
 * **Front view** on sheet 1: wipers (0–3, single or pantograph arm), detrainment door, windscreen, head / tail lights, destination display, coupler, rails and a simplified vehicle gauge outline.
+* **Windscreen & wipers** card: one or two panes, bottom and top height above floor, **width** (0 = automatic from the body width and cross-section; a larger value is limited to the body), gap to a side detrainment door, wipers. The front view notes the resulting glass size (W × H).
 
 ### Equipment Excel file
 

@@ -15,7 +15,7 @@
     return Number.isFinite(n) ? n : d;
   };
   TLT.num = num;
-  TLT.VERSION = '1.2.0';   // keep in step with CHANGELOG.md and the git tag
+  TLT.VERSION = '1.3.0';   // keep in step with CHANGELOG.md and the git tag
 
   /* ---------------- Formation ---------------- */
   /* Formation text with the multiple-unit factor: unit, then the unit turned round, alternately (DM-T-M-T | T'-M'-T'-DM') */
@@ -350,7 +350,7 @@
       couplerHeight: num(f.couplerHeight, 720), gaugeWidth: num(f.gaugeWidth, 3000), gaugeHeight: num(f.gaugeHeight, num(c.maxHeight, 4100)),
       showGauge: f.showGauge == null ? true : (f.showGauge === true || f.showGauge === 'true'),
       // windscreen: bottom / top above floor (top 0 = up to the destination display), split, gap to an offset detrainment door
-      wsBottom: num(f.wsBottom, 900), wsTop: num(f.wsTop, 0), wsSplit: f.wsSplit === 'two' ? 'two' : 'single', wsDoorGap: num(f.wsDoorGap, 150),
+      wsBottom: num(f.wsBottom, 900), wsTop: num(f.wsTop, 0), wsWidth: Math.max(0, num(f.wsWidth, 0)), wsSplit: f.wsSplit === 'two' ? 'two' : 'single', wsDoorGap: num(f.wsDoorGap, 150),
       wiperLength: num(f.wiperLength, 0) };
   };
 

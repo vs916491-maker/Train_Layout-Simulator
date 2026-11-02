@@ -633,6 +633,7 @@
     const rr = (x0, y0, x1, y1, r) => { const q = []; r = Math.max(0, Math.min(r, (x1 - x0) / 2, (y1 - y0) / 2));
       const arc = (cx, cy, a0) => { for (let k = 0; k <= 5; k++) { const a = a0 + (Math.PI / 2) * (k / 5); q.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]); } };
       arc(x1 - r, y0 + r, -Math.PI / 2); arc(x1 - r, y1 - r, 0); arc(x0 + r, y1 - r, Math.PI / 2); arc(x0 + r, y0 + r, Math.PI); return q; };
+    let wsInfo = null;
     const glass = '#e6effb';
     const detX = DC.detrain.on ? -TLT.detrainY(lay, cfg) : null;
     const dw2 = DC.detrain.width / 2, dTop = fh + DC.detrain.height;
@@ -677,7 +678,10 @@
       v.poly(rr(-bx, bz0, bx, bz1, 90), true, 'WINDOW', { fill: glass, lw: 0.25 });
       if (F.destination) v.rect(-650, bz0 + 50, 650, bz1 - 50, 'BODY_THIN', { fill: '#2b2f33' });
       // windows / windscreen
-      const z0 = fh + F.wsBottom, z1 = F.wsTop > 0 ? Math.min(fh + F.wsTop, bz0 - 80) : rh - 720, ox = Math.min(hw - 170, xAt(z1) - 120);
+      const z0 = fh + F.wsBottom, z1 = F.wsTop > 0 ? Math.min(fh + F.wsTop, bz0 - 80) : rh - 720;
+      const oxMax = Math.min(hw - 80, xAt(z1) - 60), oxAuto = Math.min(hw - 170, xAt(z1) - 120);
+      const ox = F.wsWidth > 0 ? Math.min(F.wsWidth / 2, oxMax) : oxAuto;
+      wsInfo = { w: Math.round(2 * ox), h: Math.round(z1 - z0), limited: F.wsWidth > 0 && F.wsWidth / 2 > oxMax + 0.5 };
       const glassPane = ([a, b2]) => v.poly(rr(a, z0, b2, z1, 70), true, 'WINDOW', { fill: glass, lw: 0.3 });
       const offset = DC.detrain.on && !centred;
       let panes;
@@ -705,13 +709,14 @@
       const lz = fh + Math.max(250, Math.min(F.lightsZ, Math.max(250, F.wsBottom - 500)));
       const panel = (x0, x1, k) => {
         v.poly(rr(Math.min(x0, x1), lz - 200, Math.max(x0, x1), lz + 260, 70), true, 'BODY_THIN', { lw: 0.2 });
-        v.circle(k * (ox - 170), lz + 30, 110, 'BODY', { fill: '#fffbe6' });
-        v.circle(k * (ox - 360), lz + 30, 50, 'NOTE', { fill: '#f6b3ad' });
-        v.circle(k * (ox - 480), lz + 30, 50, 'NOTE', { fill: '#f6b3ad' });
+        v.circle(k * (oxAuto - 170), lz + 30, 110, 'BODY', { fill: '#fffbe6' });
+        v.circle(k * (oxAuto - 360), lz + 30, 50, 'NOTE', { fill: '#f6b3ad' });
+        v.circle(k * (oxAuto - 480), lz + 30, 50, 'NOTE', { fill: '#f6b3ad' });
       };
       if (!offset) {
-        const pw = Math.min(700, ox - (centred ? dw2 + 140 : 0) - 40);
-        [-1, 1].forEach(k => panel(k * ox, k * (ox - pw), k));
+        // lamps keep their place on the body, independent of the windscreen width
+        const pw = Math.min(700, oxAuto - (centred ? dw2 + 140 : 0) - 40);
+        [-1, 1].forEach(k => panel(k * oxAuto, k * (oxAuto - pw), k));
       } else {
         // door at the side: slim upright lamp columns at both outer edges, symmetric and clear of the door
         const free = hw - 60 - (Math.abs(detX) + dw2) - 50;
@@ -744,7 +749,9 @@
       [-1, 1].forEach(k => v.poly(half.filter((p, i) => i >= 3 && i <= 15).map(([x, z]) => [k * (x - 220), z - 160]), false, 'BODY_THIN', { lw: 0.15 }));
       // windscreen: wide and upright at low speed, narrower and smaller at high speed
       const z0 = fh + F.wsBottom + 100 * f, z1 = F.wsTop > 0 ? fh + F.wsTop : rh - 520 - 220 * f;
-      const bw = hw - 470 - 260 * f, tw = hw - 780 - 330 * f;
+      let bw = hw - 470 - 260 * f, tw = hw - 780 - 330 * f;
+      if (F.wsWidth > 0) { const k = tw / bw, lim = hw - 300; bw = Math.min(F.wsWidth / 2, lim); tw = bw * k; wsInfo = { w: Math.round(2 * bw), h: Math.round(z1 - z0), limited: F.wsWidth / 2 > lim + 0.5 }; }
+      else wsInfo = { w: Math.round(2 * bw), h: Math.round(z1 - z0), limited: false };
       v.poly([[-bw, z0 + 60], [-bw + 60, z0], [bw - 60, z0], [bw, z0 + 60], [tw, z1 - 60], [tw - 80, z1], [-tw + 80, z1], [-tw, z1 - 60]], true, 'WINDOW', { fill: glass, lw: 0.3 });
       wipersOver([[-bw, bw]], z0, z1);
       // upper light cluster
@@ -782,7 +789,7 @@
     if (DC.detrain.on) v.dimV(detX - dw2, fh - 60, dTop, -hw - 4 * s, { h: 1.5 });   // door height, outside the body (width in the note below)
     v.text(-xr, -380 - 9.5 * s, 'SIDE A', 1.6, { anchor: 'start', color: '#555555', bold: true });
     v.text(xr, -380 - 9.5 * s, 'SIDE B', 1.6, { anchor: 'end', color: '#555555', bold: true });
-    const info = [`Windscreen: ${F.wsSplit === 'two' ? 'two panes' : 'one pane'}, from ${F.wsBottom} mm above floor · wipers: ${n ? `${n} × ${F.wiperType === 'pantograph' ? 'pantograph' : 'single-arm'}` : 'none'}`, `Detrainment door: ${DC.detrain.on ? `${DC.detrain.width} × ${DC.detrain.height}${Math.abs(detX) > 1 ? ', offset ' + Math.round(Math.abs(detX)) : ', centred'}` : 'none'} · Body section: ${(lay.profile || TLT.profileCfg(cfg)).label}`,
+    const info = [`Windscreen: ${F.wsSplit === 'two' ? 'two panes' : 'one pane'}, ${wsInfo ? `${wsInfo.w} × ${wsInfo.h} mm${F.wsWidth > 0 ? (wsInfo.limited ? ' (width limited by the body)' : '') : ' (auto width)'}, ` : ''}from ${F.wsBottom} mm above floor · wipers: ${n ? `${n} × ${F.wiperType === 'pantograph' ? 'pantograph' : 'single-arm'}` : 'none'}`, `Detrainment door: ${DC.detrain.on ? `${DC.detrain.width} × ${DC.detrain.height}${Math.abs(detX) > 1 ? ', offset ' + Math.round(Math.abs(detX)) : ', centred'}` : 'none'} · Body section: ${(lay.profile || TLT.profileCfg(cfg)).label}`,
       (TLT.aeroCfg(cfg).on ? `Design speed ${TLT.aeroCfg(cfg).speed} km/h: ${TLT.aeroCfg(cfg).cls}, nose ${lay.noseLen} mm · ` : '') + `Desk: ${CB.goa4 ? 'GoA4, covered console' : (CB.desk === 'central' ? 'central' : 'side ' + CB.deskSide) + (CB.observer ? (CB.coDesk ? ', co-driver seat + desk' : ', co-driver seat') : '')}`, `Power: ${PWf.label}${PWf.third ? ', third rail ' + PWf.contact + ' contact' : ''}${PWf.panto ? ', pantograph' : ''}`];
     info.forEach((tx, i) => v.text(-xr, -380 - (13.5 + i * 3.2) * s, tx, 1.6, { color: '#333333' }));
   }

@@ -2,6 +2,9 @@
 
 Versions follow [Semantic Versioning](https://semver.org/): **MAJOR** for changes that break saved inputs or Excel templates, **MINOR** for new features, **PATCH** for fixes. The version is shown in the app header and on every PDF sheet (`TLT.VERSION` in `js/engine.js`); each release is a git tag `vX.Y.Z`.
 
+## [1.3.0] – 2026-11-02
+- **Windscreen width** input in Windscreen & wipers (0 = automatic). Applies to the Metro / LRV flat front (one or two panes, side windows around a centred door, pane beside a side door) and to the mainline nose (top width scales with it). Limited to the body width at that height; the front-view note shows the glass size W × H and when the width was limited. Also in the main-inputs Excel.
+
 ## [1.2.0] – 2026-11-02
 - **Bicycle space** (interior item, default 1,800 × 700 mm) drawn with a bicycle symbol, placed per bay / side like the wheelchair space.
 - **Wheelchair sign** (access symbol) drawn inside every wheelchair space on the train layout and the car layouts (replaces the WHEELCHAIR text).

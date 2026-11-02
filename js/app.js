@@ -198,7 +198,7 @@
       ${F('Windscreen', 'front.wsSplit', 'select', { options: [['single', 'One pane'], ['two', 'Two panes (centre mullion)']] })}${F('Gap to side detrainment door', 'front.wsDoorGap', 'num', { unit: 'mm' })}
       ${F('Windscreen bottom above floor', 'front.wsBottom', 'num', { unit: 'mm' })}${F('Windscreen top above floor (0 = auto)', 'front.wsTop', 'num', { unit: 'mm' })}
       ${F('Wipers', 'front.wipers', 'select', { numeric: true, options: [['0', 'None'], ['1', '1'], ['2', '2'], ['3', '3']] })}${F('Wiper type', 'front.wiperType', 'select', { options: [['single', 'Single arm'], ['pantograph', 'Pantograph arm']] })}
-      ${F('Wiper blade length (0 = auto)', 'front.wiperLength', 'num', { unit: 'mm' })}<div></div>
+      ${F('Windscreen width (0 = auto)', 'front.wsWidth', 'num', { unit: 'mm', hint: 'Overall glass width across the front; with a centred door, outer edge to outer edge of the two side windows.' })}${F('Wiper blade length (0 = auto)', 'front.wiperLength', 'num', { unit: 'mm' })}
     </div><p class="hint">With a centred detrainment door the windscreen is split into two side windows around it. With the door at the side, the windscreen ends before the door (gap above) and the door has its own window at the same height; the lamps become slim columns at both outer edges. Wipers are shared evenly over the panes (one wiper goes in front of the driver).</p>`);
     if (anyCab) h += card('Front view (sheet 1)', `<div class="fields">
       ${F('Head / tail lights above floor', 'front.lightsZ', 'num', { unit: 'mm' })}${F('Lights inset from body side', 'front.lightsInset', 'num', { unit: 'mm' })}
@@ -648,6 +648,7 @@
     ['Windows', 'Door window height', 'windows.doorWinHeight', 'num', 'mm'], ['Windows', 'Door window sill above floor', 'windows.doorWinSill', 'num', 'mm'],
     ['Windscreen & wipers', 'Windscreen', 'front.wsSplit', ['single', 'two']], ['Windscreen & wipers', 'Gap to side detrainment door', 'front.wsDoorGap', 'num', 'mm'],
     ['Windscreen & wipers', 'Windscreen bottom above floor', 'front.wsBottom', 'num', 'mm'], ['Windscreen & wipers', 'Windscreen top above floor (0 = auto)', 'front.wsTop', 'num', 'mm'],
+    ['Windscreen & wipers', 'Windscreen width (0 = auto)', 'front.wsWidth', 'num', 'mm'],
     ['Windscreen & wipers', 'Wipers', 'front.wipers', ['0', '1', '2', '3']], ['Windscreen & wipers', 'Wiper type', 'front.wiperType', ['single', 'pantograph']],
     ['Windscreen & wipers', 'Wiper blade length (0 = auto)', 'front.wiperLength', 'num', 'mm'],
     ['Front view', 'Head / tail lights above floor', 'front.lightsZ', 'num', 'mm'], ['Front view', 'Lights inset from body side', 'front.lightsInset', 'num', 'mm'],

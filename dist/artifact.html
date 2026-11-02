@@ -244,7 +244,7 @@ table.data select { min-width: 104px; }
     return Number.isFinite(n) ? n : d;
   };
   TLT.num = num;
-  TLT.VERSION = '1.2.0';   // keep in step with CHANGELOG.md and the git tag
+  TLT.VERSION = '1.3.0';   // keep in step with CHANGELOG.md and the git tag
 
   /* ---------------- Formation ---------------- */
   /* Formation text with the multiple-unit factor: unit, then the unit turned round, alternately (DM-T-M-T | T'-M'-T'-DM') */
@@ -579,7 +579,7 @@ table.data select { min-width: 104px; }
       couplerHeight: num(f.couplerHeight, 720), gaugeWidth: num(f.gaugeWidth, 3000), gaugeHeight: num(f.gaugeHeight, num(c.maxHeight, 4100)),
       showGauge: f.showGauge == null ? true : (f.showGauge === true || f.showGauge === 'true'),
       // windscreen: bottom / top above floor (top 0 = up to the destination display), split, gap to an offset detrainment door
-      wsBottom: num(f.wsBottom, 900), wsTop: num(f.wsTop, 0), wsSplit: f.wsSplit === 'two' ? 'two' : 'single', wsDoorGap: num(f.wsDoorGap, 150),
+      wsBottom: num(f.wsBottom, 900), wsTop: num(f.wsTop, 0), wsWidth: Math.max(0, num(f.wsWidth, 0)), wsSplit: f.wsSplit === 'two' ? 'two' : 'single', wsDoorGap: num(f.wsDoorGap, 150),
       wiperLength: num(f.wiperLength, 0) };
   };
 
@@ -1437,7 +1437,7 @@ table.data select { min-width: 104px; }
       },
       cab: { desk: 'side', deskSide: 'B', observer: true, goa4: false, consoleDepth: 700, deskDepth: 800, deskWidth: 1400, auxLength: 700, auxDepth: 1000, auxSide: 'B', coDesk: false, coDeskWidth: 650 },
       windows: { inner: 'single', end: 'single', singleWidth: 0, doubleWidth: 1000, height: 900, sill: 820, drop: 'ends', dropDepth: 400, doorWin: true, doorWinWidth: 0, doorWinHeight: 750, doorWinSill: 950 },
-      front: { wsSplit: 'single', wsDoorGap: 150, wsTop: 0, wiperLength: 0, wsBottom: 900, wipers: 2, wiperType: 'single', lightsZ: 350, lightsInset: 420, destination: true, couplerHeight: 720, showGauge: true, gaugeWidth: 3000, gaugeHeight: 4100 },
+      front: { wsSplit: 'single', wsDoorGap: 150, wsTop: 0, wsWidth: 0, wiperLength: 0, wsBottom: 900, wipers: 2, wiperType: 'single', lightsZ: 350, lightsInset: 420, destination: true, couplerHeight: 720, showGauge: true, gaugeWidth: 3000, gaugeHeight: 4100 },
       hvac: { unitsPerCar: 2, cabHvac: false },
       interior: {
         widthRefHeight: 1200,
@@ -1538,7 +1538,7 @@ table.data select { min-width: 104px; }
       doors: { type: 'Bi-parting sliding (pocket)', width: 1400, height: 1900, detrain: { on: true, width: 800, height: 1800 }, cabSide: { on: true, width: 600, height: 1900, pos: 1200 }, cabSaloon: { on: true, width: 700, height: 1900, y: 0, type: 'Hinged' } },
       cab: { desk: 'side', deskSide: 'B', observer: true, goa4: false, consoleDepth: 700, deskDepth: 800, deskWidth: 1400, auxLength: 700, auxDepth: 1000, auxSide: 'B', coDesk: false, coDeskWidth: 650 },
       windows: { inner: 'single', end: 'single', singleWidth: 0, doubleWidth: 1000, height: 900, sill: 820, drop: 'ends', dropDepth: 400, doorWin: true, doorWinWidth: 0, doorWinHeight: 750, doorWinSill: 950 },
-      front: { wsSplit: 'single', wsDoorGap: 150, wsTop: 0, wiperLength: 0, wsBottom: 900, wipers: 2, wiperType: 'single', lightsZ: 350, lightsInset: 420, destination: true, couplerHeight: 720, showGauge: true, gaugeWidth: 3100, gaugeHeight: 4250 },
+      front: { wsSplit: 'single', wsDoorGap: 150, wsTop: 0, wsWidth: 0, wiperLength: 0, wsBottom: 900, wipers: 2, wiperType: 'single', lightsZ: 350, lightsInset: 420, destination: true, couplerHeight: 720, showGauge: true, gaugeWidth: 3100, gaugeHeight: 4250 },
       hvac: { unitsPerCar: 2, cabHvac: false },
       interior: { widthRefHeight: 1200, seatType: 'longitudinal', seatWidth: 450, seatDepth: 550, footZone: 300, doorClearance: 330, endClearance: 0, minDoorClearance: 100, transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,
         wcLength: 1300, wcWidth: 750, wcTurning: 1500, wcAsStanding: true, minAisle: 900, cabinetDepth: 600 },
@@ -1577,7 +1577,7 @@ table.data select { min-width: 104px; }
       doors: { type: 'Bi-parting sliding plug', width: 1300, height: 1900, detrain: { on: true, width: 700, height: 1700 }, cabSide: { on: false, width: 600, height: 1800, pos: 1000 }, cabSaloon: { on: true, width: 650, height: 1900, y: -600, type: 'Hinged' } },
       cab: Object.assign({}, baseCab),
       windows: Object.assign({}, baseWindows),
-      front: { wsSplit: 'single', wsDoorGap: 150, wsTop: 0, wiperLength: 0, wsBottom: 900, wipers: 1, wiperType: 'pantograph', lightsZ: 300, lightsInset: 380, destination: true, couplerHeight: 600, showGauge: true, gaugeWidth: 2750, gaugeHeight: 3800 },
+      front: { wsSplit: 'single', wsDoorGap: 150, wsTop: 0, wsWidth: 0, wiperLength: 0, wsBottom: 900, wipers: 1, wiperType: 'pantograph', lightsZ: 300, lightsInset: 380, destination: true, couplerHeight: 600, showGauge: true, gaugeWidth: 2750, gaugeHeight: 3800 },
       hvac: { unitsPerCar: 1, cabHvac: false },
       interior: { widthRefHeight: 1200, seatType: 'transverse', seatWidth: 450, seatDepth: 500, footZone: 300, doorClearance: 200, endClearance: 0, minDoorClearance: 100, transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,
         wcLength: 1300, wcWidth: 750, wcTurning: 1500, wcAsStanding: true, minAisle: 600, cabinetDepth: 600 },
@@ -1616,7 +1616,7 @@ table.data select { min-width: 104px; }
       doors: { type: 'Bi-parting sliding plug', width: 1300, height: 2000, detrain: { on: false, width: 700, height: 1800 }, cabSide: { on: true, width: 650, height: 1900, pos: 1700 }, cabSaloon: { on: true, width: 700, height: 1950, y: 0, type: 'Sliding' } },
       cab: Object.assign({}, baseCab),
       windows: Object.assign({}, baseWindows, { inner: 'double', doubleWidth: 1500, sill: 800, height: 900, drop: 'none' }),
-      front: { wsSplit: 'single', wsDoorGap: 150, wsTop: 0, wiperLength: 0, wsBottom: 1050, wipers: 2, wiperType: 'pantograph', lightsZ: 300, lightsInset: 420, destination: true, couplerHeight: 1025, showGauge: true, gaugeWidth: 3150, gaugeHeight: 4300 },
+      front: { wsSplit: 'single', wsDoorGap: 150, wsTop: 0, wsWidth: 0, wiperLength: 0, wsBottom: 1050, wipers: 2, wiperType: 'pantograph', lightsZ: 300, lightsInset: 420, destination: true, couplerHeight: 1025, showGauge: true, gaugeWidth: 3150, gaugeHeight: 4300 },
       hvac: { unitsPerCar: 2, cabHvac: true },
       interior: { widthRefHeight: 1200, seatType: 'transverse', seatWidth: 450, seatDepth: 500, footZone: 300, doorClearance: 200, endClearance: 0, minDoorClearance: 100, transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,
         wcLength: 1300, wcWidth: 750, wcTurning: 1500, wcAsStanding: true, minAisle: 600, cabinetDepth: 600,
@@ -2304,6 +2304,7 @@ table.data select { min-width: 104px; }
     const rr = (x0, y0, x1, y1, r) => { const q = []; r = Math.max(0, Math.min(r, (x1 - x0) / 2, (y1 - y0) / 2));
       const arc = (cx, cy, a0) => { for (let k = 0; k <= 5; k++) { const a = a0 + (Math.PI / 2) * (k / 5); q.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]); } };
       arc(x1 - r, y0 + r, -Math.PI / 2); arc(x1 - r, y1 - r, 0); arc(x0 + r, y1 - r, Math.PI / 2); arc(x0 + r, y0 + r, Math.PI); return q; };
+    let wsInfo = null;
     const glass = '#e6effb';
     const detX = DC.detrain.on ? -TLT.detrainY(lay, cfg) : null;
     const dw2 = DC.detrain.width / 2, dTop = fh + DC.detrain.height;
@@ -2348,7 +2349,10 @@ table.data select { min-width: 104px; }
       v.poly(rr(-bx, bz0, bx, bz1, 90), true, 'WINDOW', { fill: glass, lw: 0.25 });
       if (F.destination) v.rect(-650, bz0 + 50, 650, bz1 - 50, 'BODY_THIN', { fill: '#2b2f33' });
       // windows / windscreen
-      const z0 = fh + F.wsBottom, z1 = F.wsTop > 0 ? Math.min(fh + F.wsTop, bz0 - 80) : rh - 720, ox = Math.min(hw - 170, xAt(z1) - 120);
+      const z0 = fh + F.wsBottom, z1 = F.wsTop > 0 ? Math.min(fh + F.wsTop, bz0 - 80) : rh - 720;
+      const oxMax = Math.min(hw - 80, xAt(z1) - 60), oxAuto = Math.min(hw - 170, xAt(z1) - 120);
+      const ox = F.wsWidth > 0 ? Math.min(F.wsWidth / 2, oxMax) : oxAuto;
+      wsInfo = { w: Math.round(2 * ox), h: Math.round(z1 - z0), limited: F.wsWidth > 0 && F.wsWidth / 2 > oxMax + 0.5 };
       const glassPane = ([a, b2]) => v.poly(rr(a, z0, b2, z1, 70), true, 'WINDOW', { fill: glass, lw: 0.3 });
       const offset = DC.detrain.on && !centred;
       let panes;
@@ -2376,13 +2380,14 @@ table.data select { min-width: 104px; }
       const lz = fh + Math.max(250, Math.min(F.lightsZ, Math.max(250, F.wsBottom - 500)));
       const panel = (x0, x1, k) => {
         v.poly(rr(Math.min(x0, x1), lz - 200, Math.max(x0, x1), lz + 260, 70), true, 'BODY_THIN', { lw: 0.2 });
-        v.circle(k * (ox - 170), lz + 30, 110, 'BODY', { fill: '#fffbe6' });
-        v.circle(k * (ox - 360), lz + 30, 50, 'NOTE', { fill: '#f6b3ad' });
-        v.circle(k * (ox - 480), lz + 30, 50, 'NOTE', { fill: '#f6b3ad' });
+        v.circle(k * (oxAuto - 170), lz + 30, 110, 'BODY', { fill: '#fffbe6' });
+        v.circle(k * (oxAuto - 360), lz + 30, 50, 'NOTE', { fill: '#f6b3ad' });
+        v.circle(k * (oxAuto - 480), lz + 30, 50, 'NOTE', { fill: '#f6b3ad' });
       };
       if (!offset) {
-        const pw = Math.min(700, ox - (centred ? dw2 + 140 : 0) - 40);
-        [-1, 1].forEach(k => panel(k * ox, k * (ox - pw), k));
+        // lamps keep their place on the body, independent of the windscreen width
+        const pw = Math.min(700, oxAuto - (centred ? dw2 + 140 : 0) - 40);
+        [-1, 1].forEach(k => panel(k * oxAuto, k * (oxAuto - pw), k));
       } else {
         // door at the side: slim upright lamp columns at both outer edges, symmetric and clear of the door
         const free = hw - 60 - (Math.abs(detX) + dw2) - 50;
@@ -2415,7 +2420,9 @@ table.data select { min-width: 104px; }
       [-1, 1].forEach(k => v.poly(half.filter((p, i) => i >= 3 && i <= 15).map(([x, z]) => [k * (x - 220), z - 160]), false, 'BODY_THIN', { lw: 0.15 }));
       // windscreen: wide and upright at low speed, narrower and smaller at high speed
       const z0 = fh + F.wsBottom + 100 * f, z1 = F.wsTop > 0 ? fh + F.wsTop : rh - 520 - 220 * f;
-      const bw = hw - 470 - 260 * f, tw = hw - 780 - 330 * f;
+      let bw = hw - 470 - 260 * f, tw = hw - 780 - 330 * f;
+      if (F.wsWidth > 0) { const k = tw / bw, lim = hw - 300; bw = Math.min(F.wsWidth / 2, lim); tw = bw * k; wsInfo = { w: Math.round(2 * bw), h: Math.round(z1 - z0), limited: F.wsWidth / 2 > lim + 0.5 }; }
+      else wsInfo = { w: Math.round(2 * bw), h: Math.round(z1 - z0), limited: false };
       v.poly([[-bw, z0 + 60], [-bw + 60, z0], [bw - 60, z0], [bw, z0 + 60], [tw, z1 - 60], [tw - 80, z1], [-tw + 80, z1], [-tw, z1 - 60]], true, 'WINDOW', { fill: glass, lw: 0.3 });
       wipersOver([[-bw, bw]], z0, z1);
       // upper light cluster
@@ -2453,7 +2460,7 @@ table.data select { min-width: 104px; }
     if (DC.detrain.on) v.dimV(detX - dw2, fh - 60, dTop, -hw - 4 * s, { h: 1.5 });   // door height, outside the body (width in the note below)
     v.text(-xr, -380 - 9.5 * s, 'SIDE A', 1.6, { anchor: 'start', color: '#555555', bold: true });
     v.text(xr, -380 - 9.5 * s, 'SIDE B', 1.6, { anchor: 'end', color: '#555555', bold: true });
-    const info = [`Windscreen: ${F.wsSplit === 'two' ? 'two panes' : 'one pane'}, from ${F.wsBottom} mm above floor · wipers: ${n ? `${n} × ${F.wiperType === 'pantograph' ? 'pantograph' : 'single-arm'}` : 'none'}`, `Detrainment door: ${DC.detrain.on ? `${DC.detrain.width} × ${DC.detrain.height}${Math.abs(detX) > 1 ? ', offset ' + Math.round(Math.abs(detX)) : ', centred'}` : 'none'} · Body section: ${(lay.profile || TLT.profileCfg(cfg)).label}`,
+    const info = [`Windscreen: ${F.wsSplit === 'two' ? 'two panes' : 'one pane'}, ${wsInfo ? `${wsInfo.w} × ${wsInfo.h} mm${F.wsWidth > 0 ? (wsInfo.limited ? ' (width limited by the body)' : '') : ' (auto width)'}, ` : ''}from ${F.wsBottom} mm above floor · wipers: ${n ? `${n} × ${F.wiperType === 'pantograph' ? 'pantograph' : 'single-arm'}` : 'none'}`, `Detrainment door: ${DC.detrain.on ? `${DC.detrain.width} × ${DC.detrain.height}${Math.abs(detX) > 1 ? ', offset ' + Math.round(Math.abs(detX)) : ', centred'}` : 'none'} · Body section: ${(lay.profile || TLT.profileCfg(cfg)).label}`,
       (TLT.aeroCfg(cfg).on ? `Design speed ${TLT.aeroCfg(cfg).speed} km/h: ${TLT.aeroCfg(cfg).cls}, nose ${lay.noseLen} mm · ` : '') + `Desk: ${CB.goa4 ? 'GoA4, covered console' : (CB.desk === 'central' ? 'central' : 'side ' + CB.deskSide) + (CB.observer ? (CB.coDesk ? ', co-driver seat + desk' : ', co-driver seat') : '')}`, `Power: ${PWf.label}${PWf.third ? ', third rail ' + PWf.contact + ' contact' : ''}${PWf.panto ? ', pantograph' : ''}`];
     info.forEach((tx, i) => v.text(-xr, -380 - (13.5 + i * 3.2) * s, tx, 1.6, { color: '#333333' }));
   }
@@ -3947,7 +3954,7 @@ table.data select { min-width: 104px; }
       ${F('Windscreen', 'front.wsSplit', 'select', { options: [['single', 'One pane'], ['two', 'Two panes (centre mullion)']] })}${F('Gap to side detrainment door', 'front.wsDoorGap', 'num', { unit: 'mm' })}
       ${F('Windscreen bottom above floor', 'front.wsBottom', 'num', { unit: 'mm' })}${F('Windscreen top above floor (0 = auto)', 'front.wsTop', 'num', { unit: 'mm' })}
       ${F('Wipers', 'front.wipers', 'select', { numeric: true, options: [['0', 'None'], ['1', '1'], ['2', '2'], ['3', '3']] })}${F('Wiper type', 'front.wiperType', 'select', { options: [['single', 'Single arm'], ['pantograph', 'Pantograph arm']] })}
-      ${F('Wiper blade length (0 = auto)', 'front.wiperLength', 'num', { unit: 'mm' })}<div></div>
+      ${F('Windscreen width (0 = auto)', 'front.wsWidth', 'num', { unit: 'mm', hint: 'Overall glass width across the front; with a centred door, outer edge to outer edge of the two side windows.' })}${F('Wiper blade length (0 = auto)', 'front.wiperLength', 'num', { unit: 'mm' })}
     </div><p class="hint">With a centred detrainment door the windscreen is split into two side windows around it. With the door at the side, the windscreen ends before the door (gap above) and the door has its own window at the same height; the lamps become slim columns at both outer edges. Wipers are shared evenly over the panes (one wiper goes in front of the driver).</p>`);
     if (anyCab) h += card('Front view (sheet 1)', `<div class="fields">
       ${F('Head / tail lights above floor', 'front.lightsZ', 'num', { unit: 'mm' })}${F('Lights inset from body side', 'front.lightsInset', 'num', { unit: 'mm' })}
@@ -4397,6 +4404,7 @@ table.data select { min-width: 104px; }
     ['Windows', 'Door window height', 'windows.doorWinHeight', 'num', 'mm'], ['Windows', 'Door window sill above floor', 'windows.doorWinSill', 'num', 'mm'],
     ['Windscreen & wipers', 'Windscreen', 'front.wsSplit', ['single', 'two']], ['Windscreen & wipers', 'Gap to side detrainment door', 'front.wsDoorGap', 'num', 'mm'],
     ['Windscreen & wipers', 'Windscreen bottom above floor', 'front.wsBottom', 'num', 'mm'], ['Windscreen & wipers', 'Windscreen top above floor (0 = auto)', 'front.wsTop', 'num', 'mm'],
+    ['Windscreen & wipers', 'Windscreen width (0 = auto)', 'front.wsWidth', 'num', 'mm'],
     ['Windscreen & wipers', 'Wipers', 'front.wipers', ['0', '1', '2', '3']], ['Windscreen & wipers', 'Wiper type', 'front.wiperType', ['single', 'pantograph']],
     ['Windscreen & wipers', 'Wiper blade length (0 = auto)', 'front.wiperLength', 'num', 'mm'],
     ['Front view', 'Head / tail lights above floor', 'front.lightsZ', 'num', 'mm'], ['Front view', 'Lights inset from body side', 'front.lightsInset', 'num', 'mm'],
