@@ -225,17 +225,18 @@
         wcLength: 1300, wcWidth: 750, wcTurning: 1500, wcAsStanding: true, minAisle: 600, cabinetDepth: 600 },
       loads: { paxMass: 70, maxAxleLoad: 11, axlesPerCar: 4, standCase: '', rounding: 'floor', wheelSpacing: 1500, imbalanceLimit: 15 },
       cases: [
-        { name: 'Seated', kind: 'seated', note: '' },
-        { name: '4 pax/m²', kind: 'density', density: 4, note: 'Normal load' },
-        { name: '6 pax/m²', kind: 'density', density: 6, note: 'Crush load' },
+        { name: 'Seated', kind: 'seated', note: 'All seats occupied (folding seats in use)' },
+        { name: 'EL4', kind: 'density', density: 4, fold: 'yes', note: 'Design load: fixed seats + 4 pax/m²; folding seats, wheelchair and bicycle areas standing' },
+        { name: 'EL6', kind: 'density', density: 6, fold: 'yes', note: 'Crush load: fixed seats + 6 pax/m²' },
+        { name: 'PXD', kind: 'kgm2', density: 500, fold: 'yes', note: 'Exceptional load: fixed seats + 500 kg/m²' },
       ],
       carTypes: [
         { name: 'A', desc: 'Car A: cab, motor bogie at the cab end, pantograph', end1: 'cab', end2: 'artic', cab: true, couplerLength: 15000, bodyLength: 14700, cabLength: 1800,
           support1: 'own', support2: 'shared', centreBogie: false, bogieCentres: 6000, motorBogies: '1e1', doorsPerSide: 2, doorPitch: 5500, doorRearOffset: 3500, tare: 0,
-          pantos: 1, specSeats: '', specStanding: '', interiorItems: [{ kind: 'wheelchair', bay: 1, side: 'A', place: 'door' }] },
+          pantos: 1, specSeats: '', specStanding: '', interiorItems: [{ kind: 'wheelchair', bay: 1, side: 'A', place: 'door' }, { kind: 'folding', bay: 1, side: 'B', place: 'door', n: 3, stand: 'yes' }] },
         { name: 'B', desc: 'Car B: cab, motor bogie at the cab end', end1: 'cab', end2: 'artic', cab: true, couplerLength: 15000, bodyLength: 14700, cabLength: 1800,
           support1: 'own', support2: 'shared', centreBogie: false, bogieCentres: 6000, motorBogies: '1e1', doorsPerSide: 2, doorPitch: 5500, doorRearOffset: 3500, tare: 0,
-          pantos: 0, specSeats: '', specStanding: '', interiorItems: [{ kind: 'wheelchair', bay: 1, side: 'A', place: 'door' }] },
+          pantos: 0, specSeats: '', specStanding: '', interiorItems: [{ kind: 'wheelchair', bay: 1, side: 'A', place: 'door' }, { kind: 'bicycle', bay: 1, side: 'B', place: 'door', length: 1800, depth: 700, stand: 'yes' }] },
       ],
     }),
 

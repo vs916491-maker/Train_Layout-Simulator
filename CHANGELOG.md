@@ -2,6 +2,15 @@
 
 Versions follow [Semantic Versioning](https://semver.org/): **MAJOR** for changes that break saved inputs or Excel templates, **MINOR** for new features, **PATCH** for fixes. The version is shown in the app header and on every PDF sheet (`TLT.VERSION` in `js/engine.js`); each release is a git tag `vX.Y.Z`.
 
+## [1.2.0] – 2026-11-02
+- **Bicycle space** (interior item, default 1,800 × 700 mm) drawn with a bicycle symbol, placed per bay / side like the wheelchair space.
+- **Wheelchair sign** (access symbol) drawn inside every wheelchair space on the train layout and the car layouts (replaces the WHEELCHAIR text).
+- **Folding seats** (interior item: number of seats × seat width) drawn as seats marked F.
+- **Use as standing area** per wheelchair space, bicycle space and folding-seat group (wheelchair default = the Interior rules tick; bicycle and folding seats default Yes).
+- **Load cases:** new type **Density (kg/m²)** (e.g. PXD 500 kg/m²; persons = area × kg/m² ÷ passenger mass) and **Folding seats folded** per case: marked folding seats then count as standing area and not as seats (default Yes, except seated-only cases) — matches "folding seat, wheelchair spaces and bicycle area are occupied by standing passengers".
+- Car and capacity sheets list bicycle / folding areas, seats as "fixed + folding", standing area folded / in use; Excel import/export carries the new item kinds, the Standing area column and the load-case options.
+- LRV template uses Seated / EL4 / EL6 / PXD with a folding-seat group (car A) and a bicycle space (car B).
+
 ## [1.1.0] – 2026-11-02
 - **Equipment Inputs:** new **Description** column (full name of the equipment) next to **Equipment** (short form shown inside the boxes on the drawings). Read from / written to the equipment Excel file (header "Description"); older files without it still import.
 - Grey suggestions for common short forms (VVVF, APS, HSCB, BCU, CMP, MR, CCD …): double-click an empty cell to take one, or **Fill empty descriptions** for the whole list. Presets and the power-collection template rows come with descriptions.

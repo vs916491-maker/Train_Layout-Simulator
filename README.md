@@ -160,8 +160,9 @@ Method:
 ### Capacity rules
 
 * Seats are fitted per bay: available length = bay length − clearance at each door (draft screen) / end wall, divided by seat width.
-* Standing area = saloon floor (interior width × length between end walls or cab partition) minus seats, the foot zone in front of longitudinal seats, cubicles, and the wheelchair space if it is not counted as standing.
-* The standees target per car variant is checked at the load case you choose in Load cases & mass (or not at all). Load cases are either *seated only*, a *density* (pax/m²) or a *factor* of another case (e.g. TPN = 1.8 × AW2).
+* Standing area = saloon floor (interior width × length between end walls or cab partition) minus seats, the foot zone in front of longitudinal seats, cubicles, and the wheelchair spaces, bicycle spaces and folding seats that are not marked **Use as standing area**.
+* Folding seats marked as standing area count as standing area and not as seats in the load cases where **Folding seats folded** is set (default: every case except seated only), and as seats otherwise — e.g. EL4 / EL6 / PXD: "folding seat, wheelchair spaces and bicycle area are occupied by standing passengers".
+* The standees target per car variant is checked at the load case you choose in Load cases & mass (or not at all). Load cases are either *seated only*, a *density* in pax/m², a *density in kg/m²* (persons = area × kg/m² ÷ passenger mass, e.g. PXD 500 kg/m²) or a *factor* of another case (e.g. TPN = 1.8 × AW2).
 * Mass = tare + passengers × passenger mass; axle load = mass ÷ axles per car (equal sharing).
 
 Default seat, foot-zone and wheelchair dimensions follow common EN / PRM practice. Confirm them against the standard that applies to each project.
