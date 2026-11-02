@@ -15,7 +15,7 @@
     return Number.isFinite(n) ? n : d;
   };
   TLT.num = num;
-  TLT.VERSION = '1.0.0';   // keep in step with CHANGELOG.md and the git tag
+  TLT.VERSION = '1.1.0';   // keep in step with CHANGELOG.md and the git tag
 
   /* ---------------- Formation ---------------- */
   /* Formation text with the multiple-unit factor: unit, then the unit turned round, alternately (DM-T-M-T | T'-M'-T'-DM') */
@@ -128,6 +128,19 @@
     return '';
   };
   TLT.symbolLabel = k => (TLT.SYMBOLS.find(q => q[0] === (k || '')) || TLT.SYMBOLS[0])[1];
+  // usual full names of equipment short forms (suggestions for the Description column; matched on the start of the name)
+  TLT.EQUIP_DESC = [
+    [/^(AC|HVAC)\d*$/i, 'Air-conditioning unit (HVAC)'], [/^CAB\s*AC/i, 'Cab air-conditioning unit'], [/^PAN/i, 'Pantograph'],
+    [/^VVVF/i, 'Traction inverter (VVVF)'], [/^TRACTION\s*CONV/i, 'Traction converter'], [/^AUX\s*CONV/i, 'Auxiliary converter'],
+    [/^APS\/BC/i, 'Auxiliary power supply / battery charger'], [/^(APS|APU|SIV)\b/i, 'Auxiliary power supply'], [/^BC\b/i, 'Battery charger'],
+    [/^HSCB/i, 'High-speed circuit breaker'], [/^VCB/i, 'Vacuum circuit breaker'], [/^ES\b/i, 'Earthing switch'], [/^(ARR|LA)\b/i, 'Surge arrester'],
+    [/^(MAIN\s*TRANSFORMER|MTR)\b/i, 'Main transformer'], [/^FL\b/i, 'Filter reactor (line filter)'], [/^LF\b/i, 'Line filter'],
+    [/^HSCB\/LF/i, 'High-speed circuit breaker / line filter'], [/^BR\b/i, 'Braking resistor'], [/^BCU/i, 'Brake control unit'],
+    [/^(CMP|ACM)\b/i, 'Main air compressor unit'], [/^MR\b/i, 'Main air reservoir'], [/^(LV\s*)?BAT\b/i, 'Battery box'],
+    [/^TBAT\s*CONV/i, 'Traction battery converter'], [/^TBAT/i, 'Traction battery'], [/^CCD/i, 'Current collector device (third-rail shoe)'],
+    [/^OD\b/i, 'Obstacle deflector'], [/^SHOE\s*FUSE/i, 'Shoe fuse box'],
+  ];
+  TLT.equipDescFor = name => { const n = String(name || '').trim(); const m = TLT.EQUIP_DESC.find(([re]) => re.test(n)); return m ? m[1] : ''; };
   TLT.normEquipRow = function (r) {
     const loc = /^r/i.test(String(r.loc || '')) ? 'roof' : 'under';
     const kind = TLT.normKind(r.kind);
@@ -135,6 +148,7 @@
       cat: /^(m|w)/i.test(String(r.cat || '').trim()) ? 'mass' : 'equip',
       car: String(r.car == null ? '' : r.car).trim(),
       name: String(r.name == null ? '' : r.name).trim(),
+      desc: String(r.desc == null ? '' : r.desc).trim(),
       loc,
       length: num(r.length, NaN), width: num(r.width, NaN), height: num(r.height, NaN),
       x: num(r.x, NaN), y: num(r.y, 0), mass: num(r.mass, NaN),
@@ -147,7 +161,7 @@
     cfg.equipment.map(TLT.normEquipRow).filter(r => r.car === type.name && r.cat === 'equip').forEach(r => {
       if (!r.name || !Number.isFinite(r.x) || !(r.length > 0)) { errors.push(`Equipment row "${r.name || '?'}" needs a name, X and length.`); return; }
       items.push({
-        name: r.name, loc: r.loc, x: r.x, y: r.y, length: r.length,
+        name: r.name, desc: r.desc, loc: r.loc, x: r.x, y: r.y, length: r.length,
         width: Number.isFinite(r.width) && r.width > 0 ? r.width : 800,
         height: Number.isFinite(r.height) && r.height > 0 ? r.height : (r.loc === 'roof' ? 450 : 550),
         mass: r.mass, kind: r.kind,

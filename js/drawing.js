@@ -1432,19 +1432,20 @@
     const avail = yT - 52;
     const rowH = Math.min(4.4, avail / Math.max(1, all.length + 1));
     const th = Math.min(1.9, rowH * 0.45);
-    const cols = [{ h: 'No.', w: 9, align: 'middle' }, { h: 'Equipment', w: 30 }, { h: 'Location', w: 20 }, { h: 'L', w: 14, align: 'end' }, { h: 'W', w: 14, align: 'end' },
-      { h: 'H', w: 14, align: 'end' }, { h: 'X from centre', w: 22, align: 'end' }, { h: 'Y from CL', w: 20, align: 'end' }, { h: 'Bottom / top ATR', w: 30, align: 'end' }];
-    const rows = all.map((e, i) => [i + 1, e.name, e.loc === 'roof' ? 'Roof' : 'Underframe', i0(e.length), i0(e.width), i0(e.height), `${e.x > 0 ? '+' : ''}${Math.round(e.x)}`, `${e.y > 0 ? '+' : ''}${Math.round(e.y)}`,
+    const cols = [{ h: 'No.', w: 9, align: 'middle' }, { h: 'Equipment', w: 26 }, { h: 'Description', w: 58 }, { h: 'Location', w: 19 }, { h: 'L', w: 13, align: 'end' }, { h: 'W', w: 13, align: 'end' },
+      { h: 'H', w: 13, align: 'end' }, { h: 'X from centre', w: 21, align: 'end' }, { h: 'Y from CL', w: 18, align: 'end' }, { h: 'Bottom / top ATR', w: 26, align: 'end' }];
+    const fitTxt = (tx, w) => { const n = Math.max(4, Math.floor((w - 2) / (0.55 * th))); tx = String(tx || ''); return tx.length > n ? tx.slice(0, n - 1) + '…' : tx; };
+    const rows = all.map((e, i) => [i + 1, e.name, fitTxt(e.desc, 58), e.loc === 'roof' ? 'Roof' : 'Underframe', i0(e.length), i0(e.width), i0(e.height), `${e.x > 0 ? '+' : ''}${Math.round(e.x)}`, `${e.y > 0 ? '+' : ''}${Math.round(e.y)}`,
       e.loc === 'roof' ? `top ${Math.round(num(c.roofHeight, 3650) + e.height)}` : `${Math.round(sole - e.height)}`]);
     if (all.length) table(p, 20, yT, cols, rows, { rowH, h: th });
     else p.text(20, yT - 5, 'No equipment rows for this car type. Upload or edit the equipment list in the Underframe Input tab.', 2.2, { color: '#b3261e' });
-    legend(p, 240, yT - 2, [
+    legend(p, 250, yT - 2, [
       { ly: 'EQUIP', label: 'Underframe equipment', kind: 'box' },
       { ly: 'ROOF', label: 'Roof equipment (side view)', kind: 'box' },
       { ly: 'BOGIE', label: 'Bogie envelope / motor', kind: 'box' },
       { ly: 'CENTER', label: 'Car / bogie centre line', kind: 'line' },
     ]);
-    p.text(240, yT - 26, `Mounting face ${num(c.mountDepth, 250)} mm below floor (${Math.round(sole)} mm ATR).`, 1.8, { color: '#555555' });
+    p.text(250, yT - 26, `Mounting face ${num(c.mountDepth, 250)} mm below floor (${Math.round(sole)} mm ATR).`, 1.8, { color: '#555555' });
     return { title: `Underframe & roof equipment — ${t.name}`, short: `${t.name} underframe`, size, scale, views: [v], paper: p };
   }
   const fmtKg = m => `${Math.round(m).toLocaleString('en-US')} kg`;

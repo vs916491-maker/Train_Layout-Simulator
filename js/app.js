@@ -8,7 +8,8 @@
   const ALLOWED_IN_VIEWER = new Set(['pdf', 'json', 'zip', 'svg', 'csv', 'txt', 'md', 'html', 'xlsx']);
   const EQ_COLS = [
     { key: 'car', head: 'Car Type', hint: 'Must match a car variant name, e.g. Tc, M1, M2' },
-    { key: 'name', head: 'Equipment', hint: 'Name shown on the drawing, e.g. VVVF' },
+    { key: 'name', head: 'Equipment', hint: 'Short form shown inside the box on the drawings, e.g. VVVF' },
+    { key: 'desc', head: 'Description', hint: 'Optional full name, listed in the underframe equipment table, e.g. Traction inverter (VVVF)' },
     { key: 'loc', head: 'Location', hint: 'Underframe or Roof' },
     { key: 'length', head: 'Length (mm)', hint: 'Along the car' },
     { key: 'width', head: 'Width (mm)', hint: 'Across the car' },
@@ -474,7 +475,7 @@
       <button class="btn" data-tpl="equipment">Download Excel template</button>`);
     h += card('2. Upload equipment list', dropZone('equipment') + `<p class="hint" style="margin-top:10px">Current list: <b>${esc(cfg.equipmentSource || '—')}</b><br>${rows.length} rows · ${esc(perCar)}${bad ? ` · <span class="pill bad">${bad} row${bad > 1 ? 's' : ''} to fix</span>` : ''}</p>`);
     h += '</div>';
-    h += `<div class="section-title"><h3>3. Equipment list</h3><span class="hint" style="margin:0">Small corrections can be made here; the Excel file stays your master copy.</span><span class="grow"></span><button class="btn small" id="addRow">Add row</button></div>`;
+    h += `<div class="section-title"><h3>3. Equipment list</h3><span class="hint" style="margin:0">Small corrections can be made here; the Excel file stays your master copy.</span><span class="grow"></span><button class="btn small" id="fillDesc" title="Fills only empty Description cells with the usual full name of the short form (grey suggestion)">Fill empty descriptions</button><button class="btn small" id="addRow">Add row</button></div>`;
     h += `<div class="card"><div class="scroll-x"><table class="data"><thead><tr><th>Status</th>${EQ_COLS.map(c => `<th>${esc(c.head)}</th>`).join('')}<th></th></tr></thead><tbody>`;
     rows.forEach((r, i) => {
       const [cls, txt] = st[i];
@@ -483,6 +484,7 @@
         if (c.key === 'car') return `<td>${carSelect(id, `equipment.${i}.car`, r.car)}</td>`;
         if (c.key === 'loc') return `<td><select id="${id}" data-path="equipment.${i}.loc" data-kind="text"><option value="under"${r.loc !== 'roof' ? ' selected' : ''}>Underframe</option><option value="roof"${r.loc === 'roof' ? ' selected' : ''}>Roof</option></select></td>`;
         if (c.key === 'kind') return `<td><select id="${id}" data-path="equipment.${i}.kind" data-kind="text">${TLT.SYMBOLS.map(([v, l]) => `<option value="${v}"${TLT.normKind(r.kind) === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>`;
+        if (c.key === 'desc') { const sug = TLT.equipDescFor(r.name); return `<td><input id="${id}" class="desc" data-path="equipment.${i}.desc" data-kind="text" value="${esc(r.desc)}"${sug ? ` placeholder="${esc(sug)}" title="Empty: double-click to use “${esc(sug)}”"` : ''}></td>`; }
         const numeric = c.key !== 'name';
         return `<td><input id="${id}" ${numeric ? 'class="num" type="number" step="any"' : ''} data-path="equipment.${i}.${c.key}" data-kind="${numeric ? 'num' : 'text'}" value="${esc(r[c.key])}"></td>`;
       }).join('') + `<td><button class="btn small" data-delrow="${i}" aria-label="Delete row ${i + 1}">×</button></td></tr>`;
@@ -505,9 +507,10 @@
   }
 
   /* ---------- Excel / CSV (equipment list and weight list) ---------- */
-  function headerKey(h) {
+  function headerKey(h, spec) {
     const s = String(h || '').trim().toLowerCase();
     if (!s) return null;
+    if (spec && spec.cols.some(c => c.key === 'desc') && /descr|full\s*(name|form)/.test(s)) return 'desc';
     if (/^x(\s|$|\(|_)|x\s*from|longitud/.test(s)) return 'x';
     if (/^y(\s|$|\(|_)|y\s*from|lateral|transvers/.test(s)) return 'y';
     if (/^z(\s|$|\(|_)|z\s*(from|above)|above rail|vertical/.test(s)) return 'z';
@@ -526,7 +529,7 @@
     let hi = -1, map = null;
     for (let i = 0; i < Math.min(aoa.length, 15); i++) {
       const m = {};
-      (aoa[i] || []).forEach((h, j) => { const k = headerKey(h); if (k && m[k] == null) m[k] = j; });
+      (aoa[i] || []).forEach((h, j) => { const k = headerKey(h, spec); if (k && m[k] == null) m[k] = j; });
       if (spec.required.every(k => m[k] != null)) { hi = i; map = m; break; }
     }
     if (hi < 0) throw new Error(`No header row found. It needs at least ${spec.required.map(k => spec.cols.find(c => c.key === k).head).join(', ')} columns.`);
@@ -540,6 +543,7 @@
       if (spec.key === 'equipment' && /^(m|w)/i.test(String(o.cat || '').trim())) return; // old mass-item rows are not equipment
       ['length', 'width', 'height', 'x', 'y', 'z', 'mass'].forEach(k => { if (!(k in o)) return; const v = parseFloat(clean(o[k])); o[k] = Number.isFinite(v) ? v : ''; });
       o.car = String(o.car == null ? '' : o.car).trim(); o.name = String(o.name == null ? '' : o.name).trim();
+      if ('desc' in o) o.desc = String(o.desc == null ? '' : o.desc).trim();
       delete o.cat;
       if (spec.key === 'equipment') {
         o.loc = /^r/i.test(String(o.loc || '')) ? 'roof' : 'under';
@@ -920,7 +924,7 @@
     };
     const add = (car, name, loc, L, Wd, H, x, y, mass, kind) => {
       if (has(car, name)) return;
-      eq.push({ car, name, loc, length: L, width: Wd, height: H, x, y, kind: kind || '' }); nE++;
+      eq.push({ car, name, desc: TLT.equipDescFor(name), loc, length: L, width: Wd, height: H, x, y, kind: kind || '' }); nE++;
       addW(car, loc === 'roof' ? 'Roof' : 'UF', name, L, Wd, H, x, y, mass);
     };
     if (P.panto) pCars.forEach(car => {
@@ -932,7 +936,7 @@
       const pos = [xp, -xp, 0, Math.round(xp / 2)];
       for (let k = haveP; k < want; k++) {
         let nm = 'PAN' + (k + 1); while (eq.some(r => String(r.car).trim() === car && String(r.name).trim() === nm)) nm += "'";
-        eq.push({ car, name: nm, loc: 'roof', length: 1700, width: 1800, height: 450, x: pos[k % 4], y: 0, kind: 'panto' }); nE++;
+        eq.push({ car, name: nm, desc: 'Pantograph', loc: 'roof', length: 1700, width: 1800, height: 450, x: pos[k % 4], y: 0, kind: 'panto' }); nE++;
         addW(car, 'Roof', nm, 1700, 1800, 450, pos[k % 4], 0, P.system === '25kV' ? 260 : 200);
       }
       add(car, 'ARR', 'roof', 400, 400, 450, xp - 1500, -700, 25, 'box');
@@ -1208,6 +1212,10 @@
   }
 
   function bind() {
+    document.addEventListener('dblclick', e => {
+      const el = e.target.closest('input.desc');
+      if (el && !el.value && el.placeholder) { el.value = el.placeholder; el.dispatchEvent(new Event('change', { bubbles: true })); }
+    });
     document.addEventListener('input', e => { if (e.target.closest('#pane-1, #pane-2, #weight-edit, #fixed-edit')) onInput(e); });
     document.addEventListener('change', e => { if (e.target.closest('#pane-1, #pane-2, #weight-edit, #fixed-edit')) onInput(e); });
     document.addEventListener('click', e => {
@@ -1277,6 +1285,7 @@
         if (b.dataset.confirm !== '1') { b.dataset.confirm = '1'; b.textContent = 'Confirm delete'; setTimeout(() => { if (b.isConnected) { b.dataset.confirm = ''; b.textContent = 'Delete'; } }, 3000); return; }
         cfg.carTypes.splice(+b.dataset.deltype, 1); renderPane1(); markChanged(); return;
       }
+      if (b.id === 'fillDesc') { let n = 0; (cfg.equipment || []).forEach(r => { if (!String(r.desc || '').trim()) { const d = TLT.equipDescFor(r.name); if (d) { r.desc = d; n++; } } }); renderPane2(); markChanged(); toast(n ? `${n} description(s) filled — check them, the suggestions are generic.` : 'No empty description with a known short form.'); return; }
       if (b.id === 'addRow') { (cfg.equipment = cfg.equipment || []).push({ cat: 'Equipment', car: cfg.carTypes[0].name, name: 'NEW', loc: 'under', length: 1000, width: 800, height: 500, x: 0, y: 0, mass: '', kind: '' }); renderPane2(); markChanged(); return; }
       if (b.dataset.delrow != null) { cfg.equipment.splice(+b.dataset.delrow, 1); renderPane2(); markChanged(); return; }
     });

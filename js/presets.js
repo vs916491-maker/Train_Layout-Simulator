@@ -290,6 +290,12 @@
     TLT.PRESETS[id] = () => { const c = f(); c.carTypes.forEach(t => { if (!t.tare) t.tare = Math.round(c.weightItems.filter(r => r.car === t.name).reduce((a, r) => a + (+r.mass || 0), 0) / 100) / 10; }); return c; };
   });
 
+  // equipment descriptions (full names) for the short forms used in the presets
+  Object.keys(TLT.PRESETS).forEach(id => {
+    const f = TLT.PRESETS[id];
+    TLT.PRESETS[id] = () => { const c = f(); (c.equipment || []).forEach(r => { if (!r.desc) r.desc = TLT.equipDescFor(r.name); }); return c; };
+  });
+
   // Template per product type (used by "Load template" in Train formation)
   TLT.PRODUCT_TEMPLATES = { metro: 'metro-6car', lrv: 'lrv-2car', mainline: 'mainline-emu4' };
 
