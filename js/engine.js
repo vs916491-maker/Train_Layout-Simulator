@@ -15,7 +15,7 @@
     return Number.isFinite(n) ? n : d;
   };
   TLT.num = num;
-  TLT.VERSION = '1.3.0';   // keep in step with CHANGELOG.md and the git tag
+  TLT.VERSION = '1.4.0';   // keep in step with CHANGELOG.md and the git tag
 
   /* ---------------- Formation ---------------- */
   /* Formation text with the multiple-unit factor: unit, then the unit turned round, alternately (DM-T-M-T | T'-M'-T'-DM') */
@@ -354,6 +354,18 @@
       wiperLength: num(f.wiperLength, 0) };
   };
 
+  /* Small standing pockets: free floor where a W × D rectangle (either way round) does not fit is not counted as standing.
+   * Rule '300x300' (default), '400x300', 'custom' (pocketW × pocketD) or 'off' (old behaviour: all free floor counts).
+   * With the rule on, the strip between a door edge and its draft screen (door pillar zone) is also excluded unless pillarStand is ticked. */
+  TLT.pocketCfg = function (cfg) {
+    const r = cfg.interior || {};
+    const rule = ['off', '300x300', '400x300', 'custom'].includes(r.standPocket) ? r.standPocket : '300x300';
+    const sz = rule === '400x300' ? [400, 300] : rule === 'custom' ? [Math.max(0, num(r.standPocketW, 300)), Math.max(0, num(r.standPocketD, 300))] : [300, 300];
+    const on = rule !== 'off' && sz[0] > 0 && sz[1] > 0;
+    return { rule, on, w: sz[0], d: sz[1], pillar: on && !(r.pillarStand === true || r.pillarStand === 'true'),
+      label: on ? `${sz[0]} × ${sz[1]} mm` : 'off' };
+  };
+
   /* Mainline interior (product type Mainline EMU / DMU only) */
   TLT.mainlineCfg = function (cfg) {
     const r = cfg.interior || {};
@@ -608,8 +620,9 @@
       });
       // draft screens at door ends of the bay (not with vestibules)
       if (!vestibules.length) {
-        if (bay.k0 === 'door') { screens.push({ side: 'A', x: bay.x0 + Math.min(dClr, 150) }); screens.push({ side: 'B', x: bay.x0 + Math.min(dClr, 150) }); }
-        if (bay.k1 === 'door') { screens.push({ side: 'A', x: bay.x1 - Math.min(dClr, 150) }); screens.push({ side: 'B', x: bay.x1 - Math.min(dClr, 150) }); }
+        const sDepth = seatD + 80;   // screen length from the wall (as drawn)
+        if (bay.k0 === 'door') ['A', 'B'].forEach(side => screens.push({ side, x: bay.x0 + Math.min(dClr, 150), door: bay.x0, depth: sDepth }));
+        if (bay.k1 === 'door') ['A', 'B'].forEach(side => screens.push({ side, x: bay.x1 - Math.min(dClr, 150), door: bay.x1, depth: sDepth }));
       }
     });
 
@@ -667,9 +680,28 @@
     });
     const PF = TLT.profileCfg(cfg);
     const insetRef = Math.max(0, TLT.profileInset(PF, PF.refH));
-    const standRects = TLT.freeRects(standStart, standEnd, -half + insetRef, half - insetRef, occ);
-    const aStand = standRects.reduce((s, q) => s + (q.x1 - q.x0) * (q.y1 - q.y0), 0);
-    const aStandUnfold = occUnfold.length ? TLT.freeRects(standStart, standEnd, -half + insetRef, half - insetRef, occ.concat(occUnfold)).reduce((s, q) => s + (q.x1 - q.x0) * (q.y1 - q.y0), 0) : aStand;
+    // Small pockets (and door pillar zones) are taken out of the standing area when the pocket rule is on
+    const PK = TLT.pocketCfg(cfg);
+    const sy0 = -half + insetRef, sy1 = half - insetRef;
+    const areaOf = rs => rs.reduce((s, q) => s + (q.x1 - q.x0) * (q.y1 - q.y0), 0);
+    const pillars = [], walls = [];
+    if (PK.on) screens.forEach(scr => {
+      const [y0, y1] = sideY(scr.side, scr.depth);
+      walls.push({ x0: scr.x, x1: scr.x, y0, y1 });   // zero-thickness: splits pockets, takes no area
+      if (PK.pillar) pillars.push({ x0: Math.min(scr.door, scr.x), x1: Math.max(scr.door, scr.x), y0, y1 });
+    });
+    const standOf = base => {
+      if (!PK.on) { const s = TLT.freeRects(standStart, standEnd, sy0, sy1, base); return { stand: s, excl: [] }; }
+      const ob = base.concat(pillars, walls);
+      const pockets = TLT.pocketRects(standStart, standEnd, sy0, sy1, ob, PK.w, PK.d);
+      const stand = TLT.freeRects(standStart, standEnd, sy0, sy1, ob.concat(pockets));
+      return { stand, excl: TLT.freeRects(standStart, standEnd, sy0, sy1, base.concat(stand)) };
+    };
+    const SF = standOf(occ);
+    const standRects = SF.stand, pocketRects = SF.excl;
+    const aStand = areaOf(standRects), aPocket = areaOf(pocketRects);
+    const SU = occUnfold.length ? standOf(occ.concat(occUnfold)) : SF;
+    const aStandUnfold = areaOf(SU.stand), aPocketUnfold = areaOf(SU.excl);
     const foldSeats = foldings.reduce((s, f) => s + f.n, 0), foldStand = foldings.filter(f => f.stand).reduce((s, f) => s + f.n, 0);
     const aSaloon = Math.max(0, standEnd - standStart) * Wi;
     const aVest = vestibules.reduce((s, q) => s + (q.x1 - q.x0) * Wi, 0);
@@ -711,9 +743,9 @@
       noseLen, noseDesk, aeroF: AE.f,
       type, Lc, Lb, bodyF, bodyR, mid, bogies, bogieInfo, bc, axles, shared: [sh1, sh2], hinge: [h1, h2], ends: E, cab1: E.cab1, cab2: E.cab2,
       W, Wi, doors, dw, cabLen, cabLen2, salStart, salEnd, bays,
-      seatBlocks, wheelchairs, bicycles, foldings, foldSeats, foldStand, cabinets, screens, standRects, seats, seatsFirst, vestibules, xFirst, mainline: ML.on,
+      seatBlocks, wheelchairs, bicycles, foldings, foldSeats, foldStand, cabinets, screens, standRects, pocketRects, pocketCfg: PK, seats, seatsFirst, vestibules, xFirst, mainline: ML.on,
       doorCfg: DC, cabDoorX, cabDoorX2, cabCfg: CB, openCab, openCab2, standStart, standEnd,
-      areas: { saloon: aSaloon / 1e6, seat: aSeat / 1e6, foot: aFoot / 1e6, wheelchair: aWc / 1e6, bicycle: aBike / 1e6, folding: aFold / 1e6, cabinet: aCab / 1e6, standing: aStand / 1e6, standingUnfolded: aStandUnfold / 1e6, vestibule: aVest / 1e6 },
+      areas: { saloon: aSaloon / 1e6, seat: aSeat / 1e6, foot: aFoot / 1e6, wheelchair: aWc / 1e6, bicycle: aBike / 1e6, folding: aFold / 1e6, cabinet: aCab / 1e6, standing: aStand / 1e6, standingUnfolded: aStandUnfold / 1e6, pocket: aPocket / 1e6, pocketUnfolded: aPocketUnfold / 1e6, vestibule: aVest / 1e6 },
       aisle, warnings: warn, profile: PF, insetRef, usableWidth: Wi - 2 * insetRef,
       equipment: TLT.equipmentFor(type, cfg),
       motorBogies: bogieInfo.filter(bg => bg.motor).length,
@@ -748,6 +780,20 @@
       open = next;
     }
     return out;
+  };
+
+  /* Free area of the box (minus occ) on which no w × d rectangle, either way round, can be placed: the small pockets.
+   * Exact for axis-aligned rectangles: the corners of rectangles that fit are the box shrunk by (w, d) minus the obstacles
+   * grown by (w, d); the area those rectangles cover is kept, the rest of the free area is returned. 1 mm tolerance so an exact fit counts. */
+  TLT.pocketRects = function (x0, x1, y0, y1, occ, w, d) {
+    const keep = [];
+    const sizes = w === d ? [[w, d]] : [[w, d], [d, w]];
+    sizes.forEach(([a, b]) => {
+      const A = Math.max(0, a - 1), B = Math.max(0, b - 1);
+      const grown = occ.map(o => ({ x0: o.x0 - A, x1: o.x1, y0: o.y0 - B, y1: o.y1 }));
+      TLT.freeRects(x0, x1 - A, y0, y1 - B, grown).forEach(c => keep.push({ x0: c.x0, x1: c.x1 + A, y0: c.y0, y1: c.y1 + B }));
+    });
+    return TLT.freeRects(x0, x1, y0, y1, occ.concat(keep));
   };
 
   /* ---------------- Capacity ---------------- */
