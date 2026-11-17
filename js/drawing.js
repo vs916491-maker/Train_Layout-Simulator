@@ -22,6 +22,7 @@
     SEAT: { color: '#0f7a63', lw: 0.2, aci: 3, fill: '#d5efe7' },
     FOOT: { color: '#0f7a63', lw: 0.13, aci: 3, dash: [1.2, 0.8] },
     STAND: { color: '#d6b300', lw: 0.1, aci: 2, fill: '#fbf0b4' },
+    NOSTAND: { color: '#0f7a63', lw: 0.13, aci: 3, dash: [1.2, 0.8], fill: '#ffffff' },
     GAUGE: { color: '#6a1b9a', lw: 0.2, aci: 6, dash: [3, 1.5] },
     WC: { color: '#1565c0', lw: 0.25, aci: 5, fill: '#dce9fb' },
     WC_DASH: { color: '#1565c0', lw: 0.15, aci: 5, dash: [1.5, 1] },
@@ -330,6 +331,8 @@
 
     // Standing area
     lay.standRects.forEach(q => v.hatch(q.x0, q.y0, q.x1, q.y1, 'STAND'));
+    // Small pockets / door pillar zones: left white (not standing) with a dashed outline, like the foot zone
+    (lay.pocketRects || []).forEach(q => v.rect(q.x0, q.y0, q.x1, q.y1, 'NOSTAND', { fill: true }));
 
     // Outer body
     v.poly(planOutline(lay), true, 'BODY');
@@ -508,8 +511,8 @@
       }
     });
     // Draft screens + stanchions
-    const sd = num(r.seatDepth, 550) + 80;
     lay.screens.forEach(scr => {
+      const sd = scr.depth || num(r.seatDepth, 550) + 80;
       const k = scr.side === 'A' ? 1 : -1;
       v.line(scr.x, k * hi, scr.x, k * (hi - sd), 'BODY_THIN', { lw: 0.25 });
       if (detail) v.circle(scr.x, k * (hi - sd), 25, 'BODY_THIN');
@@ -1048,7 +1051,7 @@
       { ly: 'SEAT', label: 'Seats', kind: 'box' },
       { ly: 'STAND', label: 'Standing area', kind: 'fill' },
       { ly: 'WC', label: 'Wheelchair space', kind: 'box' },
-    ]);
+    ].concat(R.used.some(n => (R.layouts.get(n).pocketRects || []).length) ? [{ ly: 'NOSTAND', label: 'Not standing (small pocket)', kind: 'box' }] : []));
     legend(p, 85, yy - 5, [
       { ly: 'EQUIP', label: 'Underframe equipment', kind: 'box' },
       { ly: 'ROOF', label: 'Roof equipment / pantograph', kind: 'box' },
@@ -1168,7 +1171,10 @@
     ];
     if (lay.bicycles.length) rows.push([`Bicycle space${lay.bicycles.every(w => w.stand) ? ' (counted as standing)' : lay.bicycles.some(w => w.stand) ? ' (partly standing)' : ''}`, `${A.bicycle.toFixed(2)} m²`]);
     if (lay.foldSeats) rows.push([`Folding seats (${lay.foldSeats}${lay.foldStand ? `, ${lay.foldStand} standing when folded` : ''})`, `${A.folding.toFixed(2)} m²`]);
-    rows.push(['Cubicles / cabinets', `${A.cabinet.toFixed(2)} m²`],
+    rows.push(['Cubicles / cabinets', `${A.cabinet.toFixed(2)} m²`]);
+    if (lay.pocketCfg && lay.pocketCfg.on) rows.push([`Small pockets${lay.pocketCfg.pillar ? ' / door pillar zones' : ''} (not standing, < ${lay.pocketCfg.label})`,
+      lay.foldStand && Math.abs(A.pocket - A.pocketUnfolded) > 0.005 ? `${A.pocket.toFixed(2)} / ${A.pocketUnfolded.toFixed(2)} m²` : `${A.pocket.toFixed(2)} m²`]);
+    rows.push(
       [lay.foldStand ? 'STANDING AREA (folding seats folded / in use)' : 'STANDING AREA', lay.foldStand ? `${A.standing.toFixed(2)} / ${A.standingUnfolded.toFixed(2)} m²` : `${A.standing.toFixed(2)} m²`],
       ['SEATS', (lay.mainline && lay.seatsFirst ? `${lay.seats} (1st ${lay.seatsFirst} / std ${lay.seats - lay.seatsFirst})` : String(lay.seats)) + (lay.foldSeats ? ` + ${lay.foldSeats} folding` : '')]);
     if (lay.mainline) rows.splice(5, 0, ['Vestibules (included in standing)', `${A.vestibule.toFixed(2)} m²`]);
@@ -1191,7 +1197,8 @@
       { ly: 'WC_DASH', label: `Turning circle Ø${num(cfg.interior.wcTurning, 1500)}`, kind: 'line' },
       { ly: 'CABINET', label: 'Cubicle / cabinet', kind: 'box' },
     ]);
-    const extra = (lay.bicycles.length ? [{ ly: 'BIKE', label: 'Bicycle space', kind: 'box' }] : []).concat(lay.foldSeats ? [{ ly: 'FOLD', label: 'Folding seat (F)', kind: 'box' }] : []);
+    const extra = (lay.bicycles.length ? [{ ly: 'BIKE', label: 'Bicycle space', kind: 'box' }] : []).concat(lay.foldSeats ? [{ ly: 'FOLD', label: 'Folding seat (F)', kind: 'box' }] : [],
+      lay.pocketRects && lay.pocketRects.length ? [{ ly: 'NOSTAND', label: 'Not standing (small pocket / door pillar)', kind: 'box' }] : []);
     if (extra.length) legend(p, 170, yB1 - 6, extra);
     if (lay.mainline) p.text(20, yB1 - 22, `Mainline seating ${TLT.mainlineCfg(cfg).arrangement}: standard ${TLT.mainlineCfg(cfg).std.abreast.join('+')} at ${TLT.mainlineCfg(cfg).std.pitch} mm pitch, 1st class ${TLT.mainlineCfg(cfg).first.abreast.join('+')} at ${TLT.mainlineCfg(cfg).first.pitch} mm (1st class seats shaded).`, 1.8, { color: '#555555' });
     else p.text(20, yB1 - 22, 'Bays are numbered B0 … Bn from END 1. Seat blocks dimensioned along side B with seat count in brackets.', 1.8, { color: '#555555' });
@@ -1240,6 +1247,7 @@
       ['Wheelchair space', `${num(I.wcLength, 1300)} × ${num(I.wcWidth, 700)} mm, ${I.wcAsStanding ? 'counted as standing area' : 'excluded from standing area'} unless set per space`],
       ...(() => { const L = R.used.map(n => R.layouts.get(n)); const b = L.some(l => l.bicycles.length), f = L.some(l => l.foldSeats);
         return (b ? [['Bicycle spaces', 'Size per space; counted as standing area when marked']] : []).concat(f ? [['Folding seats', 'Seats when in use; marked ones count as standing area (not seats) where folded']] : []); })(),
+      (() => { const K = TLT.pocketCfg(cfg); return ['Small pockets (not standing)', K.on ? `Free floor where ${K.w} × ${K.d} mm (either way round) does not fit is excluded${K.pillar ? '; also door pillar zone (door edge to draft screen)' : ''}` : 'Not applied: all free floor counted']; })(),
       ['Interior width (body - 2 × wall)', `${num(cfg.common.bodyWidth, 2950) - 2 * num(cfg.common.wallThk, 60)} mm`],
       (() => { const PF = TLT.profileCfg(cfg), Wi = num(cfg.common.bodyWidth, 2950) - 2 * num(cfg.common.wallThk, 60), ins = TLT.profileInset(PF, PF.refH);
         return ['Car body section / standing width', `${PF.label}; usable ${Math.round(Wi - 2 * ins)} mm at ${PF.refH} mm above floor`]; })(),

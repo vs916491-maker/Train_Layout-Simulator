@@ -2,6 +2,12 @@
 
 Versions follow [Semantic Versioning](https://semver.org/): **MAJOR** for changes that break saved inputs or Excel templates, **MINOR** for new features, **PATCH** for fixes. The version is shown in the app header and on every PDF sheet (`TLT.VERSION` in `js/engine.js`); each release is a git tag `vX.Y.Z`.
 
+## [1.4.0] – 2026-11-17
+- **Small standing pockets** (Interior rules): free floor where a 300 × 300 mm (default), 400 × 300 mm or custom rectangle (either way round) does not fit is no longer counted as standing area — strips behind seat backs, gaps between seats / cabinets / wheelchair or bicycle spaces and the draft screens. Draft screens now split the floor for this test.
+- **Door pillar zone** (door edge to draft screen) excluded when the rule is on; tick *Count door pillar zone as standing area* to keep it.
+- Excluded areas drawn white with a dashed outline (new layer `NOSTAND`) on the train and car layouts, PDF and DXF; car sheet lists the excluded area, capacity sheet states the rule.
+- **Off** reproduces the earlier standing areas. Saved inputs without the setting use 300 × 300 mm, so their standing passengers drop (typically 3–4 m² per 20 m metro car). Excel: `interior.standPocket`, `interior.standPocketW`, `interior.standPocketD`, `interior.pillarStand`.
+
 ## [1.3.0] – 2026-11-02
 - **Windscreen width** input in Windscreen & wipers (0 = automatic). Applies to the Metro / LRV flat front (one or two panes, side windows around a centred door, pane beside a side door) and to the mainline nose (top width scales with it). Limited to the body width at that height; the front-view note shows the glass size W × H and when the width was limited. Also in the main-inputs Excel.
 

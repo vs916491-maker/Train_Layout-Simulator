@@ -162,6 +162,7 @@ Method:
 
 * Seats are fitted per bay: available length = bay length − clearance at each door (draft screen) / end wall, divided by seat width.
 * Standing area = saloon floor (interior width × length between end walls or cab partition) minus seats, the foot zone in front of longitudinal seats, cubicles, and the wheelchair spaces, bicycle spaces and folding seats that are not marked **Use as standing area**.
+* **Small standing pockets** (Interior rules): free floor where a 300 × 300 mm (default), 400 × 300 mm or custom rectangle, either way round, cannot be placed is not counted — e.g. the strip behind a seat back, the gap between a seat or cabinet end and the draft screen. Draft screens split the floor for this test. With the rule on, the **door pillar zone** (door edge to draft screen, screen length from the wall) is also excluded unless *Count door pillar zone as standing area* is ticked. **Off** counts all free floor (versions before 1.4.0). Excluded areas are left white with a dashed outline (layer `NOSTAND`) and listed per car on the car sheet; the rule is stated in the capacity sheet. EN 15663 has no pocket-size rule; the 400 × 300 mm test is the one used for buses (UNECE R107). Check the project specification. Excel parameters: `interior.standPocket` (300x300 / 400x300 / custom / off), `interior.standPocketW`, `interior.standPocketD`, `interior.pillarStand`.
 * Folding seats marked as standing area count as standing area and not as seats in the load cases where **Folding seats folded** is set (default: every case except seated only), and as seats otherwise — e.g. EL4 / EL6 / PXD: "folding seat, wheelchair spaces and bicycle area are occupied by standing passengers".
 * The standees target per car variant is checked at the load case you choose in Load cases & mass (or not at all). Load cases are either *seated only*, a *density* in pax/m², a *density in kg/m²* (persons = area × kg/m² ÷ passenger mass, e.g. PXD 500 kg/m²) or a *factor* of another case (e.g. TPN = 1.8 × AW2).
 * Mass = tare + passengers × passenger mass; axle load = mass ÷ axles per car (equal sharing).
@@ -172,7 +173,7 @@ Default seat, foot-zone and wheelchair dimensions follow common EN / PRM practic
 
 * AutoCAD R12 (AC1009) format, millimetres, model space at 1:1. Opens in AutoCAD, BricsCAD, DraftSight, LibreCAD and others.
 * Each sheet is placed side by side. The frame, title block and tables are scaled by the sheet scale, so a sheet plots at the scale shown in its title block.
-* Layers: `BODY`, `DOOR`, `WINDOW`, `BOGIE`, `EQUIP`, `ROOF`, `SEAT`, `FOOT`, `STAND` (standing area hatch lines), `WC`, `CABINET`, `CAB`, `DIM`, `TEXT`, `TABLE`, `TITLE`, `FRAME`, `CENTER`, `RAIL`.
+* Layers: `BODY`, `DOOR`, `WINDOW`, `BOGIE`, `EQUIP`, `ROOF`, `SEAT`, `FOOT`, `STAND` (standing area hatch lines), `NOSTAND` (small pockets / door pillar zones not counted as standing), `WC`, `CABINET`, `CAB`, `DIM`, `TEXT`, `TABLE`, `TITLE`, `FRAME`, `CENTER`, `RAIL`.
 * When the tool runs inside the claude.ai viewer, the DXF is delivered inside a `.zip` because the viewer only accepts certain file types.
 
 ## Publishing with GitHub Pages

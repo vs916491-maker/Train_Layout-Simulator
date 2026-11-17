@@ -251,6 +251,11 @@
       ${F('Turning circle Ø', 'interior.wcTurning', 'num', { unit: 'mm' })}${F('Min. aisle (check)', 'interior.minAisle', 'num', { unit: 'mm' })}
       ${F('Default cubicle depth', 'interior.cabinetDepth', 'num', { unit: 'mm' })}<div></div>
       ${F('Count wheelchair space as standing area (default for each wheelchair space)', 'interior.wcAsStanding', 'check', { wide: true })}
+      ${(() => { const K = TLT.pocketCfg(cfg);
+        return F('Small standing pockets (not counted as standing)', 'interior.standPocket', 'select', { wide: true, re: true, options: [['300x300', 'Exclude where 300 × 300 mm does not fit'], ['400x300', 'Exclude where 400 × 300 mm does not fit'], ['custom', 'Exclude where a custom size does not fit'], ['off', 'Off: count all free floor']],
+          hint: 'Free floor left behind seats, beside cabinets or at draft screens where the rectangle (either way round) cannot be placed is left white and not counted. Not fixed by EN 15663; check the project specification.' })
+          + (K.rule === 'custom' ? F('Pocket size along car', 'interior.standPocketW', 'num', { unit: 'mm', hint: 'Blank = 300' }) + F('Pocket size across car', 'interior.standPocketD', 'num', { unit: 'mm', hint: 'Blank = 300' }) : '')
+          + (K.on ? F('Count door pillar zone (door edge to draft screen) as standing area', 'interior.pillarStand', 'check', { wide: true }) : ''); })()}
     </div><p class="hint">Defaults follow common EN / PRM practice (wheelchair space 1300 × 700, Ø1500 turning circle). Confirm against the standard for each project.</p>`);
     h += '</div>';
 
@@ -662,6 +667,9 @@
     ['Interior', 'Wheelchair space length', 'interior.wcLength', 'num', 'mm'], ['Interior', 'Wheelchair space width', 'interior.wcWidth', 'num', 'mm'],
     ['Interior', 'Turning circle diameter', 'interior.wcTurning', 'num', 'mm'], ['Interior', 'Min. aisle (check)', 'interior.minAisle', 'num', 'mm'],
     ['Interior', 'Count wheelchair space as standing area', 'interior.wcAsStanding', 'bool'],
+    ['Interior', 'Small standing pockets (not counted)', 'interior.standPocket', ['300x300', '400x300', 'custom', 'off']],
+    ['Interior', 'Custom pocket size along car', 'interior.standPocketW', 'num', 'mm'], ['Interior', 'Custom pocket size across car', 'interior.standPocketD', 'num', 'mm'],
+    ['Interior', 'Count door pillar zone as standing area', 'interior.pillarStand', 'bool'],
     ['Mainline interior', 'Seat arrangement', 'interior.mlArrangement', ['facing', 'airline']], ['Mainline interior', 'Seat length along car', 'interior.mlSeatLength', 'num', 'mm'],
     ['Mainline interior', 'Standard class abreast', 'interior.mlStdAbreast', ['2+2', '2+1', '3+2', '1+1', '2+0']], ['Mainline interior', 'Standard class seat pitch', 'interior.mlStdPitch', 'num', 'mm'],
     ['Mainline interior', '1st class abreast', 'interior.mlFirstAbreast', ['2+2', '2+1', '3+2', '1+1', '2+0']], ['Mainline interior', '1st class seat pitch', 'interior.mlFirstPitch', 'num', 'mm'],
