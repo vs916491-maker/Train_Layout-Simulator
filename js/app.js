@@ -109,7 +109,7 @@
   /* ================= Pane 1: Main Dimensions ================= */
   function renderPane1() {
     const F = (...a) => field('', ...a);
-    const trans = cfg.interior.seatType === 'transverse';
+    const trans = cfg.interior.seatType === 'transverse' || (cfg.carTypes || []).some(t => (t.interiorItems || []).some(q => q.kind === 'transverse'));
     let h = `<div class="pane-head"><h2>Main Dimensions</h2><p>Enter the train formation, car body data and one set of data per car variant, then press Generate Results.</p></div>`;
     h += `<div class="card excel-main" style="margin-bottom:14px"><h3>Import / export main inputs (Excel)</h3>
       <div class="excel-row"><div><p class="hint" style="margin-top:0">One workbook with all inputs of this step: <b>Parameters</b> (project, formation, car body & bogie, doors, HVAC, power, cab, windows, front view, interior rules, masses), <b>Car variants</b>, <b>Interior items</b> and <b>Load cases</b>, plus an Instructions sheet with the allowed values. The template is filled with the current inputs.</p>
@@ -246,10 +246,11 @@
       ${F('Seat depth', 'interior.seatDepth', 'num', { unit: 'mm' })}${F('Foot zone in front of seats', 'interior.footZone', 'num', { unit: 'mm' })}
       ${F('Clearance at doors', 'interior.doorClearance', 'num', { unit: 'mm' })}${F('Clearance at end wall / cab', 'interior.endClearance', 'num', { unit: 'mm' })}
       ${F('Min. door clearance (fixed seats per bay)', 'interior.minDoorClearance', 'num', { unit: 'mm', wide: true, hint: 'Used when a car variant asks for 6 / 7 / 8 seats between doors: the door clearance shrinks to fit, down to this value.' })}
-      ${trans && !MLon ? F('Seats per side (row)', 'interior.transSeatsPerSide', 'num') + F('Transverse seat depth', 'interior.transSeatDepth', 'num', { unit: 'mm' }) + F('Legroom, facing seats', 'interior.transLegroom', 'num', { unit: 'mm' }) : ''}
+      ${trans && !MLon ? F('Transverse seat width / pax (0 = seat width)', 'interior.transSeatWidth', 'num', { unit: 'mm' }) + F('Seats per side (row)', 'interior.transSeatsPerSide', 'num') + F('Transverse seat depth', 'interior.transSeatDepth', 'num', { unit: 'mm' }) + F('Legroom, facing seats', 'interior.transLegroom', 'num', { unit: 'mm' }) : ''}
       ${F('Wheelchair space length', 'interior.wcLength', 'num', { unit: 'mm' })}${F('Wheelchair space width', 'interior.wcWidth', 'num', { unit: 'mm' })}
       ${F('Turning circle Ø', 'interior.wcTurning', 'num', { unit: 'mm' })}${F('Min. aisle (check)', 'interior.minAisle', 'num', { unit: 'mm' })}
       ${F('Default cubicle depth', 'interior.cabinetDepth', 'num', { unit: 'mm' })}<div></div>
+      ${F('Ceiling height above floor (centre, cross-section)', 'interior.ceilingHeight', 'num', { unit: 'mm' })}${F('Overhead handrail height (cross-section)', 'interior.handrailHeight', 'num', { unit: 'mm' })}
       ${F('Count wheelchair space as standing area (default for each wheelchair space)', 'interior.wcAsStanding', 'check', { wide: true })}
       ${(() => { const K = TLT.pocketCfg(cfg);
         return F('Small standing pockets (not counted as standing)', 'interior.standPocket', 'select', { wide: true, re: true, options: [['300x300', 'Exclude where 300 × 300 mm does not fit'], ['400x300', 'Exclude where 400 × 300 mm does not fit'], ['custom', 'Exclude where a custom size does not fit'], ['off', 'Off: count all free floor']],
@@ -307,7 +308,9 @@
         ${F('Length over couplers / joints', 'couplerLength', 'num', { unit: 'mm' })}${F('Body length', 'bodyLength', 'num', { unit: 'mm' })}
         ${E.cab1 ? F('END 1 cab length (body end → partition)', 'cabLength', 'num', { unit: 'mm', wide: true }) : ''}
         ${E.cab2 ? F('END 2 cab length (body end → partition)', 'cabLength2', 'num', { unit: 'mm', wide: true }) : ''}
-        ${E.s1 === 'own' || E.s2 === 'own' ? F('Bogie centres (own bogies)', 'bogieCentres', 'num', { unit: 'mm' }) : '<div></div>'}${F('Motor bogies', 'motorBogies', 'select', { options: [['0', '0 (trailer)'], ['1', '1 (END 2 side)'], ['1e1', '1 (END 1 side)'], ['2', '2'], ['3', '3']] })}
+        ${E.s1 === 'own' || E.s2 === 'own' ? F('Bogie centres (own bogies)', 'bogieCentres', 'num', { unit: 'mm' }) : '<div></div>'}<div></div>
+        ${E.s1 !== 'none' ? F(`END 1 bogie (${E.s1 === 'shared' ? 'shared Jacobs' : 'own'})`, 'bogie1', 'select', { re: true, options: [['motor', 'Motor'], ['trailer', 'Trailer']] }) : ''}${E.centre && (E.s1 === 'none' || E.s2 === 'none') ? F('Centre bogie', 'bogieC', 'select', { re: true, options: [['motor', 'Motor'], ['trailer', 'Trailer']] }) : ''}${E.s2 !== 'none' ? F(`END 2 bogie (${E.s2 === 'shared' ? 'shared Jacobs' : 'own'})`, 'bogie2', 'select', { re: true, options: [['motor', 'Motor'], ['trailer', 'Trailer']] }) : ''}
+        ${E.s1 === 'shared' || E.s2 === 'shared' ? '<p class="hint" style="grid-column:1/-1;margin-top:0">A shared (Jacobs) bogie is one bogie for the two cars at the joint: it is a motor bogie when either car sets its end to Motor (set Motor on the car that carries its traction equipment, Trailer on the other). A variant used more than once (e.g. A and A\' turned round) applies its setting at every joint where it appears.</p>' : ''}
         ${F('Doors per side', 'doorsPerSide', 'num')}${F('Door pitch in car', 'doorPitch', 'num', { unit: 'mm' })}
         ${F('END 2 coupler face → nearest door centre', 'doorRearOffset', 'num', { unit: 'mm', wide: true })}
         ${ML ? F('Seating class', 'seatClass', 'select', { re: true, options: [['std', 'Standard class'], ['first', '1st class'], ['mixed', '1st class from END 1, then standard']] })
@@ -351,7 +354,14 @@
     const B = lay.bogieInfo;
     if (!B.length) return 'Suspended module: no bogie; carried by the neighbouring modules through the articulation joints.';
     const d = B.map(bg => `${bg.motor ? 'motor' : 'trailer'} bogie ${bg.end === 0 ? 'at the car centre' : bg.shared ? `shared at the END ${bg.end} joint` : `at END ${bg.end}`}`).join(', ');
-    return `${B.length} bogie${B.length > 1 ? 's' : ''}: ${d}${B.length >= 2 ? ` · ${Math.round(lay.bc)} mm apart` : ''} · ${lay.axles} axle${lay.axles === 1 ? '' : 's'} for the axle load.`;
+    let jt = '';
+    if (B.some(bg => bg.shared)) {
+      // what the shared bogies of this variant are in the train (a shared bogie is Motor when either car sets it)
+      let R = null; try { R = TLT.compute(cfg); } catch (e) { /* */ }
+      const J = R && R.form.joints ? R.form.joints.filter(j => j.a.type.name === t.name || j.b.type.name === t.name) : [];
+      if (J.length) jt = ' In the train: ' + J.map(j => `joint ${j.a.label}–${j.b.label} ${j.motor ? `MOTOR (set by ${j.by.map(q => q.label).join(' + ')})` : 'TRAILER'}`).join(' · ') + '.';
+    }
+    return `${B.length} bogie${B.length > 1 ? 's' : ''}: ${d}${B.length >= 2 ? ` · ${Math.round(lay.bc)} mm apart` : ''} · ${lay.axles} axle${lay.axles === 1 ? '' : 's'} for the axle load.${jt}`;
   }
   function seatFitHint(t) {
     let lay = null; try { lay = TLT.layoutCar(t, cfg); } catch (e) { return ''; }
@@ -363,7 +373,7 @@
   }
 
   /* Interior items editor (wheelchair spaces, electrical cabinets, seat limits) */
-  const ITEM_KINDS_BASE = [['wheelchair', 'Wheelchair space'], ['bicycle', 'Bicycle space'], ['folding', 'Folding seats'], ['cabinet', 'Electrical cabinet'], ['max', 'Seat limit'], ['none', 'No seats']];
+  const ITEM_KINDS_BASE = [['wheelchair', 'Wheelchair space'], ['bicycle', 'Bicycle space'], ['folding', 'Folding seats'], ['cabinet', 'Electrical cabinet'], ['max', 'Seat limit'], ['none', 'No seats'], ['transverse', 'Transverse seats (this bay side)'], ['longitudinal', 'Longitudinal seats (this bay side)']];
   const itemKinds = () => (TLT.productType(cfg) === 'mainline' ? ITEM_KINDS_BASE.concat([['toilet', 'Toilet (standard)'], ['toiletPrm', 'Toilet (PRM)']]) : ITEM_KINDS_BASE);
   const PLACES = [['door', 'Next to door'], ['end1', 'END 1 side of bay'], ['middle', 'Middle of bay'], ['end2', 'END 2 side of bay']];
   function interiorItemsHtml(t, i) {
@@ -397,9 +407,10 @@
           : `<div class="row2 c2">${plc}${stand}</div><p class="hint" style="margin:4px 0 0">${TLT.num(cfg.interior.wcLength, 1300)} × ${TLT.num(cfg.interior.wcWidth, 700)} mm, Ø${TLT.num(cfg.interior.wcTurning, 1500)} circle (Interior rules)</p>`;
       }
       if (it.kind === 'max') h += `<div class="row2">${inp(idb + '-n', base + '.n', it.n, 'Max. seats per side', 'pax')}</div>`;
+      if (it.kind === 'transverse' || it.kind === 'longitudinal') h += `<p class="hint" style="margin:4px 0 0">Seats on this bay side are ${it.kind}, whatever the train-wide Seating setting (mixed seating). Combine with a seat limit to cap them.</p>`;
       h += '</div>';
     });
-    h += `<div class="additems"><button class="btn small" data-additem="${i}:wheelchair">+ Wheelchair space</button><button class="btn small" data-additem="${i}:bicycle">+ Bicycle space</button><button class="btn small" data-additem="${i}:folding">+ Folding seats</button><button class="btn small" data-additem="${i}:cabinet">+ Electrical cabinet</button><button class="btn small" data-additem="${i}:max">+ Seat limit</button>${TLT.productType(cfg) === 'mainline' ? `<button class="btn small" data-additem="${i}:toilet">+ Toilet</button><button class="btn small" data-additem="${i}:toiletPrm">+ PRM toilet</button>` : ''}</div></div>`;
+    h += `<div class="additems"><button class="btn small" data-additem="${i}:wheelchair">+ Wheelchair space</button><button class="btn small" data-additem="${i}:bicycle">+ Bicycle space</button><button class="btn small" data-additem="${i}:folding">+ Folding seats</button><button class="btn small" data-additem="${i}:cabinet">+ Electrical cabinet</button><button class="btn small" data-additem="${i}:max">+ Seat limit</button><button class="btn small" data-additem="${i}:transverse">+ Seat orientation</button>${TLT.productType(cfg) === 'mainline' ? `<button class="btn small" data-additem="${i}:toilet">+ Toilet</button><button class="btn small" data-additem="${i}:toiletPrm">+ PRM toilet</button>` : ''}</div></div>`;
     return h;
   }
   function interiorGuide() {
@@ -426,6 +437,7 @@
         <li><b>Electrical cabinet</b>: give label, length, depth and height. It is drawn and dimensioned on the layout, removed from the standing area, and seats fill the rest of the bay.</li>
         <li><b>Placement</b>: next to the door (default), END 1 side, middle or END 2 side of the bay.</li>
         <li><b>Seat limit / No seats</b> caps the seats on that bay side.</li>
+        <li><b>Seat orientation</b> (transverse / longitudinal) sets the seats of one bay side against the train-wide Seating setting, for mixed layouts (e.g. 2+2 facing bays in the front area, longitudinal elsewhere).</li>
       </ul></div>`;
   }
 
@@ -663,9 +675,10 @@
     ['Interior', 'Seat depth', 'interior.seatDepth', 'num', 'mm'], ['Interior', 'Foot zone in front of seats', 'interior.footZone', 'num', 'mm'],
     ['Interior', 'Clearance at doors', 'interior.doorClearance', 'num', 'mm'], ['Interior', 'Clearance at end wall / cab', 'interior.endClearance', 'num', 'mm'],
     ['Interior', 'Min. door clearance (fixed seats per bay)', 'interior.minDoorClearance', 'num', 'mm'],
-    ['Interior', 'Transverse: seats per side', 'interior.transSeatsPerSide', 'num'], ['Interior', 'Transverse seat depth', 'interior.transSeatDepth', 'num', 'mm'], ['Interior', 'Legroom, facing seats', 'interior.transLegroom', 'num', 'mm'],
+    ['Interior', 'Transverse seat width / pax (0 = seat width)', 'interior.transSeatWidth', 'num', 'mm'], ['Interior', 'Transverse: seats per side', 'interior.transSeatsPerSide', 'num'], ['Interior', 'Transverse seat depth', 'interior.transSeatDepth', 'num', 'mm'], ['Interior', 'Legroom, facing seats', 'interior.transLegroom', 'num', 'mm'],
     ['Interior', 'Wheelchair space length', 'interior.wcLength', 'num', 'mm'], ['Interior', 'Wheelchair space width', 'interior.wcWidth', 'num', 'mm'],
     ['Interior', 'Turning circle diameter', 'interior.wcTurning', 'num', 'mm'], ['Interior', 'Min. aisle (check)', 'interior.minAisle', 'num', 'mm'],
+    ['Interior', 'Ceiling height above floor (cross-section)', 'interior.ceilingHeight', 'num', 'mm'], ['Interior', 'Overhead handrail height (cross-section)', 'interior.handrailHeight', 'num', 'mm'],
     ['Interior', 'Count wheelchair space as standing area', 'interior.wcAsStanding', 'bool'],
     ['Interior', 'Small standing pockets (not counted)', 'interior.standPocket', ['300x300', '400x300', 'custom', 'off']],
     ['Interior', 'Custom pocket size along car', 'interior.standPocketW', 'num', 'mm'], ['Interior', 'Custom pocket size across car', 'interior.standPocketD', 'num', 'mm'],
@@ -684,13 +697,14 @@
     ['support1', 'END 1 support', ['own', 'shared', 'none']], ['support2', 'END 2 support', ['own', 'shared', 'none']], ['centreBogie', 'Centre bogie', 'bool'],
     ['couplerLength', 'Length over couplers / joints (mm)', 'num'], ['bodyLength', 'Body length (mm)', 'num'],
     ['cabLength', 'END 1 cab length (mm)', 'num'], ['cabLength2', 'END 2 cab length (mm)', 'num'], ['bogieCentres', 'Bogie centres (mm)', 'num'],
+    ['bogie1', 'END 1 bogie', ['motor', 'trailer']], ['bogieC', 'Centre bogie type', ['motor', 'trailer']], ['bogie2', 'END 2 bogie', ['motor', 'trailer']],
     ['motorBogies', 'Motor bogies', ['0', '1', '1e1', '2', '3']], ['doorsPerSide', 'Doors per side', 'num'], ['doorPitch', 'Door pitch (mm)', 'num'],
     ['doorRearOffset', 'END 2 coupler face to nearest door centre (mm)', 'num'], ['seatsPerBay', 'Seats between two doors (blank = auto)', 'num'],
     ['seatClass', 'Seating class (mainline)', ['std', 'first', 'mixed']], ['firstLength', '1st class length from END 1 (mm)', 'num'],
     ['specSeats', 'Seated passengers target', 'num'], ['specStanding', 'Standees target', 'num'], ['tare', 'Tare mass AW0 (t)', 'num'],
     ['pantos', 'Pantographs per car (target)', 'num'], ['ccd', 'CCD shoes per car', 'num'],
   ];
-  const ITEM_COLS = [['car', 'Variant', 'text'], ['kind', 'Item', ['wheelchair', 'bicycle', 'folding', 'cabinet', 'max', 'none', 'toilet', 'toiletPrm']], ['bay', 'Bay (0 = END 1)', 'num'],
+  const ITEM_COLS = [['car', 'Variant', 'text'], ['kind', 'Item', ['wheelchair', 'bicycle', 'folding', 'cabinet', 'max', 'none', 'toilet', 'toiletPrm', 'transverse', 'longitudinal']], ['bay', 'Bay (0 = END 1)', 'num'],
     ['side', 'Side', ['A', 'B', 'AB']], ['place', 'Placement', ['door', 'end1', 'middle', 'end2']], ['length', 'Length (mm)', 'num'], ['depth', 'Depth (mm)', 'num'],
     ['height', 'Height (mm)', 'num'], ['label', 'Label', 'text'], ['n', 'Max. seats per side', 'num'], ['stand', 'Standing area (yes / no / blank = default)', ['yes', 'no']]];
   const CASE_COLS = [['name', 'Load case', 'text'], ['kind', 'Type', ['seated', 'density', 'kgm2', 'factor']], ['density', 'Density (pax/m², or kg/m² for kgm2)', 'num'], ['factor', 'Factor', 'num'],
@@ -720,9 +734,10 @@
       .concat(VAR_COLS.map(c => ['Car variants', c[1], allowed(c)]),
         [['Car variants', 'END 1 / END 2', 'cab = driving cab, aux = auxiliary driving desk, gangway, wall = end wall without gangway, artic = articulation joint']],
         [['Car variants', 'Supports', 'own = own bogie, shared = Jacobs bogie at the joint, none = no bogie (overhang / carried by the joint)']],
-        [['Car variants', 'Motor bogies', '1 = one motor bogie at the END 2 side, 1e1 = one at the END 1 side']],
+        [['Car variants', 'END 1 / Centre / END 2 bogie', 'motor / trailer for each bogie the car has (own or shared). A shared (Jacobs) bogie is a motor bogie when either car at the joint sets it to motor.']],
+        [['Car variants', 'Motor bogies', 'Older files only; read only when the three bogie columns are blank: 1 = one motor bogie at the END 2 side, 1e1 = one at the END 1 side']],
         ITEM_COLS.map(c => ['Interior items', c[1], allowed(c)]),
-        [['Interior items', 'Item', 'wheelchair, cabinet (electrical cabinet), max (seat limit), none (no seats), toilet, toiletPrm (mainline)']],
+        [['Interior items', 'Item', 'wheelchair, cabinet (electrical cabinet), max (seat limit), none (no seats), toilet, toiletPrm (mainline), transverse / longitudinal (seat orientation of that bay side — mixed seating; Placement, sizes and seats are not used)']],
         CASE_COLS.map(c => ['Load cases', c[1], allowed(c)]));
     const wi = X.utils.aoa_to_sheet(ins); wi['!cols'] = [{ wch: 16 }, { wch: 44 }, { wch: 110 }];
     X.utils.book_append_sheet(wb, wi, 'Instructions');
@@ -1175,6 +1190,8 @@
     o.carTypes.forEach(t => {
       delete t.equipment; if (!t.support1) t.support1 = 'own'; if (!t.support2) t.support2 = 'own';
       const E = TLT.carEnds(t); t.end1 = E.e1; t.end2 = E.e2; t.cab = E.cab1 || E.cab2; if (t.centreBogie == null) t.centreBogie = false;
+      // motor / trailer per bogie (older inputs: from the motor-bogie count)
+      const BF = TLT.bogieFlags(t); TLT.BOGIE_KEYS.forEach(k => { t[k] = BF[k]; }); t.motorBogies = '';
       if (!Array.isArray(t.interiorItems)) {
         t.interiorItems = TLT.parseBays(t.bays).rules.map(q => q.kind === 'wheelchair' ? { kind: 'wheelchair', bay: q.bay, side: q.side, place: 'door' }
           : q.kind === 'cabinet' ? { kind: 'cabinet', bay: q.bay, side: q.side, place: 'door', label: q.label, length: q.length, depth: Number.isFinite(q.depth) ? q.depth : 600, height: '' }
@@ -1288,6 +1305,7 @@
           : kind === 'toilet' ? { kind, bay: 1, side: 'A', place: 'end1', length: 1100, depth: 1200 }
           : kind === 'toiletPrm' ? { kind, bay: 1, side: 'A', place: 'end1', length: 2100, depth: 1800 }
           : kind === 'cabinet' ? { kind, bay: 0, side: 'A', place: 'end1', label: 'ELEC. CABINET', length: 900, depth: 600, height: 1900 }
+          : kind === 'transverse' ? { kind: cfg.interior.seatType === 'transverse' ? 'longitudinal' : 'transverse', bay: 0, side: 'AB' }
             : { kind, bay: 1, side: 'A', n: 3 });
         renderPane1(); markChanged(); return;
       }

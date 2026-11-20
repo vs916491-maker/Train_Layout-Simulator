@@ -15,7 +15,7 @@
     return Number.isFinite(n) ? n : d;
   };
   TLT.num = num;
-  TLT.VERSION = '1.4.0';   // keep in step with CHANGELOG.md and the git tag
+  TLT.VERSION = '1.7.0';   // keep in step with CHANGELOG.md and the git tag
 
   /* ---------------- Formation ---------------- */
   /* Formation text with the multiple-unit factor: unit, then the unit turned round, alternately (DM-T-M-T | T'-M'-T'-DM') */
@@ -184,7 +184,7 @@
       src = p.rules.map(q => ({ kind: q.kind === 'max' ? (q.n === 0 ? 'none' : 'max') : q.kind, bay: q.bay, side: q.side, place: 'door', length: q.length, depth: q.depth, label: q.label, n: q.n }));
     }
     src.forEach(q => {
-      const kind = ['wheelchair', 'bicycle', 'folding', 'cabinet', 'max', 'none', 'toilet', 'toiletPrm'].includes(q.kind) ? q.kind : 'cabinet';
+      const kind = ['wheelchair', 'bicycle', 'folding', 'cabinet', 'max', 'none', 'toilet', 'toiletPrm', 'transverse', 'longitudinal'].includes(q.kind) ? q.kind : 'cabinet';
       const standOf = v => (/^(y|yes|true|1)$/i.test(String(v)) || v === true ? true : /^(n|no|false|0)$/i.test(String(v)) || v === false ? false : null);
       if (kind === 'toilet' || kind === 'toiletPrm') {
         const prm = kind === 'toiletPrm';
@@ -196,6 +196,8 @@
       const bay = Math.round(num(q.bay, 0));
       const side = String(q.side || 'A').toUpperCase();
       const sides = side === 'AB' || side === 'BA' ? ['A', 'B'] : side === 'B' ? ['B'] : ['A'];
+      // seat orientation of one bay side (mixed seating): overrides the train-wide Seating setting
+      if (kind === 'transverse' || kind === 'longitudinal') { out.push({ kind: 'orient', orient: kind, bay, sides, place: 'door', n: 0 }); return; }
       const it = { kind: kind === 'none' ? 'max' : kind, bay, sides, place: ['door', 'end1', 'middle', 'end2'].includes(q.place) ? q.place : 'door',
         length: num(q.length, kind === 'bicycle' ? 1800 : 900), depth: num(q.depth, kind === 'bicycle' ? 700 : 600), height: num(q.height, NaN),
         label: String(q.label || (kind === 'bicycle' ? 'BICYCLE' : kind === 'folding' ? 'FOLDING SEATS' : 'ELEC. CABINET')),
@@ -396,6 +398,24 @@
     };
   };
 
+  /* Motor / trailer per bogie position of a car variant: { bogie1, bogieC, bogie2 } = 'motor' | 'trailer'.
+   * Explicit settings win; older inputs give a count of motor bogies counted from END 2 ('1e1' = one at END 1). */
+  TLT.BOGIE_KEYS = ['bogie1', 'bogieC', 'bogie2'];
+  TLT.bogieFlags = function (type) {
+    const ok = v => v === 'motor' || v === 'trailer';
+    if (TLT.BOGIE_KEYS.some(k => ok(type[k]))) return { bogie1: ok(type.bogie1) ? type.bogie1 : 'trailer', bogieC: ok(type.bogieC) ? type.bogieC : 'trailer', bogie2: ok(type.bogie2) ? type.bogie2 : 'trailer' };
+    const E = TLT.carEnds(type);
+    const pos = [];
+    if (E.s1 !== 'none') pos.push('bogie1');
+    if (E.centre && (E.s1 === 'none' || E.s2 === 'none')) pos.push('bogieC');
+    if (E.s2 !== 'none') pos.push('bogie2');
+    const e1 = String(type.motorBogies) === '1e1';
+    const n = e1 ? 1 : Math.max(0, Math.min(pos.length, Math.round(num(type.motorBogies, 0))));
+    const f = { bogie1: 'trailer', bogieC: 'trailer', bogie2: 'trailer' };
+    pos.forEach((k, i) => { if (e1 ? i === 0 : i >= pos.length - n) f[k] = 'motor'; });
+    return f;
+  };
+
   /* ---------------- Car geometry & interior ---------------- */
   TLT.layoutCar = function (type, cfg) {
     const c = cfg.common, r = cfg.interior;
@@ -416,10 +436,9 @@
     }
     if (!h2) bogieInfo.push({ x: sh2 ? Lc : mid + bcIn / 2, end: 2, shared: sh2 });
     bogieInfo.sort((p, q) => p.x - q.x);
-    // motor bogies counted from END 2 ('1e1' = one motor bogie at the END 1 side)
-    const e1Motor = String(type.motorBogies) === '1e1';
-    const nMot = e1Motor ? 1 : Math.max(0, Math.min(bogieInfo.length, Math.round(num(type.motorBogies, 0))));
-    bogieInfo.forEach((bg, i) => { bg.motor = e1Motor ? i === 0 : i >= bogieInfo.length - nMot; });
+    // motor / trailer per bogie: END 1 bogie, centre bogie, END 2 bogie (own or shared); older inputs: motor-bogie count
+    const BF = TLT.bogieFlags(type);
+    bogieInfo.forEach(bg => { bg.motor = BF[bg.end === 1 ? 'bogie1' : bg.end === 2 ? 'bogie2' : 'bogieC'] === 'motor'; bg.ownMotor = bg.motor; });
     const bogies = bogieInfo.map(bg => bg.x);
     const bc = bogies.length >= 2 ? bogies[bogies.length - 1] - bogies[0] : 0;
     const axles = bogieInfo.reduce((a, bg) => a + (bg.shared ? 1 : 2), 0);
@@ -478,7 +497,11 @@
     const seatW = num(r.seatWidth, 430), seatD = num(r.seatDepth, 550), foot = num(r.footZone, 300);
     const dClr = num(r.doorClearance, 330), eClr = num(r.endClearance, 0);
     const ML = TLT.mainlineCfg(cfg);
-    const trans = !ML.on && r.seatType === 'transverse';
+    // Seat orientation: train-wide setting, overridden per bay side by 'transverse' / 'longitudinal' interior items (mixed seating)
+    const transG = !ML.on && r.seatType === 'transverse';
+    const orientOf = (bi, sd) => { if (ML.on) return false; const o = itemsIn.items.filter(q => q.kind === 'orient' && q.bay === bi && q.sides.includes(sd)).pop(); return o ? o.orient === 'transverse' : transG; };
+    let trans = transG;
+    const tSeatW = num(r.transSeatWidth, 0) > 0 ? num(r.transSeatWidth, 0) : seatW;
     const tPerSide = Math.max(1, Math.round(num(r.transSeatsPerSide, 2)));
     const tDepth = num(r.transSeatDepth, 450);
     const tLeg = num(r.transLegroom, 600);
@@ -546,6 +569,7 @@
 
     bays.forEach(bay => {
       ['A', 'B'].forEach(side => {
+        trans = orientOf(bay.i, side);
         let ca = clr(bay.k0), cb = clr(bay.k1);
         const inner = bay.k0 === 'door' && bay.k1 === 'door';
         if (inner && nSel > 0 && !trans) {
@@ -561,7 +585,7 @@
             if (vz.x1 >= b - EPS && vz.x0 < b) b = Math.min(b, vz.x0 - 80);
           });
         }
-        const mine = itemsIn.items.filter(q => q.bay === bay.i && q.sides.includes(side));
+        const mine = itemsIn.items.filter(q => q.kind !== 'orient' && q.bay === bay.i && q.sides.includes(side));
         if (b - a <= EPS) {
           mine.filter(q => q.kind !== 'max').forEach(q => warn.push(`${type.name}: B${bay.i} side ${side} has no free length (${Math.round(bay.x1 - bay.x0)} mm bay${vestibules.length ? ', vestibule' : ''}) for the ${nameOf(q)}.`));
           return;
@@ -613,7 +637,7 @@
             const len = g * groupL, x0 = f0 + (avail - len) / 2;
             const groups = [];
             for (let k = 0; k < g; k++) groups.push({ x0: x0 + k * groupL, x1: x0 + (k + 1) * groupL });
-            seatBlocks.push({ side, x0, x1: x0 + len, n: g * 2 * tPerSide, bay: bay.i, depth: tPerSide * seatW, foot: 0, groups, trans: true });
+            seatBlocks.push({ side, x0, x1: x0 + len, n: g * 2 * tPerSide, bay: bay.i, depth: tPerSide * tSeatW, foot: 0, groups, trans: true, sw: tSeatW });
             left -= g * 2 * tPerSide;
           }
         });
@@ -872,6 +896,30 @@
       });
       return { name: cs.name, kind: cs.kind, seated, standing, total, mass, axleMax, ok: axleMax <= maxAxle + 1e-9 };
     });
+    // Running gear of the train: a shared (Jacobs) bogie is one bogie for the two cars at the joint and is a
+    // motor bogie when either car sets its end to Motor. Per car: c.bogieMotor (index = lay.bogieInfo);
+    // per variant: lay.bogieShow (motored in any car of the formation) for the car sheets.
+    const physEnd = (c, side) => (side === 'R') !== !!c.flip ? 2 : 1;   // car end at the right / left of the train
+    form.cars.forEach(c => { c.bogieMotor = lay(c).bogieInfo.map(bg => bg.motor); });
+    let nBog = 0, nMot = 0;
+    const joints = [];
+    form.cars.forEach((c, i) => {
+      const L = lay(c);
+      L.bogieInfo.forEach((bg, k) => {
+        if (!bg.shared) { nBog++; if (c.bogieMotor[k]) nMot++; return; }
+        const left = bg.end === physEnd(c, 'L');
+        const nb = left ? form.cars[i - 1] : form.cars[i + 1];
+        const kn = nb ? lay(nb).bogieInfo.findIndex(b2 => b2.shared && b2.end === physEnd(nb, left ? 'R' : 'L')) : -1;
+        if (kn < 0) { nBog++; if (c.bogieMotor[k]) nMot++; if (nb) warnings.push(`Cars ${c.no} and ${nb.no}: shared (Jacobs) bogie at car ${c.no} has no shared end on car ${nb.no}.`); return; }
+        if (left) return;                                  // counted once, from the car on its left
+        const m = c.bogieMotor[k] || nb.bogieMotor[kn];
+        c.bogieMotor[k] = m; nb.bogieMotor[kn] = m;
+        nBog++; if (m) nMot++;
+        joints.push({ a: c, b: nb, motor: m, by: [c, nb].filter((q, j) => lay(q).bogieInfo[j ? kn : k].ownMotor) });
+      });
+    });
+    used.forEach(n => { const L = layouts.get(n); L.bogieShow = L.bogieInfo.map((bg, k) => form.cars.some(c => c.type.name === n && c.bogieMotor[k])); });
+    form.bogieCount = nBog; form.motorBogieCount = nMot; form.joints = joints;
     const wcCount = form.cars.reduce((s, c) => s + layouts.get(c.type.name).wheelchairs.length, 0);
     // HVAC count checks against the equipment list
     const hv = cfg.hvac || {};

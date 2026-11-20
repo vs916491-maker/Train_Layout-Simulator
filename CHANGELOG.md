@@ -2,6 +2,28 @@
 
 Versions follow [Semantic Versioning](https://semver.org/): **MAJOR** for changes that break saved inputs or Excel templates, **MINOR** for new features, **PATCH** for fixes. The version is shown in the app header and on every PDF sheet (`TLT.VERSION` in `js/engine.js`); each release is a git tag `vX.Y.Z`.
 
+## [1.7.0] – 2026-11-20
+- **Mixed seating:** new interior items **Transverse seats** / **Longitudinal seats** (button *+ Seat orientation*) set the seat orientation of one bay side (A, B or A + B) against the train-wide *Seating* setting. Seats, folding seats, seat limits and the aisle check follow the orientation of each bay side.
+- **Transverse seat width** (Interior rules, Excel `interior.transSeatWidth`; 0 = seat width) — e.g. narrower 2+2 seats to keep a 700 mm aisle while longitudinal seats stay at 480 mm.
+- **Cross-section sheet with mixed seating:** cuts a car that has transverse seats; B-B shows each side as it is at the cut (transverse row, longitudinal seat or none) and an extra section shows the longitudinal seats (up to four sections A-A … D-D). Key-dimension table and capacity sheet state *Mixed* seating.
+- Excel *Interior items* accepts `transverse` / `longitudinal`.
+- No change to existing inputs or results: all presets give the same capacities and drawings as 1.6.1 (the capacity sheet now also states the transverse seat width).
+
+## [1.6.1] – 2026-11-20
+- Each car-variant card shows what every shared (Jacobs) bogie becomes in the train and which car sets it (e.g. *joint B–A' MOTOR (set by A')*). A variant used more than once (A and A' turned round) applies its END setting at every joint where it appears.
+
+## [1.6.0] – 2026-11-20
+- **Motor / trailer per bogie position:** new car-variant inputs **END 1 bogie**, **Centre bogie type** and **END 2 bogie** (`motor` / `trailer`; Excel columns *END 1 bogie*, *Centre bogie type*, *END 2 bogie*). *Motor bogies* is still read when these are blank.
+- Shared (Jacobs) bogies are merged per joint in the train: counted once, and motor if either car sets it to motor. Train totals show the true bogie count (e.g. "3 motor + 1 trailer bogies"); a warning appears if a shared end has no shared partner.
+
+## [1.5.0] – 2026-11-20
+- **Cross-section sheet** in Train Layouts & Capacity, right after *Train layout* (tab **2 · Cross-section**; also in the PDF and DXF). Typical sections through the first intermediate car (else the first car), viewed towards END 1, side A left:
+  - **A-A** vestibule at a door – door openings, vertical poles, overhead handrails, standing passenger, standing width at the reference height, door clear height;
+  - **B-B** seat bay – transverse seats seen from the front with seat-block widths and the aisle (checked against *Min. aisle*), or longitudinal seats in profile with the clear width between seat fronts;
+  - **C-C** (transverse seating only) tip-up seats / multi-purpose area, or the wheelchair space when there are no tip-up seats.
+  - Shell from the selected car body section (Type 1…5) with the wall and floor cut in grey; roof and underframe equipment cut at the same position along the car (from the equipment list); rails; floor / roof / max. height above rail, ceiling height, body and interior widths; key-dimension table.
+- New Interior rules: **Ceiling height above floor** (default 2,200 mm) and **Overhead handrail height** (default 1,950 mm); Excel `interior.ceilingHeight`, `interior.handrailHeight`. Older inputs use the defaults.
+
 ## [1.4.0] – 2026-11-17
 - **Small standing pockets** (Interior rules): free floor where a 300 × 300 mm (default), 400 × 300 mm or custom rectangle (either way round) does not fit is no longer counted as standing area — strips behind seat backs, gaps between seats / cabinets / wheelchair or bicycle spaces and the draft screens. Draft screens now split the floor for this test.
 - **Door pillar zone** (door edge to draft screen) excluded when the rule is on; tick *Count door pillar zone as standing area* to keep it.

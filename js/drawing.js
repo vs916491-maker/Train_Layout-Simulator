@@ -17,6 +17,7 @@
     DOOR: { color: '#8e24aa', lw: 0.3, aci: 6 },
     WINDOW: { color: '#1e5bd8', lw: 0.2, aci: 5 },
     BOGIE: { color: '#b3261e', lw: 0.25, aci: 1 },
+    BOGIE_M: { color: '#7f1410', lw: 0.3, aci: 14, fill: '#9b1c14' },
     EQUIP: { color: '#0b6e8a', lw: 0.25, aci: 4, fill: '#e3f2f6' },
     ROOF: { color: '#9a5b12', lw: 0.25, aci: 30, fill: '#f6ead9' },
     SEAT: { color: '#0f7a63', lw: 0.2, aci: 3, fill: '#d5efe7' },
@@ -267,17 +268,19 @@
 
     // Bogies (own, shared or centre) and third-rail shoe gear
     TLT.shoeLayout(lay, cfg).forEach(xs => { v.rect(xs - 260, 90, xs + 260, 180, 'BOGIE', { fill: '#5a5a5a' }); v.line(xs, 180, xs, D / 2 - 80, 'BOGIE'); });
-    lay.bogieInfo.forEach(bg => {
-      const xb = bg.x, motor = bg.motor;
-      v.rect(xb - wb / 2 - 420, D / 2 - 80, xb + wb / 2 + 420, D / 2 + 300, 'BOGIE', { fill: '#fbe9e7' });
-      v.rect(xb - 350, D / 2 + 300, xb + 350, sole, 'BOGIE');
+    // motor bogies: dark red frame and motor blocks (layer BOGIE_M); trailer bogies light. A shared bogie follows
+    // the train (motor when either car at the joint sets it to Motor): o.motor per car, else lay.bogieShow.
+    lay.bogieInfo.forEach((bg, i) => {
+      const xb = bg.x, motor = o.motor ? !!o.motor[i] : lay.bogieShow ? !!lay.bogieShow[i] : bg.motor;
+      v.rect(xb - wb / 2 - 420, D / 2 - 80, xb + wb / 2 + 420, D / 2 + 300, motor ? 'BOGIE_M' : 'BOGIE', { fill: motor ? '#d98a82' : '#fbe9e7' });
+      v.rect(xb - 350, D / 2 + 300, xb + 350, sole, motor ? 'BOGIE_M' : 'BOGIE');
       [-1, 1].forEach(k => {
         v.circle(xb + k * wb / 2, D / 2, D / 2, 'BOGIE', { fill: '#ffffff' });
         v.circle(xb + k * wb / 2, D / 2, D * 0.12, 'BOGIE');
-        if (motor) v.rect(xb + k * (wb / 2 - 520) - 260, D / 2 - 40, xb + k * (wb / 2 - 520) + 260, D / 2 + 260, 'BOGIE', { fill: '#f3c6c0' });
+        if (motor) v.rect(xb + k * (wb / 2 - 520) - 260, D / 2 - 40, xb + k * (wb / 2 - 520) + 260, D / 2 + 260, 'BOGIE_M', { fill: true });
       });
       v.line(xb, -150, xb, sole + 250, 'CENTER');
-      if (detail) v.text(xb, D / 2 + 110, motor ? 'M' : 'T', 2.2, { anchor: 'middle', valign: 'middle', bold: true, ly: 'BOGIE', color: '#b3261e' });
+      v.text(xb, D / 2 + 110, motor ? 'M' : 'T', detail ? 2.2 : 1.5, { anchor: 'middle', valign: 'middle', bold: true, ly: motor ? 'BOGIE_M' : 'BOGIE', color: motor ? '#ffffff' : '#b3261e' });
     });
 
     // Equipment
@@ -498,7 +501,7 @@
         const fy = b.side === 'A' ? hi - b.depth - b.foot : -hi + b.depth + b.foot;
         if (b.foot > 0) v.line(b.x0, fy, b.x1, fy, 'FOOT');
       } else {
-        const sw = num(r.seatWidth, 430), td = num(r.transSeatDepth, 450);
+        const sw = b.sw || num(r.seatWidth, 430), td = num(r.transSeatDepth, 450);
         const per = Math.round(b.depth / sw);
         b.groups.forEach(g => {
           [[g.x0, g.x0 + td], [g.x1 - td, g.x1]].forEach(([a, z]) => {
@@ -904,6 +907,7 @@
     const sheets = [];
     if (!R.form.cars.length) return sheets;
     sheets.push(trainSheet(R, paper));
+    sheets.push(crossSectionSheet(R, paper));
     // One layout sheet per car variant used in the formation, in formation order
     R.used.forEach(name => {
       const lay = R.layouts.get(name);
@@ -968,7 +972,7 @@
         const lay = R.layouts.get(car.type.name);
         const cx = car.x0 - x0row;
         v.setTf(cx, car.flip, lay.Lc, false, 0);
-        drawCarSide(v, lay, cfg, { detail: false });
+        drawCarSide(v, lay, cfg, { detail: false, motor: car.bogieMotor });
         v.setTf(cx, car.flip, lay.Lc, true, planY);
         drawCarPlan(v, lay, cfg, { detail: false });
         v.clearTf();
@@ -1018,11 +1022,11 @@
     const tRows = R.form.cars.map(car => {
       const lay = R.layouts.get(car.type.name);
       const t = car.type;
-      const bog = lay.bogieInfo.length ? lay.bogieInfo.map(bg => (bg.motor ? 'M' : 'T') + (bg.shared ? ' (Jacobs)' : bg.end === 0 ? ' (centre)' : '')).join(' + ') : 'suspended';
+      const bog = lay.bogieInfo.length ? (car.flip ? lay.bogieInfo.map((bg, k) => [bg, k]).reverse() : lay.bogieInfo.map((bg, k) => [bg, k])).map(([bg, k]) => (car.bogieMotor[k] ? 'M' : 'T') + (bg.shared ? ' (Jacobs' + (car.bogieMotor[k] && !bg.ownMotor ? ', driven by adjacent car' : '') + ')' : bg.end === 0 ? ' (centre)' : '')).join(' + ') : 'suspended';
       const cabTxt = lay.cab1 && lay.cab2 ? 'Both' : lay.cab1 ? 'END 1' : lay.cab2 ? 'END 2' : lay.ends.e1 === 'aux' || lay.ends.e2 === 'aux' ? 'Aux.' : '—';
       return [car.no, car.label, car.unit + 1, (t.desc || '') + (car.flip ? ' (reversed)' : ''), cabTxt, i0(lay.Lc), i0(lay.Lb), lay.bogieInfo.length >= 2 ? i0(lay.bc) : '—', lay.doors.length, bog];
     });
-    tRows.push(['', '', '', 'TRAIN TOTAL', R.form.cars.reduce((a, c) => { const l = R.layouts.get(c.type.name); return a + (l.cab1 ? 1 : 0) + (l.cab2 ? 1 : 0); }, 0), i0(R.form.length), '', '', '', `${R.form.cars.reduce((a, c) => a + R.layouts.get(c.type.name).motorBogies, 0)} motor bogies`]);
+    tRows.push(['', '', '', 'TRAIN TOTAL', R.form.cars.reduce((a, c) => { const l = R.layouts.get(c.type.name); return a + (l.cab1 ? 1 : 0) + (l.cab2 ? 1 : 0); }, 0), i0(R.form.length), '', '', '', `${R.form.motorBogieCount} motor + ${R.form.bogieCount - R.form.motorBogieCount} trailer bogies`]);
     const drv = R.form.cars.find(cc => TLT.hasCab(cc.type));
     const colW = drv ? Math.min(150, Math.max(105, PW * 0.27)) : 0;
     const fac = (PW - 40 - (colW ? colW + 8 : 0)) / cols.reduce((a, c) => a + c.w, 0);
@@ -1055,7 +1059,8 @@
     legend(p, 85, yy - 5, [
       { ly: 'EQUIP', label: 'Underframe equipment', kind: 'box' },
       { ly: 'ROOF', label: 'Roof equipment / pantograph', kind: 'box' },
-      { ly: 'BOGIE', label: 'Bogie (darker blocks = motored)', kind: 'box' },
+      { ly: 'BOGIE_M', label: 'Motor bogie (M, dark red)', kind: 'fill' },
+      { ly: 'BOGIE', label: 'Trailer bogie (T)', kind: 'box' },
       { ly: 'CENTER', label: 'Centre line', kind: 'line' },
     ]);
     const notes = [
@@ -1067,6 +1072,223 @@
     const noteW = (drv ? PW - 10 - colW - 6 : PW - 20) - 165;
     notes.forEach((t, i) => p.text(165, yy - i * 4.6, trunc(t, i ? 2 : 2.4, noteW), i ? 2 : 2.4, { bold: i === 0 }));
     return { title: `Train formation & vehicle layout (${n} cars)`, short: 'Train layout', size, scale, views, paper: p };
+  }
+
+  /* ---------- Sheet 2: car body cross-sections ----------
+   * Up to three typical sections through one car (the first intermediate car, else the first car):
+   * A-A vestibule at a door (standing passengers, handrails, door opening), B-B through a seat bay,
+   * C-C through tip-up / longitudinal seats when the car has them. Shell outline from the selected
+   * car body section (Type 1…5); roof and underframe equipment cut at the same position along the car.
+   * Section view looking towards END 1, side A on the left (as the front view). */
+  function crossSectionSheet(R, size) {
+    const cfg = R.cfg, c = cfg.common, I = cfg.interior || {};
+    const [PW, PH] = size;
+    const lays = R.used.map(n => R.layouts.get(n));
+    const hasT = l => l.seatBlocks.some(b => b.trans);
+    let lay = lays.find(l => !(l.cab1 || l.cab2)) || lays[0];
+    if (!TLT.mainlineCfg(cfg).on && lays.some(hasT) && !hasT(lay)) lay = lays.find(l => hasT(l) && !(l.cab1 || l.cab2)) || lays.find(hasT);   // mixed seating: cut a car with transverse seats
+    const fh = num(c.floorHeight, 1130), rh = num(c.roofHeight, 3650), mh = Math.max(num(c.maxHeight, 4100), rh);
+    const sole = fh - num(c.mountDepth, 250);
+    const hw = lay.W / 2, wall = num(c.wallThk, 60);
+    const PF = lay.profile || TLT.profileCfg(cfg);
+    const H = rh - fh - 40;                                     // shell height above floor at the centre line
+    const outer = TLT.profileOutline(PF, hw, H);               // right half, z from floor
+    const zTop = H - PF.camber - PF.roofR;                      // start of the roof radius
+    const ceil = Math.min(num(I.ceilingHeight, 2200), H - 150);
+    const hr = num(I.handrailHeight, 1950);
+    const xIn = z => hw - wall - TLT.profileInset(PF, z);      // inner lining face at height z above floor
+    const ML = TLT.mainlineCfg(cfg);
+    const trans = ML.on || (lay.seatBlocks.length ? hasT(lay) : I.seatType === 'transverse');
+    const longToo = !ML.on && trans && lay.seatBlocks.some(b => !b.trans);   // mixed seating in the cut car
+    const seatW = ML.on ? ML.std.seatW : num(I.transSeatWidth, 0) > 0 ? num(I.transSeatWidth, 0) : num(I.seatWidth, 450), seatD = num(I.seatDepth, 450);
+    const seatWL = num(I.seatWidth, 450);
+    const blockAt = (x, side, tr) => lay.seatBlocks.find(b => b.side === side && !!b.trans === tr && x >= b.x0 - 1 && x <= b.x1 + 1);
+    const perSide = ML.on ? ML.std.abreast : [Math.max(1, Math.round(num(I.transSeatsPerSide, 2))), Math.max(1, Math.round(num(I.transSeatsPerSide, 2)))];
+    const DC = lay.doorCfg;
+    const WC = TLT.windowCfg(cfg);
+
+    // cut positions along the car (car-local x from the END 1 coupler face)
+    const best = arr => arr.slice().sort((a, b) => (b.n || 0) - (a.n || 0))[0];
+    const secs = [];
+    secs.push({ id: 'A-A', kind: 'door', title: 'VESTIBULE AT DOOR', x: lay.doors.length ? lay.doors[0] : lay.mid });
+    const tBlocks = lay.seatBlocks.filter(q => ML.on || !!q.trans === trans);
+    // transverse cut: prefer a position with transverse seats on both sides
+    const both = trans && !ML.on ? tBlocks.filter(q => blockAt((q.x0 + q.x1) / 2, q.side === 'A' ? 'B' : 'A', true)) : [];
+    const sb = best(both.length ? both : tBlocks);
+    if (sb) secs.push({ id: 'B-B', kind: trans ? 'trans' : 'long', title: trans ? 'TRANSVERSE SEATS' : 'LONGITUDINAL SEATS', x: (sb.x0 + sb.x1) / 2 });
+    const lb = longToo ? best(lay.seatBlocks.filter(q => !q.trans)) : null;
+    if (lb) secs.push({ id: 'C-C', kind: 'long', title: 'LONGITUDINAL SEATS', x: (lb.x0 + lb.x1) / 2 });
+    const fd = lay.foldings && lay.foldings.length ? lay.foldings[0] : null;
+    if (trans && fd) secs.push({ id: 'C-C', kind: 'fold', title: 'TIP-UP SEATS / MULTI-PURPOSE AREA', x: (fd.x0 + fd.x1) / 2 });
+    else if (trans && lay.wheelchairs.length) secs.push({ id: 'C-C', kind: 'wc', title: 'WHEELCHAIR SPACE', x: (lay.wheelchairs[0].x0 + lay.wheelchairs[0].x1) / 2 });
+    secs.forEach((q, i) => { q.id = ['A-A', 'B-B', 'C-C', 'D-D'][i]; });
+
+    // scale: all sections side by side, heights from below the rail to above the roof equipment
+    const nS = secs.length;
+    const XS = [10, 15, 20, 25, 30, 40, 50, 75, 100, 125, 150, 200];
+    const need = Math.max((nS * (lay.W + 1900)) / (PW - 40), (mh + 900 + 1700) / (PH - 34 - 62));
+    const scale = XS.find(v => v >= need) || Math.ceil(need);
+    const s = scale;
+    const oy = PH - 36 - (mh + 700) / s;                        // paper y of the top of rail
+    const slot = (PW - 40) / nS;
+    const views = [];
+    const p = new View(1, 0, 0);
+    p.text(20, PH - 19, `CAR BODY CROSS-SECTIONS — ${lay.type.name.toUpperCase()} CAR`, 4.2, { bold: true });
+    p.text(20, PH - 24.5, `${PF.label}  ·  body width ${lay.W} mm  ·  floor ${fh} / roof ${rh} / max. ${mh} mm above top of rail  ·  ceiling ${ceil} mm above floor  ·  typical sections, viewed towards END 1`, 2.2, { color: '#444444' });
+
+    // shell polygons
+    const outerPoly = [[-(hw - 120), sole - 40], [-hw, fh]].concat(outer.map(([x, z]) => [-x, z + fh]), outer.slice(0, -1).reverse().map(([x, z]) => [x, z + fh]), [[hw, fh], [hw - 120, sole - 40]]);
+    const zc = Math.min(ceil - 260, zTop - wall);
+    const wallPts = [];
+    for (let z = 0; z < zc; z += 50) wallPts.push([xIn(z), z]);
+    wallPts.push([xIn(zc), zc]);
+    const cove = Math.min(320, xIn(zc) * 0.3);
+    const innerHalf = wallPts.concat([[xIn(zc) - cove, ceil]]);
+    const innerPoly = innerHalf.map(([x, z]) => [-x, z + fh]).concat(innerHalf.slice().reverse().map(([x, z]) => [x, z + fh]));
+    const cutAt = (e, x) => { const xl = lay.mid - e.x; return Math.abs(x - xl) <= e.length / 2 + 1; };
+
+    const standing = (v, x, railX) => {         // standing passenger (1750 mm) seen from the front, one hand on the overhead rail
+      const z = fh, L = { lw: 0.22 };
+      v.circle(x, z + 1640, 105, 'BODY_THIN', Object.assign({ fill: '#ffffff' }, L));
+      v.poly([[x - 215, z + 1450], [x + 215, z + 1450], [x + 175, z + 950], [x - 175, z + 950]], true, 'BODY_THIN', Object.assign({ fill: '#ffffff' }, L));
+      v.poly([[x - 160, z + 950], [x - 130, z + 40], [x - 30, z + 40], [x - 10, z + 900], [x + 10, z + 900], [x + 30, z + 40], [x + 130, z + 40], [x + 160, z + 950]], false, 'BODY_THIN', L);
+      const up = railX < x ? -1 : 1;
+      v.line(x - up * 215, z + 1430, x - up * 265, z + 820, 'BODY_THIN', L);               // arm down
+      v.line(x + up * 215, z + 1430, railX, z + hr - 25, 'BODY_THIN', L);                   // arm up to the rail
+    };
+    const seated = (v, xw, k, d) => {           // seated passenger in profile on a seat against the wall at xw, facing the centre
+      const z = fh, hip = [xw - k * 170, z + 500], sh = [xw - k * 200, z + 1080], knee = [xw - k * (d + 60), z + 520], foot = [xw - k * (d + 120), z];
+      v.circle(sh[0] - k * 10, z + 1280, 105, 'BODY_THIN', { fill: '#ffffff' });
+      v.line(hip[0], hip[1], sh[0], sh[1], 'BODY_THIN', { lw: 0.25 });
+      v.line(hip[0], hip[1], knee[0], knee[1], 'BODY_THIN', { lw: 0.25 });
+      v.line(knee[0], knee[1], foot[0], foot[1], 'BODY_THIN', { lw: 0.25 });
+      v.line(sh[0], sh[1] - 60, knee[0] + k * 80, z + 640, 'BODY_THIN', { lw: 0.25 });
+    };
+    const transSeat = (v, k, n) => {            // transverse seat row seen from the front (seat back of the row ahead behind it)
+      const xw = xIn(450), xa = xw - n * seatW;
+      v.rect(k * xa, fh + 1180, k * xw, fh + 470, 'SEAT', { fill: true });
+      for (let i = 1; i < n; i++) v.line(k * (xw - i * seatW), fh + 470, k * (xw - i * seatW), fh + 1180, 'SEAT');
+      v.rect(k * xa, fh + 400, k * xw, fh + 470, 'SEAT', { fill: true });
+      v.poly([[k * xw, fh + 260], [k * (xa + 150), fh + 330], [k * (xa + 150), fh + 400]], false, 'BODY_THIN', { lw: 0.25 });
+      return xa;
+    };
+    const profSeat = (v, k, d, ly) => {          // longitudinal / tip-up seat in profile against the wall
+      const xw = xIn(450);
+      v.poly([[k * xw, fh + 400], [k * (xw - d), fh + 400], [k * (xw - d), fh + 470], [k * xw, fh + 470]], true, ly, { fill: true });
+      v.poly([[k * (xw - 10), fh + 470], [k * (xw - 90), fh + 470], [k * (xIn(1100) - 60), fh + 1100], [k * xIn(1100), fh + 1100]], true, ly, { fill: true });
+      return xw - d;
+    };
+
+    secs.forEach((q, i) => {
+      const v = new View(scale, 20 + slot * (i + 0.5), oy);
+      views.push(v);
+      const last = i === nS - 1;
+      // roof equipment cut here (behind the shell)
+      lay.equipment.items.filter(e => e.loc === 'roof' && cutAt(e, q.x)).forEach(e => v.rect(-e.y - e.width / 2, rh - 200, -e.y + e.width / 2, rh + e.height, 'ROOF', { fill: true }));
+      // rails and top of rail
+      v.line(-hw - 500, 0, hw + 500, 0, 'CENTER');
+      [-1, 1].forEach(k => { v.rect(k * 717.5, -40, k * 789.5, 0, 'RAIL', { fill: '#888888' }); v.rect(k * 745.5, -150, k * 761.5, -40, 'RAIL'); v.rect(k * 678.5, -172, k * 828.5, -150, 'RAIL', { fill: '#888888' }); });
+      // underframe equipment cut here
+      lay.equipment.items.filter(e => e.loc === 'under' && e.kind !== 'ccd' && cutAt(e, q.x)).forEach(e => {
+        v.rect(-e.y - e.width / 2, sole - e.height, -e.y + e.width / 2, sole, 'EQUIP', { fill: true });
+        v.text(-e.y, sole - e.height / 2, e.name, 1.5, { anchor: 'middle', valign: 'middle', ly: 'EQUIP', color: '#0b6e8a' });
+      });
+      // shell (cut = grey) and saloon
+      v.poly(outerPoly, true, 'BODY', { fill: '#d9dee3' });
+      v.poly(innerPoly, true, 'BODY_THIN', { fill: '#ffffff' });
+      v.line(-xIn(0), fh + 20, xIn(0), fh + 20, 'BODY_THIN', { lw: 0.3 });      // floor covering
+      // side wall openings
+      if (q.kind === 'door') {
+        [-1, 1].forEach(k => {
+          v.rect(k * xIn(0), fh, k * (hw + 20), fh + DC.height, 'DOOR', { fill: '#f3e5f5' });
+          v.rect(k * (hw - 10), fh - 30, k * (hw + 70), fh, 'DOOR', { fill: '#ce93d8' });   // threshold
+        });
+      } else {
+        [-1, 1].forEach(k => v.rect(k * xIn(WC.sill), fh + WC.sill, k * (hw + 5), fh + WC.sill + WC.height, 'WINDOW', { fill: '#e6effb' }));
+      }
+      // overhead handrails above the aisle edges / vestibule
+      let rx = Math.max(400, xIn(hr) - 650);
+      // contents
+      if (q.kind === 'door') {
+        const px = Math.min(690, xIn(1200) - 450);
+        [-1, 1].forEach(k => v.rect(k * px - 17, fh, k * px + 17, fh + ceil, 'BODY_THIN', { fill: '#c9ced3' }));   // vertical poles
+        standing(v, -Math.min(px - 330, rx - 120), -rx);
+        v.dimChainH([-px, px], fh + 300, fh + 120, { h: 1.6 });
+        const ins = TLT.profileInset(PF, PF.refH);
+        v.dimChainH([-(xIn(PF.refH)), xIn(PF.refH)], fh + PF.refH, fh + PF.refH, { h: 1.6, labels: [String(Math.round(2 * xIn(PF.refH)))] });
+        v.dimV(-xIn(0), fh, fh + DC.height, -hw - 5 * s, { h: 1.6 });
+        v.dimV(-rx, fh, fh + hr, -rx - 0 * s, { h: 1.6, side: 'right' });
+        q.notes = [`Standing width ${Math.round(2 * xIn(PF.refH))} mm at ${PF.refH} mm above floor (wall inset ${Math.round(ins)} mm each side)`, `Door clear height ${DC.height} mm, width ${DC.width} mm · handrails ${hr} mm above floor`];
+      } else if (q.kind === 'trans') {
+        // side A is on the left (k = -1); a side without transverse seats at this cut shows its longitudinal seat or nothing
+        const sideAt = sd => (ML.on || blockAt(q.x, sd, true) ? 'T' : blockAt(q.x, sd, false) ? 'L' : '-');
+        const kA = sideAt('A'), kB = sideAt('B');
+        const nA = kA === 'T' ? perSide[0] : 0, nB = kB === 'T' ? perSide[1] : 0;
+        const one = (k, kind, n) => (kind === 'T' ? transSeat(v, k, n) : kind === 'L' ? profSeat(v, k, seatD, 'SEAT') : xIn(450));
+        const xa = one(-1, kA, nA), xb = one(1, kB, nB);
+        const aisle = xa + xb;
+        rx = Math.min(xa, xb);
+        v.dimChainH([-xa, xb], fh + 260, fh + 120, { h: 1.6 });
+        v.dimChainH([-xIn(450), -xa], fh + 1180, fh + 1290, { h: 1.5 });
+        v.dimChainH([xb, xIn(450)], fh + 1180, fh + 1290, { h: 1.5 });
+        const minA = num(I.minAisle, 0);
+        q.notes = [`Aisle ${Math.round(aisle)} mm${minA ? (aisle + 0.5 >= minA ? ` ≥ ${minA} mm (min. aisle) – OK` : ` < ${minA} mm (min. aisle) – CHECK`) : ''} · ${kA === 'T' && kB === 'T' ? `${nA}+${nB} seats ${seatW} mm wide` : `side A ${kA === 'T' ? `${nA} transverse` : kA === 'L' ? 'longitudinal' : 'no'} seats, side B ${kB === 'T' ? `${nB} transverse` : kB === 'L' ? 'longitudinal' : 'no'} seats (mixed seating)`}`, `Seat height 450 mm, back to ${1180} mm above floor`];
+      } else {
+        const d = q.kind === 'long' ? seatD : Math.min(seatD, 400);
+        const ly = q.kind === 'long' ? 'SEAT' : 'FOLD';
+        const xs = (q.kind === 'wc') ? null : profSeat(v, -1, d, ly);
+        if (q.kind === 'wc') {
+          const wcW = num(I.wcWidth, 750);
+          v.rect(-xIn(0), fh, -xIn(0) + wcW, fh + 1300, 'WC_DASH');
+          v.text(-xIn(0) + wcW / 2, fh + 650, 'WHEELCHAIR', 1.5, { anchor: 'middle', valign: 'middle', ly: 'WC', color: '#1565c0' });
+          profSeat(v, 1, Math.min(seatD, 400), 'FOLD');
+          q.notes = [`Wheelchair space ${num(I.wcLength, 1300)} × ${wcW} mm, tip-up seats opposite`];
+        } else {
+          const xs2 = profSeat(v, 1, d, ly);
+          seated(v, xIn(450), 1, d);
+          v.dimChainH([-xs, xs2], fh + 470, fh + 140, { h: 1.6 });
+          q.notes = [`Clear width between seat fronts ${Math.round(xs + xs2)} mm · seat depth ${d} mm`, q.kind === 'fold' ? 'Tip-up seats shown in use; folded they count as standing area' : `Foot zone ${num(I.footZone, 300)} mm in front of the seats`];
+        }
+        rx = Math.min(rx, xIn(hr) - 500);
+      }
+      [-1, 1].forEach(k => v.circle(k * rx, fh + hr, 17, 'BODY_THIN', { fill: '#c9ced3' }));
+      // centre line, ceiling height, body width
+      v.line(0, -250, 0, mh + 300, 'CENTER');
+      if (q.kind !== 'door') v.dimV(120, fh, fh + ceil, 120, { h: 1.6, side: 'right' });
+      v.dimChainH([-hw, hw], sole - 40, -400, { h: 1.7 });
+      v.dimChainH([-xIn(0), xIn(0)], fh, fh - 30 - 3.5 * s - (sole > 0 ? 0 : 0), { h: 1.6 });
+      if (last) {
+        const xr = hw + Math.max(0, ...lay.equipment.items.filter(e => e.loc === 'roof').map(e => Math.abs(-e.y) + e.width / 2 - hw));
+        v.dimV(xr, 0, fh, xr + 4 * s, { h: 1.6, side: 'right' });
+        v.dimV(xr, 0, rh, xr + 8.5 * s, { h: 1.6, side: 'right' });
+        if (mh > rh + 10) v.dimV(xr, 0, mh, xr + 13 * s, { h: 1.6, side: 'right' });
+      }
+      v.text(-hw, mh + 250, 'SIDE A', 1.5, { color: '#555555', bold: true });
+      v.text(hw, mh + 250, 'SIDE B', 1.5, { anchor: 'end', color: '#555555', bold: true });
+      // caption under the section
+      const cy = -400 - 9 * s;
+      v.text(0, cy, `SECTION ${q.id}`, 2.8, { anchor: 'middle', bold: true });
+      v.text(0, cy - 4 * s, `${q.title} — ${lay.type.name} car, ${Math.round(q.x)} mm from END 1`, 1.7, { anchor: 'middle', color: '#444444' });
+      (q.notes || []).forEach((t, j) => v.text(0, cy - (7.5 + j * 3) * s, t, 1.6, { anchor: 'middle', color: '#333333' }));
+    });
+
+    // key dimensions table (bottom left, clear of the title block)
+    const minA = num(I.minAisle, 0);
+    const rows = [
+      ['Car body section', PF.label],
+      ['Body width / interior width at floor', `${lay.W} / ${Math.round(2 * xIn(0))} mm`],
+      [`Standing width at ${PF.refH} mm above floor`, `${Math.round(2 * xIn(PF.refH))} mm`],
+      ['Floor / roof / max. height above rail', `${fh} / ${rh} / ${mh} mm`],
+      ['Ceiling height above floor (centre line)', `${ceil} mm`],
+      ['Passenger door clear width × height', `${DC.width} × ${DC.height} mm`],
+      ['Gangway width', `${num(c.gangwayWidth, 0) || '—'} mm`],
+      ['Seating', longToo ? `Mixed: transverse ${perSide[0]}+${perSide[1]}, seat ${seatW} mm${minA ? `, min. aisle ${minA} mm` : ''}; longitudinal ${seatWL} × ${seatD} mm, foot zone ${num(I.footZone, 300)} mm`
+        : trans ? `Transverse ${perSide[0]}+${perSide[1]}, seat ${seatW} mm${minA ? `, min. aisle ${minA} mm` : ''}` : `Longitudinal, seat depth ${seatD} mm, foot zone ${num(I.footZone, 300)} mm`],
+    ];
+    const tY = Math.min(oy - (400 + 9 * s + 15 * s) / s - 4, 100);
+    p.text(20, tY + 3, 'KEY CROSS-SECTION DIMENSIONS', 2.4, { bold: true });
+    table(p, 20, tY, [{ h: 'Item', w: 72 }, { h: 'Value', w: Math.min(120, PW - 210 - 92) }], rows, { rowH: 4.2, h: 1.8 });
+    return { title: `Car body cross-sections — ${lay.type.name} car`, short: 'Cross-section', size, scale, views, paper: p };
   }
 
   function powerNote(R) {
@@ -1241,7 +1463,7 @@
     p.text(20, y, '1. BASIS OF CALCULATION', 2.6, { bold: true });
     const ass = [
       ['Seat width × depth (per passenger)', `${num(I.seatWidth, 430)} × ${num(I.seatDepth, 550)} mm`],
-      ['Seating arrangement', TLT.mainlineCfg(cfg).on ? (() => { const M = TLT.mainlineCfg(cfg); return `Mainline ${M.arrangement}: std ${M.std.abreast.join('+')} / ${M.std.pitch} mm, 1st ${M.first.abreast.join('+')} / ${M.first.pitch} mm${M.vestibules ? ', vestibules' : ''}`; })() : I.seatType === 'transverse' ? `Transverse ${I.transSeatsPerSide}+${I.transSeatsPerSide}, legroom ${I.transLegroom} mm between facing seats` : 'Longitudinal'],
+      ['Seating arrangement', TLT.mainlineCfg(cfg).on ? (() => { const M = TLT.mainlineCfg(cfg); return `Mainline ${M.arrangement}: std ${M.std.abreast.join('+')} / ${M.std.pitch} mm, 1st ${M.first.abreast.join('+')} / ${M.first.pitch} mm${M.vestibules ? ', vestibules' : ''}`; })() : (() => { const mixed = (cfg.carTypes || []).some(t => (t.interiorItems || []).some(q => ['transverse', 'longitudinal'].includes(q.kind))); const tr = `transverse ${I.transSeatsPerSide}+${I.transSeatsPerSide} (seat ${num(I.transSeatWidth, 0) > 0 ? num(I.transSeatWidth, 0) : num(I.seatWidth, 430)} mm), legroom ${I.transLegroom} mm between facing seats`; return mixed ? `Mixed: ${I.seatType === 'transverse' ? 'transverse' : 'longitudinal'} by default, bay sides set per car variant; ${tr}` : I.seatType === 'transverse' ? tr.charAt(0).toUpperCase() + tr.slice(1) : 'Longitudinal'; })()],
       ['Foot zone in front of longitudinal seats', `${num(I.footZone, 300)} mm (not counted as standing)`],
       ['Clearance at door / end of seat bays', `${num(I.doorClearance, 330)} / ${num(I.endClearance, 0)} mm`],
       ['Wheelchair space', `${num(I.wcLength, 1300)} × ${num(I.wcWidth, 700)} mm, ${I.wcAsStanding ? 'counted as standing area' : 'excluded from standing area'} unless set per space`],
@@ -1359,15 +1581,16 @@
     v.line(-200, 0, Lc + 200, 0, 'CENTER');
     v.line(mid, -hw - 400, mid, hw + 400, 'CENTER');
     // bogies
-    lay.bogieInfo.forEach(bg => {
-      const xb = bg.x, motor = bg.motor;
-      v.rect(xb - wb / 2 - 420, -1050, xb + wb / 2 + 420, 1050, 'BOGIE', { fill: '#fdf1ef' });
+    lay.bogieInfo.forEach((bg, i) => {
+      const xb = bg.x, motor = lay.bogieShow ? !!lay.bogieShow[i] : bg.motor;
+      v.rect(xb - wb / 2 - 420, -1050, xb + wb / 2 + 420, 1050, motor ? 'BOGIE_M' : 'BOGIE', { fill: motor ? '#efc4bf' : '#fdf1ef' });
       [-1, 1].forEach(k => {
         const xa = xb + k * wb / 2;
         v.line(xa, -900, xa, 900, 'BOGIE');
         [-1, 1].forEach(sd => v.rect(xa - D / 2, sd * 717.5, xa + D / 2, sd * 852.5, 'BOGIE', { fill: '#ffffff' }));
-        if (motor) v.rect(xb + k * (wb / 2 - 520) - 260, -550, xb + k * (wb / 2 - 520) + 260, 550, 'BOGIE', { fill: '#f3c6c0' });
+        if (motor) v.rect(xb + k * (wb / 2 - 520) - 260, -550, xb + k * (wb / 2 - 520) + 260, 550, 'BOGIE_M', { fill: true });
       });
+      v.text(xb, 0, motor ? 'M' : 'T', 2, { anchor: 'middle', valign: 'middle', bold: true, ly: motor ? 'BOGIE_M' : 'BOGIE', color: motor ? '#7f1410' : '#b3261e' });
       v.line(xb, -hw - 250, xb, hw + 250, 'CENTER');
     });
     // equipment boxes (underframe only)
@@ -1507,7 +1730,8 @@
     legend(p, 250, yT - 2, [
       { ly: 'EQUIP', label: 'Underframe equipment', kind: 'box' },
       { ly: 'ROOF', label: 'Roof equipment (side view)', kind: 'box' },
-      { ly: 'BOGIE', label: 'Bogie envelope / motor', kind: 'box' },
+      { ly: 'BOGIE_M', label: 'Motor bogie (M) / traction motors', kind: 'fill' },
+      { ly: 'BOGIE', label: 'Trailer bogie (T) / bogie envelope', kind: 'box' },
       { ly: 'CENTER', label: 'Car / bogie centre line', kind: 'line' },
     ]);
     p.text(250, yT - 26, `Mounting face ${num(c.mountDepth, 250)} mm below floor (${Math.round(sole)} mm ATR).`, 1.8, { color: '#555555' });

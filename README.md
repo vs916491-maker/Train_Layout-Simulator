@@ -13,7 +13,7 @@ Source: <https://github.com/vs916491-maker/Train_Layout-Simulator>. Each release
 |---|---|---|
 | 1 | **Main Dimensions** | Project and title block, product type and template, formation and number of car variants, power collection, car body and bogie, door system, HVAC, interior rules, one card per car variant (incl. END 1 / END 2 ends and supports), load cases. Ends with **Next**. |
 | 2 | **Equipment Inputs** | Equipment list for **layout only** (positions and sizes of underframe and roof boxes), from Excel or edited in the table. **Generate Results** builds steps 3–5. |
-| 3 | **Train Layouts & Capacity** | Train layout, one interior layout per car variant, passenger capacity calculation (uses the tare typed in step 1). |
+| 3 | **Train Layouts & Capacity** | Train layout, car body cross-sections (A-A vestibule at a door, B-B seat bay, C-C tip-up seats / wheelchair space), one interior layout per car variant, passenger capacity calculation (uses the tare typed in step 1). |
 | 4 | **Underframe Layout** | Per car variant: side elevation, roof plan (when the car has roof equipment), underframe plan with X from car centre, equipment table. Any roof or underframe row added in step 2 appears on these sheets and on the train and car layouts. |
 | 5 | **Weight Cal. (Fixed Tare)** | Fixed (target) tare per car variant, passenger mass, axle-load limit and the load cases to calculate. Per car in the formation: car mass = tare + passengers × passenger mass; axle load = car mass ÷ axles of the car (equipment distribution not known; shared Jacobs bogie = 1 axle per car, suspended module half to each neighbour). Train totals and axle-load check; values to one decimal. Sheet as PDF / DXF. |
 | 6 | **Weight Cal. (Actual Design)** | Separate weight list per car (Location, Item, L/W/H, X/Y/Z, Mass) entered in the table or uploaded from its own Excel file; **Add line item**; **Copy equipment from step 2**. Results: car body (sprung) and bogie (unsprung) mass, calculated vs target tare, CoG X/Y/Z, support / axle / wheel loads per load case, train bogie table including shared Jacobs bogies, axle-load and wheel-load-imbalance checks. Weight sheets as PDF / DXF. |
@@ -50,6 +50,7 @@ Set **Number of car variants** in the formation card; a card appears for each. E
 | Wheelchair space | Bay, side (A / B / A+B), placement | Size from Interior rules (default 1300 × 700). Seats fill the rest of the bay. The Ø1500 turning circle is placed clear of seats and cabinets; a warning appears if that is not possible. |
 | Electrical cabinet | Bay, side, placement, label, length, depth, height | Drawn with label and L × D × H on the layout, listed on the sheet, removed from the standing area; seats fill the rest of the bay. |
 | Seat limit / No seats | Bay, side, max seats | Caps the seats on that bay side. |
+| Seat orientation (transverse / longitudinal) | Bay, side | Seats on that bay side are transverse (facing bays) or longitudinal, whatever the train-wide **Seating** setting — for mixed layouts, e.g. 2+2 facing bays in the front area and longitudinal seats elsewhere. Transverse seats use **Transverse seat width** (Interior rules; 0 = seat width). The cross-section sheet then cuts a car with transverse seats and adds a longitudinal-seat section. |
 
 Placement: next to the door (default), END 1 side, middle or END 2 side of the bay. Bays are numbered B0 … Bn from END 1 (B0 is between the cab / end wall and the first door); the bay list in each item shows the bay lengths. Side A is the top of the plan view. Older input files with text bay rules (`1 A wheelchair`) are converted automatically.
 
@@ -94,7 +95,7 @@ The section shapes the Metro / LRV front view. For capacity, the standing area u
 
 * **END 1 / END 2 type**: driving cab, auxiliary driving desk, gangway to the next car, end wall (no gangway) or articulation joint. Cabs at both ends give a double-ended car; an END 2 cab is drawn turned round. The auxiliary desk (size and side in the Driver's cab card) is placed against the end wall and taken out of the seats and standing area.
 * **Support per end**: own bogie, shared (Jacobs) bogie at the joint, or no bogie (cab overhang, or carried by the articulation). **Centre bogie** puts one bogie under the car centre (tram bogie module). A car with no bogie is a **suspended module**.
-* **Motor bogies**: 0, 1 (END 2 side), 1 (END 1 side), 2 or 3.
+* **Motor / trailer per bogie**: END 1 bogie, centre bogie and END 2 bogie are each set to motor or trailer (older inputs: *Motor bogies* 0, 1 (END 2 side), 1 (END 1 side), 2 or 3). A shared (Jacobs) bogie is one bogie in the train: it is motor if either car sets it to motor; the variant card shows the result at every joint.
 * Axles per car come from the running gear (a shared bogie counts as one axle per car). Weights: two bogies share the body load by the lever rule; one bogie carries the whole module; a suspended module's load goes to its two joints and on to the neighbouring modules' bogies.
 
 ### Power collection
