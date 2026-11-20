@@ -15,7 +15,7 @@
     return Number.isFinite(n) ? n : d;
   };
   TLT.num = num;
-  TLT.VERSION = '1.4.0';   // keep in step with CHANGELOG.md and the git tag
+  TLT.VERSION = '1.6.1';   // keep in step with CHANGELOG.md and the git tag
 
   /* ---------------- Formation ---------------- */
   /* Formation text with the multiple-unit factor: unit, then the unit turned round, alternately (DM-T-M-T | T'-M'-T'-DM') */
@@ -396,6 +396,24 @@
     };
   };
 
+  /* Motor / trailer per bogie position of a car variant: { bogie1, bogieC, bogie2 } = 'motor' | 'trailer'.
+   * Explicit settings win; older inputs give a count of motor bogies counted from END 2 ('1e1' = one at END 1). */
+  TLT.BOGIE_KEYS = ['bogie1', 'bogieC', 'bogie2'];
+  TLT.bogieFlags = function (type) {
+    const ok = v => v === 'motor' || v === 'trailer';
+    if (TLT.BOGIE_KEYS.some(k => ok(type[k]))) return { bogie1: ok(type.bogie1) ? type.bogie1 : 'trailer', bogieC: ok(type.bogieC) ? type.bogieC : 'trailer', bogie2: ok(type.bogie2) ? type.bogie2 : 'trailer' };
+    const E = TLT.carEnds(type);
+    const pos = [];
+    if (E.s1 !== 'none') pos.push('bogie1');
+    if (E.centre && (E.s1 === 'none' || E.s2 === 'none')) pos.push('bogieC');
+    if (E.s2 !== 'none') pos.push('bogie2');
+    const e1 = String(type.motorBogies) === '1e1';
+    const n = e1 ? 1 : Math.max(0, Math.min(pos.length, Math.round(num(type.motorBogies, 0))));
+    const f = { bogie1: 'trailer', bogieC: 'trailer', bogie2: 'trailer' };
+    pos.forEach((k, i) => { if (e1 ? i === 0 : i >= pos.length - n) f[k] = 'motor'; });
+    return f;
+  };
+
   /* ---------------- Car geometry & interior ---------------- */
   TLT.layoutCar = function (type, cfg) {
     const c = cfg.common, r = cfg.interior;
@@ -416,10 +434,9 @@
     }
     if (!h2) bogieInfo.push({ x: sh2 ? Lc : mid + bcIn / 2, end: 2, shared: sh2 });
     bogieInfo.sort((p, q) => p.x - q.x);
-    // motor bogies counted from END 2 ('1e1' = one motor bogie at the END 1 side)
-    const e1Motor = String(type.motorBogies) === '1e1';
-    const nMot = e1Motor ? 1 : Math.max(0, Math.min(bogieInfo.length, Math.round(num(type.motorBogies, 0))));
-    bogieInfo.forEach((bg, i) => { bg.motor = e1Motor ? i === 0 : i >= bogieInfo.length - nMot; });
+    // motor / trailer per bogie: END 1 bogie, centre bogie, END 2 bogie (own or shared); older inputs: motor-bogie count
+    const BF = TLT.bogieFlags(type);
+    bogieInfo.forEach(bg => { bg.motor = BF[bg.end === 1 ? 'bogie1' : bg.end === 2 ? 'bogie2' : 'bogieC'] === 'motor'; bg.ownMotor = bg.motor; });
     const bogies = bogieInfo.map(bg => bg.x);
     const bc = bogies.length >= 2 ? bogies[bogies.length - 1] - bogies[0] : 0;
     const axles = bogieInfo.reduce((a, bg) => a + (bg.shared ? 1 : 2), 0);
@@ -872,6 +889,30 @@
       });
       return { name: cs.name, kind: cs.kind, seated, standing, total, mass, axleMax, ok: axleMax <= maxAxle + 1e-9 };
     });
+    // Running gear of the train: a shared (Jacobs) bogie is one bogie for the two cars at the joint and is a
+    // motor bogie when either car sets its end to Motor. Per car: c.bogieMotor (index = lay.bogieInfo);
+    // per variant: lay.bogieShow (motored in any car of the formation) for the car sheets.
+    const physEnd = (c, side) => (side === 'R') !== !!c.flip ? 2 : 1;   // car end at the right / left of the train
+    form.cars.forEach(c => { c.bogieMotor = lay(c).bogieInfo.map(bg => bg.motor); });
+    let nBog = 0, nMot = 0;
+    const joints = [];
+    form.cars.forEach((c, i) => {
+      const L = lay(c);
+      L.bogieInfo.forEach((bg, k) => {
+        if (!bg.shared) { nBog++; if (c.bogieMotor[k]) nMot++; return; }
+        const left = bg.end === physEnd(c, 'L');
+        const nb = left ? form.cars[i - 1] : form.cars[i + 1];
+        const kn = nb ? lay(nb).bogieInfo.findIndex(b2 => b2.shared && b2.end === physEnd(nb, left ? 'R' : 'L')) : -1;
+        if (kn < 0) { nBog++; if (c.bogieMotor[k]) nMot++; if (nb) warnings.push(`Cars ${c.no} and ${nb.no}: shared (Jacobs) bogie at car ${c.no} has no shared end on car ${nb.no}.`); return; }
+        if (left) return;                                  // counted once, from the car on its left
+        const m = c.bogieMotor[k] || nb.bogieMotor[kn];
+        c.bogieMotor[k] = m; nb.bogieMotor[kn] = m;
+        nBog++; if (m) nMot++;
+        joints.push({ a: c, b: nb, motor: m, by: [c, nb].filter((q, j) => lay(q).bogieInfo[j ? kn : k].ownMotor) });
+      });
+    });
+    used.forEach(n => { const L = layouts.get(n); L.bogieShow = L.bogieInfo.map((bg, k) => form.cars.some(c => c.type.name === n && c.bogieMotor[k])); });
+    form.bogieCount = nBog; form.motorBogieCount = nMot; form.joints = joints;
     const wcCount = form.cars.reduce((s, c) => s + layouts.get(c.type.name).wheelchairs.length, 0);
     // HVAC count checks against the equipment list
     const hv = cfg.hvac || {};

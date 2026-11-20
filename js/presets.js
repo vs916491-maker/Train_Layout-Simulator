@@ -85,7 +85,7 @@
         widthRefHeight: 1200,
         seatType: 'longitudinal', seatWidth: 430, seatDepth: 550, footZone: 300, doorClearance: 330, endClearance: 0, minDoorClearance: 100,
         transSeatsPerSide: 2, transSeatDepth: 450, transLegroom: 600,
-        wcLength: 1300, wcWidth: 700, wcTurning: 1500, wcAsStanding: true, minAisle: 900, cabinetDepth: 600,
+        wcLength: 1300, wcWidth: 700, wcTurning: 1500, wcAsStanding: true, minAisle: 900, cabinetDepth: 600, ceilingHeight: 2200, handrailHeight: 1950,
       },
       loads: { paxMass: 60, maxAxleLoad: 15.77, axlesPerCar: 4, standCase: 'AW2', rounding: 'floor', wheelSpacing: 1500, imbalanceLimit: 15 },
       cases: [
