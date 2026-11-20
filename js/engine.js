@@ -15,7 +15,7 @@
     return Number.isFinite(n) ? n : d;
   };
   TLT.num = num;
-  TLT.VERSION = '1.6.1';   // keep in step with CHANGELOG.md and the git tag
+  TLT.VERSION = '1.7.0';   // keep in step with CHANGELOG.md and the git tag
 
   /* ---------------- Formation ---------------- */
   /* Formation text with the multiple-unit factor: unit, then the unit turned round, alternately (DM-T-M-T | T'-M'-T'-DM') */
@@ -184,7 +184,7 @@
       src = p.rules.map(q => ({ kind: q.kind === 'max' ? (q.n === 0 ? 'none' : 'max') : q.kind, bay: q.bay, side: q.side, place: 'door', length: q.length, depth: q.depth, label: q.label, n: q.n }));
     }
     src.forEach(q => {
-      const kind = ['wheelchair', 'bicycle', 'folding', 'cabinet', 'max', 'none', 'toilet', 'toiletPrm'].includes(q.kind) ? q.kind : 'cabinet';
+      const kind = ['wheelchair', 'bicycle', 'folding', 'cabinet', 'max', 'none', 'toilet', 'toiletPrm', 'transverse', 'longitudinal'].includes(q.kind) ? q.kind : 'cabinet';
       const standOf = v => (/^(y|yes|true|1)$/i.test(String(v)) || v === true ? true : /^(n|no|false|0)$/i.test(String(v)) || v === false ? false : null);
       if (kind === 'toilet' || kind === 'toiletPrm') {
         const prm = kind === 'toiletPrm';
@@ -196,6 +196,8 @@
       const bay = Math.round(num(q.bay, 0));
       const side = String(q.side || 'A').toUpperCase();
       const sides = side === 'AB' || side === 'BA' ? ['A', 'B'] : side === 'B' ? ['B'] : ['A'];
+      // seat orientation of one bay side (mixed seating): overrides the train-wide Seating setting
+      if (kind === 'transverse' || kind === 'longitudinal') { out.push({ kind: 'orient', orient: kind, bay, sides, place: 'door', n: 0 }); return; }
       const it = { kind: kind === 'none' ? 'max' : kind, bay, sides, place: ['door', 'end1', 'middle', 'end2'].includes(q.place) ? q.place : 'door',
         length: num(q.length, kind === 'bicycle' ? 1800 : 900), depth: num(q.depth, kind === 'bicycle' ? 700 : 600), height: num(q.height, NaN),
         label: String(q.label || (kind === 'bicycle' ? 'BICYCLE' : kind === 'folding' ? 'FOLDING SEATS' : 'ELEC. CABINET')),
@@ -495,7 +497,11 @@
     const seatW = num(r.seatWidth, 430), seatD = num(r.seatDepth, 550), foot = num(r.footZone, 300);
     const dClr = num(r.doorClearance, 330), eClr = num(r.endClearance, 0);
     const ML = TLT.mainlineCfg(cfg);
-    const trans = !ML.on && r.seatType === 'transverse';
+    // Seat orientation: train-wide setting, overridden per bay side by 'transverse' / 'longitudinal' interior items (mixed seating)
+    const transG = !ML.on && r.seatType === 'transverse';
+    const orientOf = (bi, sd) => { if (ML.on) return false; const o = itemsIn.items.filter(q => q.kind === 'orient' && q.bay === bi && q.sides.includes(sd)).pop(); return o ? o.orient === 'transverse' : transG; };
+    let trans = transG;
+    const tSeatW = num(r.transSeatWidth, 0) > 0 ? num(r.transSeatWidth, 0) : seatW;
     const tPerSide = Math.max(1, Math.round(num(r.transSeatsPerSide, 2)));
     const tDepth = num(r.transSeatDepth, 450);
     const tLeg = num(r.transLegroom, 600);
@@ -563,6 +569,7 @@
 
     bays.forEach(bay => {
       ['A', 'B'].forEach(side => {
+        trans = orientOf(bay.i, side);
         let ca = clr(bay.k0), cb = clr(bay.k1);
         const inner = bay.k0 === 'door' && bay.k1 === 'door';
         if (inner && nSel > 0 && !trans) {
@@ -578,7 +585,7 @@
             if (vz.x1 >= b - EPS && vz.x0 < b) b = Math.min(b, vz.x0 - 80);
           });
         }
-        const mine = itemsIn.items.filter(q => q.bay === bay.i && q.sides.includes(side));
+        const mine = itemsIn.items.filter(q => q.kind !== 'orient' && q.bay === bay.i && q.sides.includes(side));
         if (b - a <= EPS) {
           mine.filter(q => q.kind !== 'max').forEach(q => warn.push(`${type.name}: B${bay.i} side ${side} has no free length (${Math.round(bay.x1 - bay.x0)} mm bay${vestibules.length ? ', vestibule' : ''}) for the ${nameOf(q)}.`));
           return;
@@ -630,7 +637,7 @@
             const len = g * groupL, x0 = f0 + (avail - len) / 2;
             const groups = [];
             for (let k = 0; k < g; k++) groups.push({ x0: x0 + k * groupL, x1: x0 + (k + 1) * groupL });
-            seatBlocks.push({ side, x0, x1: x0 + len, n: g * 2 * tPerSide, bay: bay.i, depth: tPerSide * seatW, foot: 0, groups, trans: true });
+            seatBlocks.push({ side, x0, x1: x0 + len, n: g * 2 * tPerSide, bay: bay.i, depth: tPerSide * tSeatW, foot: 0, groups, trans: true, sw: tSeatW });
             left -= g * 2 * tPerSide;
           }
         });

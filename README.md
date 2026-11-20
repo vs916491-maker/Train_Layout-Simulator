@@ -50,6 +50,7 @@ Set **Number of car variants** in the formation card; a card appears for each. E
 | Wheelchair space | Bay, side (A / B / A+B), placement | Size from Interior rules (default 1300 × 700). Seats fill the rest of the bay. The Ø1500 turning circle is placed clear of seats and cabinets; a warning appears if that is not possible. |
 | Electrical cabinet | Bay, side, placement, label, length, depth, height | Drawn with label and L × D × H on the layout, listed on the sheet, removed from the standing area; seats fill the rest of the bay. |
 | Seat limit / No seats | Bay, side, max seats | Caps the seats on that bay side. |
+| Seat orientation (transverse / longitudinal) | Bay, side | Seats on that bay side are transverse (facing bays) or longitudinal, whatever the train-wide **Seating** setting — for mixed layouts, e.g. 2+2 facing bays in the front area and longitudinal seats elsewhere. Transverse seats use **Transverse seat width** (Interior rules; 0 = seat width). The cross-section sheet then cuts a car with transverse seats and adds a longitudinal-seat section. |
 
 Placement: next to the door (default), END 1 side, middle or END 2 side of the bay. Bays are numbered B0 … Bn from END 1 (B0 is between the cab / end wall and the first door); the bay list in each item shows the bay lengths. Side A is the top of the plan view. Older input files with text bay rules (`1 A wheelchair`) are converted automatically.
 

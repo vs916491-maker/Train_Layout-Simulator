@@ -2,6 +2,13 @@
 
 Versions follow [Semantic Versioning](https://semver.org/): **MAJOR** for changes that break saved inputs or Excel templates, **MINOR** for new features, **PATCH** for fixes. The version is shown in the app header and on every PDF sheet (`TLT.VERSION` in `js/engine.js`); each release is a git tag `vX.Y.Z`.
 
+## [1.7.0] – 2026-11-20
+- **Mixed seating:** new interior items **Transverse seats** / **Longitudinal seats** (button *+ Seat orientation*) set the seat orientation of one bay side (A, B or A + B) against the train-wide *Seating* setting. Seats, folding seats, seat limits and the aisle check follow the orientation of each bay side.
+- **Transverse seat width** (Interior rules, Excel `interior.transSeatWidth`; 0 = seat width) — e.g. narrower 2+2 seats to keep a 700 mm aisle while longitudinal seats stay at 480 mm.
+- **Cross-section sheet with mixed seating:** cuts a car that has transverse seats; B-B shows each side as it is at the cut (transverse row, longitudinal seat or none) and an extra section shows the longitudinal seats (up to four sections A-A … D-D). Key-dimension table and capacity sheet state *Mixed* seating.
+- Excel *Interior items* accepts `transverse` / `longitudinal`.
+- No change to existing inputs or results: all presets give the same capacities and drawings as 1.6.1 (the capacity sheet now also states the transverse seat width).
+
 ## [1.6.1] – 2026-11-20
 - Each car-variant card shows what every shared (Jacobs) bogie becomes in the train and which car sets it (e.g. *joint B–A' MOTOR (set by A')*). A variant used more than once (A and A' turned round) applies its END setting at every joint where it appears.
 

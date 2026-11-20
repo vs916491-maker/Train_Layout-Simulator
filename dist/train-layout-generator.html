@@ -277,7 +277,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return Number.isFinite(n) ? n : d;
   };
   TLT.num = num;
-  TLT.VERSION = '1.6.1';   // keep in step with CHANGELOG.md and the git tag
+  TLT.VERSION = '1.7.0';   // keep in step with CHANGELOG.md and the git tag
 
   /* ---------------- Formation ---------------- */
   /* Formation text with the multiple-unit factor: unit, then the unit turned round, alternately (DM-T-M-T | T'-M'-T'-DM') */
@@ -446,7 +446,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       src = p.rules.map(q => ({ kind: q.kind === 'max' ? (q.n === 0 ? 'none' : 'max') : q.kind, bay: q.bay, side: q.side, place: 'door', length: q.length, depth: q.depth, label: q.label, n: q.n }));
     }
     src.forEach(q => {
-      const kind = ['wheelchair', 'bicycle', 'folding', 'cabinet', 'max', 'none', 'toilet', 'toiletPrm'].includes(q.kind) ? q.kind : 'cabinet';
+      const kind = ['wheelchair', 'bicycle', 'folding', 'cabinet', 'max', 'none', 'toilet', 'toiletPrm', 'transverse', 'longitudinal'].includes(q.kind) ? q.kind : 'cabinet';
       const standOf = v => (/^(y|yes|true|1)$/i.test(String(v)) || v === true ? true : /^(n|no|false|0)$/i.test(String(v)) || v === false ? false : null);
       if (kind === 'toilet' || kind === 'toiletPrm') {
         const prm = kind === 'toiletPrm';
@@ -458,6 +458,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       const bay = Math.round(num(q.bay, 0));
       const side = String(q.side || 'A').toUpperCase();
       const sides = side === 'AB' || side === 'BA' ? ['A', 'B'] : side === 'B' ? ['B'] : ['A'];
+      // seat orientation of one bay side (mixed seating): overrides the train-wide Seating setting
+      if (kind === 'transverse' || kind === 'longitudinal') { out.push({ kind: 'orient', orient: kind, bay, sides, place: 'door', n: 0 }); return; }
       const it = { kind: kind === 'none' ? 'max' : kind, bay, sides, place: ['door', 'end1', 'middle', 'end2'].includes(q.place) ? q.place : 'door',
         length: num(q.length, kind === 'bicycle' ? 1800 : 900), depth: num(q.depth, kind === 'bicycle' ? 700 : 600), height: num(q.height, NaN),
         label: String(q.label || (kind === 'bicycle' ? 'BICYCLE' : kind === 'folding' ? 'FOLDING SEATS' : 'ELEC. CABINET')),
@@ -757,7 +759,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     const seatW = num(r.seatWidth, 430), seatD = num(r.seatDepth, 550), foot = num(r.footZone, 300);
     const dClr = num(r.doorClearance, 330), eClr = num(r.endClearance, 0);
     const ML = TLT.mainlineCfg(cfg);
-    const trans = !ML.on && r.seatType === 'transverse';
+    // Seat orientation: train-wide setting, overridden per bay side by 'transverse' / 'longitudinal' interior items (mixed seating)
+    const transG = !ML.on && r.seatType === 'transverse';
+    const orientOf = (bi, sd) => { if (ML.on) return false; const o = itemsIn.items.filter(q => q.kind === 'orient' && q.bay === bi && q.sides.includes(sd)).pop(); return o ? o.orient === 'transverse' : transG; };
+    let trans = transG;
+    const tSeatW = num(r.transSeatWidth, 0) > 0 ? num(r.transSeatWidth, 0) : seatW;
     const tPerSide = Math.max(1, Math.round(num(r.transSeatsPerSide, 2)));
     const tDepth = num(r.transSeatDepth, 450);
     const tLeg = num(r.transLegroom, 600);
@@ -825,6 +831,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
     bays.forEach(bay => {
       ['A', 'B'].forEach(side => {
+        trans = orientOf(bay.i, side);
         let ca = clr(bay.k0), cb = clr(bay.k1);
         const inner = bay.k0 === 'door' && bay.k1 === 'door';
         if (inner && nSel > 0 && !trans) {
@@ -840,7 +847,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
             if (vz.x1 >= b - EPS && vz.x0 < b) b = Math.min(b, vz.x0 - 80);
           });
         }
-        const mine = itemsIn.items.filter(q => q.bay === bay.i && q.sides.includes(side));
+        const mine = itemsIn.items.filter(q => q.kind !== 'orient' && q.bay === bay.i && q.sides.includes(side));
         if (b - a <= EPS) {
           mine.filter(q => q.kind !== 'max').forEach(q => warn.push(`${type.name}: B${bay.i} side ${side} has no free length (${Math.round(bay.x1 - bay.x0)} mm bay${vestibules.length ? ', vestibule' : ''}) for the ${nameOf(q)}.`));
           return;
@@ -892,7 +899,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
             const len = g * groupL, x0 = f0 + (avail - len) / 2;
             const groups = [];
             for (let k = 0; k < g; k++) groups.push({ x0: x0 + k * groupL, x1: x0 + (k + 1) * groupL });
-            seatBlocks.push({ side, x0, x1: x0 + len, n: g * 2 * tPerSide, bay: bay.i, depth: tPerSide * seatW, foot: 0, groups, trans: true });
+            seatBlocks.push({ side, x0, x1: x0 + len, n: g * 2 * tPerSide, bay: bay.i, depth: tPerSide * tSeatW, foot: 0, groups, trans: true, sw: tSeatW });
             left -= g * 2 * tPerSide;
           }
         });
@@ -2292,7 +2299,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         const fy = b.side === 'A' ? hi - b.depth - b.foot : -hi + b.depth + b.foot;
         if (b.foot > 0) v.line(b.x0, fy, b.x1, fy, 'FOOT');
       } else {
-        const sw = num(r.seatWidth, 430), td = num(r.transSeatDepth, 450);
+        const sw = b.sw || num(r.seatWidth, 430), td = num(r.transSeatDepth, 450);
         const per = Math.round(b.depth / sw);
         b.groups.forEach(g => {
           [[g.x0, g.x0 + td], [g.x1 - td, g.x1]].forEach(([a, z]) => {
@@ -2875,7 +2882,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     const cfg = R.cfg, c = cfg.common, I = cfg.interior || {};
     const [PW, PH] = size;
     const lays = R.used.map(n => R.layouts.get(n));
-    const lay = lays.find(l => !(l.cab1 || l.cab2)) || lays[0];
+    const hasT = l => l.seatBlocks.some(b => b.trans);
+    let lay = lays.find(l => !(l.cab1 || l.cab2)) || lays[0];
+    if (!TLT.mainlineCfg(cfg).on && lays.some(hasT) && !hasT(lay)) lay = lays.find(l => hasT(l) && !(l.cab1 || l.cab2)) || lays.find(hasT);   // mixed seating: cut a car with transverse seats
     const fh = num(c.floorHeight, 1130), rh = num(c.roofHeight, 3650), mh = Math.max(num(c.maxHeight, 4100), rh);
     const sole = fh - num(c.mountDepth, 250);
     const hw = lay.W / 2, wall = num(c.wallThk, 60);
@@ -2887,8 +2896,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     const hr = num(I.handrailHeight, 1950);
     const xIn = z => hw - wall - TLT.profileInset(PF, z);      // inner lining face at height z above floor
     const ML = TLT.mainlineCfg(cfg);
-    const trans = ML.on || I.seatType === 'transverse';
-    const seatW = ML.on ? ML.std.seatW : num(I.seatWidth, 450), seatD = num(I.seatDepth, 450);
+    const trans = ML.on || (lay.seatBlocks.length ? hasT(lay) : I.seatType === 'transverse');
+    const longToo = !ML.on && trans && lay.seatBlocks.some(b => !b.trans);   // mixed seating in the cut car
+    const seatW = ML.on ? ML.std.seatW : num(I.transSeatWidth, 0) > 0 ? num(I.transSeatWidth, 0) : num(I.seatWidth, 450), seatD = num(I.seatDepth, 450);
+    const seatWL = num(I.seatWidth, 450);
+    const blockAt = (x, side, tr) => lay.seatBlocks.find(b => b.side === side && !!b.trans === tr && x >= b.x0 - 1 && x <= b.x1 + 1);
     const perSide = ML.on ? ML.std.abreast : [Math.max(1, Math.round(num(I.transSeatsPerSide, 2))), Math.max(1, Math.round(num(I.transSeatsPerSide, 2)))];
     const DC = lay.doorCfg;
     const WC = TLT.windowCfg(cfg);
@@ -2897,12 +2909,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     const best = arr => arr.slice().sort((a, b) => (b.n || 0) - (a.n || 0))[0];
     const secs = [];
     secs.push({ id: 'A-A', kind: 'door', title: 'VESTIBULE AT DOOR', x: lay.doors.length ? lay.doors[0] : lay.mid });
-    const sb = best(lay.seatBlocks.filter(q => !q.trans || true));
+    const tBlocks = lay.seatBlocks.filter(q => ML.on || !!q.trans === trans);
+    // transverse cut: prefer a position with transverse seats on both sides
+    const both = trans && !ML.on ? tBlocks.filter(q => blockAt((q.x0 + q.x1) / 2, q.side === 'A' ? 'B' : 'A', true)) : [];
+    const sb = best(both.length ? both : tBlocks);
     if (sb) secs.push({ id: 'B-B', kind: trans ? 'trans' : 'long', title: trans ? 'TRANSVERSE SEATS' : 'LONGITUDINAL SEATS', x: (sb.x0 + sb.x1) / 2 });
+    const lb = longToo ? best(lay.seatBlocks.filter(q => !q.trans)) : null;
+    if (lb) secs.push({ id: 'C-C', kind: 'long', title: 'LONGITUDINAL SEATS', x: (lb.x0 + lb.x1) / 2 });
     const fd = lay.foldings && lay.foldings.length ? lay.foldings[0] : null;
     if (trans && fd) secs.push({ id: 'C-C', kind: 'fold', title: 'TIP-UP SEATS / MULTI-PURPOSE AREA', x: (fd.x0 + fd.x1) / 2 });
     else if (trans && lay.wheelchairs.length) secs.push({ id: 'C-C', kind: 'wc', title: 'WHEELCHAIR SPACE', x: (lay.wheelchairs[0].x0 + lay.wheelchairs[0].x1) / 2 });
-    secs.forEach((q, i) => { q.id = ['A-A', 'B-B', 'C-C'][i]; });
+    secs.forEach((q, i) => { q.id = ['A-A', 'B-B', 'C-C', 'D-D'][i]; });
 
     // scale: all sections side by side, heights from below the rail to above the roof equipment
     const nS = secs.length;
@@ -3001,15 +3018,19 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         v.dimV(-rx, fh, fh + hr, -rx - 0 * s, { h: 1.6, side: 'right' });
         q.notes = [`Standing width ${Math.round(2 * xIn(PF.refH))} mm at ${PF.refH} mm above floor (wall inset ${Math.round(ins)} mm each side)`, `Door clear height ${DC.height} mm, width ${DC.width} mm · handrails ${hr} mm above floor`];
       } else if (q.kind === 'trans') {
-        const nA = perSide[0], nB = perSide[1];
-        const xa = transSeat(v, -1, nA), xb = transSeat(v, 1, nB);
+        // side A is on the left (k = -1); a side without transverse seats at this cut shows its longitudinal seat or nothing
+        const sideAt = sd => (ML.on || blockAt(q.x, sd, true) ? 'T' : blockAt(q.x, sd, false) ? 'L' : '-');
+        const kA = sideAt('A'), kB = sideAt('B');
+        const nA = kA === 'T' ? perSide[0] : 0, nB = kB === 'T' ? perSide[1] : 0;
+        const one = (k, kind, n) => (kind === 'T' ? transSeat(v, k, n) : kind === 'L' ? profSeat(v, k, seatD, 'SEAT') : xIn(450));
+        const xa = one(-1, kA, nA), xb = one(1, kB, nB);
         const aisle = xa + xb;
         rx = Math.min(xa, xb);
         v.dimChainH([-xa, xb], fh + 260, fh + 120, { h: 1.6 });
         v.dimChainH([-xIn(450), -xa], fh + 1180, fh + 1290, { h: 1.5 });
         v.dimChainH([xb, xIn(450)], fh + 1180, fh + 1290, { h: 1.5 });
         const minA = num(I.minAisle, 0);
-        q.notes = [`Aisle ${Math.round(aisle)} mm${minA ? (aisle + 0.5 >= minA ? ` ≥ ${minA} mm (min. aisle) – OK` : ` < ${minA} mm (min. aisle) – CHECK`) : ''} · ${nA}+${nB} seats ${seatW} mm wide`, `Seat height 450 mm, back to ${1180} mm above floor`];
+        q.notes = [`Aisle ${Math.round(aisle)} mm${minA ? (aisle + 0.5 >= minA ? ` ≥ ${minA} mm (min. aisle) – OK` : ` < ${minA} mm (min. aisle) – CHECK`) : ''} · ${kA === 'T' && kB === 'T' ? `${nA}+${nB} seats ${seatW} mm wide` : `side A ${kA === 'T' ? `${nA} transverse` : kA === 'L' ? 'longitudinal' : 'no'} seats, side B ${kB === 'T' ? `${nB} transverse` : kB === 'L' ? 'longitudinal' : 'no'} seats (mixed seating)`}`, `Seat height 450 mm, back to ${1180} mm above floor`];
       } else {
         const d = q.kind === 'long' ? seatD : Math.min(seatD, 400);
         const ly = q.kind === 'long' ? 'SEAT' : 'FOLD';
@@ -3059,7 +3080,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       ['Ceiling height above floor (centre line)', `${ceil} mm`],
       ['Passenger door clear width × height', `${DC.width} × ${DC.height} mm`],
       ['Gangway width', `${num(c.gangwayWidth, 0) || '—'} mm`],
-      ['Seating', trans ? `Transverse ${perSide[0]}+${perSide[1]}, seat ${seatW} mm${minA ? `, min. aisle ${minA} mm` : ''}` : `Longitudinal, seat depth ${seatD} mm, foot zone ${num(I.footZone, 300)} mm`],
+      ['Seating', longToo ? `Mixed: transverse ${perSide[0]}+${perSide[1]}, seat ${seatW} mm${minA ? `, min. aisle ${minA} mm` : ''}; longitudinal ${seatWL} × ${seatD} mm, foot zone ${num(I.footZone, 300)} mm`
+        : trans ? `Transverse ${perSide[0]}+${perSide[1]}, seat ${seatW} mm${minA ? `, min. aisle ${minA} mm` : ''}` : `Longitudinal, seat depth ${seatD} mm, foot zone ${num(I.footZone, 300)} mm`],
     ];
     const tY = Math.min(oy - (400 + 9 * s + 15 * s) / s - 4, 100);
     p.text(20, tY + 3, 'KEY CROSS-SECTION DIMENSIONS', 2.4, { bold: true });
@@ -3239,7 +3261,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     p.text(20, y, '1. BASIS OF CALCULATION', 2.6, { bold: true });
     const ass = [
       ['Seat width × depth (per passenger)', `${num(I.seatWidth, 430)} × ${num(I.seatDepth, 550)} mm`],
-      ['Seating arrangement', TLT.mainlineCfg(cfg).on ? (() => { const M = TLT.mainlineCfg(cfg); return `Mainline ${M.arrangement}: std ${M.std.abreast.join('+')} / ${M.std.pitch} mm, 1st ${M.first.abreast.join('+')} / ${M.first.pitch} mm${M.vestibules ? ', vestibules' : ''}`; })() : I.seatType === 'transverse' ? `Transverse ${I.transSeatsPerSide}+${I.transSeatsPerSide}, legroom ${I.transLegroom} mm between facing seats` : 'Longitudinal'],
+      ['Seating arrangement', TLT.mainlineCfg(cfg).on ? (() => { const M = TLT.mainlineCfg(cfg); return `Mainline ${M.arrangement}: std ${M.std.abreast.join('+')} / ${M.std.pitch} mm, 1st ${M.first.abreast.join('+')} / ${M.first.pitch} mm${M.vestibules ? ', vestibules' : ''}`; })() : (() => { const mixed = (cfg.carTypes || []).some(t => (t.interiorItems || []).some(q => ['transverse', 'longitudinal'].includes(q.kind))); const tr = `transverse ${I.transSeatsPerSide}+${I.transSeatsPerSide} (seat ${num(I.transSeatWidth, 0) > 0 ? num(I.transSeatWidth, 0) : num(I.seatWidth, 430)} mm), legroom ${I.transLegroom} mm between facing seats`; return mixed ? `Mixed: ${I.seatType === 'transverse' ? 'transverse' : 'longitudinal'} by default, bay sides set per car variant; ${tr}` : I.seatType === 'transverse' ? tr.charAt(0).toUpperCase() + tr.slice(1) : 'Longitudinal'; })()],
       ['Foot zone in front of longitudinal seats', `${num(I.footZone, 300)} mm (not counted as standing)`],
       ['Clearance at door / end of seat bays', `${num(I.doorClearance, 330)} / ${num(I.endClearance, 0)} mm`],
       ['Wheelchair space', `${num(I.wcLength, 1300)} × ${num(I.wcWidth, 700)} mm, ${I.wcAsStanding ? 'counted as standing area' : 'excluded from standing area'} unless set per space`],
@@ -4202,7 +4224,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   /* ================= Pane 1: Main Dimensions ================= */
   function renderPane1() {
     const F = (...a) => field('', ...a);
-    const trans = cfg.interior.seatType === 'transverse';
+    const trans = cfg.interior.seatType === 'transverse' || (cfg.carTypes || []).some(t => (t.interiorItems || []).some(q => q.kind === 'transverse'));
     let h = `<div class="pane-head"><h2>Main Dimensions</h2><p>Enter the train formation, car body data and one set of data per car variant, then press Generate Results.</p></div>`;
     h += `<div class="card excel-main" style="margin-bottom:14px"><h3>Import / export main inputs (Excel)</h3>
       <div class="excel-row"><div><p class="hint" style="margin-top:0">One workbook with all inputs of this step: <b>Parameters</b> (project, formation, car body & bogie, doors, HVAC, power, cab, windows, front view, interior rules, masses), <b>Car variants</b>, <b>Interior items</b> and <b>Load cases</b>, plus an Instructions sheet with the allowed values. The template is filled with the current inputs.</p>
@@ -4339,7 +4361,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       ${F('Seat depth', 'interior.seatDepth', 'num', { unit: 'mm' })}${F('Foot zone in front of seats', 'interior.footZone', 'num', { unit: 'mm' })}
       ${F('Clearance at doors', 'interior.doorClearance', 'num', { unit: 'mm' })}${F('Clearance at end wall / cab', 'interior.endClearance', 'num', { unit: 'mm' })}
       ${F('Min. door clearance (fixed seats per bay)', 'interior.minDoorClearance', 'num', { unit: 'mm', wide: true, hint: 'Used when a car variant asks for 6 / 7 / 8 seats between doors: the door clearance shrinks to fit, down to this value.' })}
-      ${trans && !MLon ? F('Seats per side (row)', 'interior.transSeatsPerSide', 'num') + F('Transverse seat depth', 'interior.transSeatDepth', 'num', { unit: 'mm' }) + F('Legroom, facing seats', 'interior.transLegroom', 'num', { unit: 'mm' }) : ''}
+      ${trans && !MLon ? F('Transverse seat width / pax (0 = seat width)', 'interior.transSeatWidth', 'num', { unit: 'mm' }) + F('Seats per side (row)', 'interior.transSeatsPerSide', 'num') + F('Transverse seat depth', 'interior.transSeatDepth', 'num', { unit: 'mm' }) + F('Legroom, facing seats', 'interior.transLegroom', 'num', { unit: 'mm' }) : ''}
       ${F('Wheelchair space length', 'interior.wcLength', 'num', { unit: 'mm' })}${F('Wheelchair space width', 'interior.wcWidth', 'num', { unit: 'mm' })}
       ${F('Turning circle Ø', 'interior.wcTurning', 'num', { unit: 'mm' })}${F('Min. aisle (check)', 'interior.minAisle', 'num', { unit: 'mm' })}
       ${F('Default cubicle depth', 'interior.cabinetDepth', 'num', { unit: 'mm' })}<div></div>
@@ -4466,7 +4488,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   /* Interior items editor (wheelchair spaces, electrical cabinets, seat limits) */
-  const ITEM_KINDS_BASE = [['wheelchair', 'Wheelchair space'], ['bicycle', 'Bicycle space'], ['folding', 'Folding seats'], ['cabinet', 'Electrical cabinet'], ['max', 'Seat limit'], ['none', 'No seats']];
+  const ITEM_KINDS_BASE = [['wheelchair', 'Wheelchair space'], ['bicycle', 'Bicycle space'], ['folding', 'Folding seats'], ['cabinet', 'Electrical cabinet'], ['max', 'Seat limit'], ['none', 'No seats'], ['transverse', 'Transverse seats (this bay side)'], ['longitudinal', 'Longitudinal seats (this bay side)']];
   const itemKinds = () => (TLT.productType(cfg) === 'mainline' ? ITEM_KINDS_BASE.concat([['toilet', 'Toilet (standard)'], ['toiletPrm', 'Toilet (PRM)']]) : ITEM_KINDS_BASE);
   const PLACES = [['door', 'Next to door'], ['end1', 'END 1 side of bay'], ['middle', 'Middle of bay'], ['end2', 'END 2 side of bay']];
   function interiorItemsHtml(t, i) {
@@ -4500,9 +4522,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           : `<div class="row2 c2">${plc}${stand}</div><p class="hint" style="margin:4px 0 0">${TLT.num(cfg.interior.wcLength, 1300)} × ${TLT.num(cfg.interior.wcWidth, 700)} mm, Ø${TLT.num(cfg.interior.wcTurning, 1500)} circle (Interior rules)</p>`;
       }
       if (it.kind === 'max') h += `<div class="row2">${inp(idb + '-n', base + '.n', it.n, 'Max. seats per side', 'pax')}</div>`;
+      if (it.kind === 'transverse' || it.kind === 'longitudinal') h += `<p class="hint" style="margin:4px 0 0">Seats on this bay side are ${it.kind}, whatever the train-wide Seating setting (mixed seating). Combine with a seat limit to cap them.</p>`;
       h += '</div>';
     });
-    h += `<div class="additems"><button class="btn small" data-additem="${i}:wheelchair">+ Wheelchair space</button><button class="btn small" data-additem="${i}:bicycle">+ Bicycle space</button><button class="btn small" data-additem="${i}:folding">+ Folding seats</button><button class="btn small" data-additem="${i}:cabinet">+ Electrical cabinet</button><button class="btn small" data-additem="${i}:max">+ Seat limit</button>${TLT.productType(cfg) === 'mainline' ? `<button class="btn small" data-additem="${i}:toilet">+ Toilet</button><button class="btn small" data-additem="${i}:toiletPrm">+ PRM toilet</button>` : ''}</div></div>`;
+    h += `<div class="additems"><button class="btn small" data-additem="${i}:wheelchair">+ Wheelchair space</button><button class="btn small" data-additem="${i}:bicycle">+ Bicycle space</button><button class="btn small" data-additem="${i}:folding">+ Folding seats</button><button class="btn small" data-additem="${i}:cabinet">+ Electrical cabinet</button><button class="btn small" data-additem="${i}:max">+ Seat limit</button><button class="btn small" data-additem="${i}:transverse">+ Seat orientation</button>${TLT.productType(cfg) === 'mainline' ? `<button class="btn small" data-additem="${i}:toilet">+ Toilet</button><button class="btn small" data-additem="${i}:toiletPrm">+ PRM toilet</button>` : ''}</div></div>`;
     return h;
   }
   function interiorGuide() {
@@ -4529,6 +4552,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         <li><b>Electrical cabinet</b>: give label, length, depth and height. It is drawn and dimensioned on the layout, removed from the standing area, and seats fill the rest of the bay.</li>
         <li><b>Placement</b>: next to the door (default), END 1 side, middle or END 2 side of the bay.</li>
         <li><b>Seat limit / No seats</b> caps the seats on that bay side.</li>
+        <li><b>Seat orientation</b> (transverse / longitudinal) sets the seats of one bay side against the train-wide Seating setting, for mixed layouts (e.g. 2+2 facing bays in the front area, longitudinal elsewhere).</li>
       </ul></div>`;
   }
 
@@ -4766,7 +4790,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     ['Interior', 'Seat depth', 'interior.seatDepth', 'num', 'mm'], ['Interior', 'Foot zone in front of seats', 'interior.footZone', 'num', 'mm'],
     ['Interior', 'Clearance at doors', 'interior.doorClearance', 'num', 'mm'], ['Interior', 'Clearance at end wall / cab', 'interior.endClearance', 'num', 'mm'],
     ['Interior', 'Min. door clearance (fixed seats per bay)', 'interior.minDoorClearance', 'num', 'mm'],
-    ['Interior', 'Transverse: seats per side', 'interior.transSeatsPerSide', 'num'], ['Interior', 'Transverse seat depth', 'interior.transSeatDepth', 'num', 'mm'], ['Interior', 'Legroom, facing seats', 'interior.transLegroom', 'num', 'mm'],
+    ['Interior', 'Transverse seat width / pax (0 = seat width)', 'interior.transSeatWidth', 'num', 'mm'], ['Interior', 'Transverse: seats per side', 'interior.transSeatsPerSide', 'num'], ['Interior', 'Transverse seat depth', 'interior.transSeatDepth', 'num', 'mm'], ['Interior', 'Legroom, facing seats', 'interior.transLegroom', 'num', 'mm'],
     ['Interior', 'Wheelchair space length', 'interior.wcLength', 'num', 'mm'], ['Interior', 'Wheelchair space width', 'interior.wcWidth', 'num', 'mm'],
     ['Interior', 'Turning circle diameter', 'interior.wcTurning', 'num', 'mm'], ['Interior', 'Min. aisle (check)', 'interior.minAisle', 'num', 'mm'],
     ['Interior', 'Ceiling height above floor (cross-section)', 'interior.ceilingHeight', 'num', 'mm'], ['Interior', 'Overhead handrail height (cross-section)', 'interior.handrailHeight', 'num', 'mm'],
@@ -4795,7 +4819,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     ['specSeats', 'Seated passengers target', 'num'], ['specStanding', 'Standees target', 'num'], ['tare', 'Tare mass AW0 (t)', 'num'],
     ['pantos', 'Pantographs per car (target)', 'num'], ['ccd', 'CCD shoes per car', 'num'],
   ];
-  const ITEM_COLS = [['car', 'Variant', 'text'], ['kind', 'Item', ['wheelchair', 'bicycle', 'folding', 'cabinet', 'max', 'none', 'toilet', 'toiletPrm']], ['bay', 'Bay (0 = END 1)', 'num'],
+  const ITEM_COLS = [['car', 'Variant', 'text'], ['kind', 'Item', ['wheelchair', 'bicycle', 'folding', 'cabinet', 'max', 'none', 'toilet', 'toiletPrm', 'transverse', 'longitudinal']], ['bay', 'Bay (0 = END 1)', 'num'],
     ['side', 'Side', ['A', 'B', 'AB']], ['place', 'Placement', ['door', 'end1', 'middle', 'end2']], ['length', 'Length (mm)', 'num'], ['depth', 'Depth (mm)', 'num'],
     ['height', 'Height (mm)', 'num'], ['label', 'Label', 'text'], ['n', 'Max. seats per side', 'num'], ['stand', 'Standing area (yes / no / blank = default)', ['yes', 'no']]];
   const CASE_COLS = [['name', 'Load case', 'text'], ['kind', 'Type', ['seated', 'density', 'kgm2', 'factor']], ['density', 'Density (pax/m², or kg/m² for kgm2)', 'num'], ['factor', 'Factor', 'num'],
@@ -4828,7 +4852,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         [['Car variants', 'END 1 / Centre / END 2 bogie', 'motor / trailer for each bogie the car has (own or shared). A shared (Jacobs) bogie is a motor bogie when either car at the joint sets it to motor.']],
         [['Car variants', 'Motor bogies', 'Older files only; read only when the three bogie columns are blank: 1 = one motor bogie at the END 2 side, 1e1 = one at the END 1 side']],
         ITEM_COLS.map(c => ['Interior items', c[1], allowed(c)]),
-        [['Interior items', 'Item', 'wheelchair, cabinet (electrical cabinet), max (seat limit), none (no seats), toilet, toiletPrm (mainline)']],
+        [['Interior items', 'Item', 'wheelchair, cabinet (electrical cabinet), max (seat limit), none (no seats), toilet, toiletPrm (mainline), transverse / longitudinal (seat orientation of that bay side — mixed seating; Placement, sizes and seats are not used)']],
         CASE_COLS.map(c => ['Load cases', c[1], allowed(c)]));
     const wi = X.utils.aoa_to_sheet(ins); wi['!cols'] = [{ wch: 16 }, { wch: 44 }, { wch: 110 }];
     X.utils.book_append_sheet(wb, wi, 'Instructions');
@@ -5396,6 +5420,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           : kind === 'toilet' ? { kind, bay: 1, side: 'A', place: 'end1', length: 1100, depth: 1200 }
           : kind === 'toiletPrm' ? { kind, bay: 1, side: 'A', place: 'end1', length: 2100, depth: 1800 }
           : kind === 'cabinet' ? { kind, bay: 0, side: 'A', place: 'end1', label: 'ELEC. CABINET', length: 900, depth: 600, height: 1900 }
+          : kind === 'transverse' ? { kind: cfg.interior.seatType === 'transverse' ? 'longitudinal' : 'transverse', bay: 0, side: 'AB' }
             : { kind, bay: 1, side: 'A', n: 3 });
         renderPane1(); markChanged(); return;
       }
